@@ -39,7 +39,8 @@ See `python-api-exploration/icd11-api-exploration-instructions.md` for detailed 
 **Quick start:**
 ```bash
 cd python-api-exploration
-pip install requests python-dotenv
+uv venv && source .venv/bin/activate
+uv pip install requests python-dotenv
 # Then give instructions file to Claude Code
 ```
 

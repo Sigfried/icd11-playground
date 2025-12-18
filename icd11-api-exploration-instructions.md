@@ -13,6 +13,14 @@ client_id=...
 client_secret=...
 ```
 
+## Setup
+
+```bash
+cd python-api-exploration
+uv venv && source .venv/bin/activate
+uv pip install requests python-dotenv
+```
+
 ## Task 1.
 
 Build me a Python-based exploration toolkit for the ICD-11 API (put it in its
