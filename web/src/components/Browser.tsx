@@ -3,23 +3,21 @@ import { useEffect, useRef } from "react";
 interface BrowserProps {
   instanceId?: string;
   apiServerUrl: string;
-  height?: string;
   onLoaded?: () => void;
-  onChange?: () => void;
+  onBrowserChange?: (uri: string | undefined) => void;
 }
 
 export function Browser({
-  instanceId = "2",
+  instanceId = "1",
   apiServerUrl,
-  height = "500px",
   onLoaded,
-  onChange,
+  onBrowserChange,
 }: BrowserProps) {
   const initialized = useRef(false);
   const onLoadedRef = useRef(onLoaded);
-  const onChangeRef = useRef(onChange);
+  const onBrowserChangeRef = useRef(onBrowserChange);
   onLoadedRef.current = onLoaded;
-  onChangeRef.current = onChange;
+  onBrowserChangeRef.current = onBrowserChange;
 
   useEffect(() => {
     if (initialized.current || !window.ECT) return;
@@ -28,22 +26,22 @@ export function Browser({
       {
         apiServerUrl,
         autoBind: true,
-        browserHeight: height,
+        language: "en",
       },
       {
         browserLoadedFunction: () => {
           console.log("ECT Browser loaded");
           onLoadedRef.current?.();
         },
-        browserChangedFunction: () => {
-          console.log("ECT Browser changed");
-          onChangeRef.current?.();
+        browserChangedFunction: (browserContent: { uri?: string }) => {
+          console.log("ECT Browser changed:", browserContent);
+          onBrowserChangeRef.current?.(browserContent?.uri);
         },
       }
     );
 
     initialized.current = true;
-  }, [apiServerUrl, height]);
+  }, [apiServerUrl]);
 
   return (
     <div className="browser">

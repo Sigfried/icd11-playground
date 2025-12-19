@@ -160,18 +160,22 @@ build is
 1. **Remove custom EntityDetail component** - let ECT Browser handle display
 2. **Make ECT Browser full-size** - not squeezed into sidebar
 3. **Connect Coding Tool to Browser** - search selection navigates browser via `setBrowserUri()`
-4. **Add "View JSON" button** - opens new window with raw API data
-5. **JSON window fetches via FastAPI** - parallel fetch of foundation + MMS data
-    - [sg] just realized, it might make sense instead of raw JSON view to show results
-           from WHO's swagger server: https://id.who.int/swagger/. we should be able
-           make the same calls to that, right?
+4. **Add "View JSON" button** - opens popup window with raw API data
+5. **JSON popup fetches via FastAPI** - shows request URL + formatted JSON response
 6. **(LOW PRIORITY) Server switcher** - dropdown to change between test/docker/official
 
-### Open Questions
+### Swagger UI Finding
 
-- Should JSON window auto-update when browser selection changes? [sg] not necessary
-- Do we need to capture search results JSON too? (highly debounced) [sg] maybe just the last search result before displaying detail
-- Can we configure ECT to proxy through our backend for full request capture? [sg] let's abandon that idea
+The WHO Swagger UI (`id.who.int/swagger`) requires OAuth authentication to execute requests
+and doesn't support deep-linking with pre-filled parameters. Not useful for our "view JSON"
+use case. Instead, we'll use a simple popup that fetches from our FastAPI backend and
+displays the formatted JSON with the request URL.
+
+### Decisions Made
+
+- JSON window auto-update: not necessary (user clicks button when they want to see JSON)
+- Search results JSON: maybe capture last search result before displaying detail (future)
+- Proxy ECT through backend: abandoned (too complex, not needed)
 
 ## Conventions
 
