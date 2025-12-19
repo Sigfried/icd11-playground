@@ -27,7 +27,6 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 /* Header */
@@ -113,7 +112,7 @@ body {
 /* Browser container */
 .browser-container {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   background: var(--color-surface);
 }
 
