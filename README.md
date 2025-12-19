@@ -91,6 +91,8 @@ See [notes/learning-goals.md](notes/learning-goals.md) for the full learning pat
 - [ECT Documentation](https://icd.who.int/docs/icd-api/icd11ect-1.7/ECT/) - Embedded tools
 
 ## Reference Papers
+[sg] incomplete. and provide links to the local pdfs (and maybe also to
+     the DOI or official paper location)
 
 - PMID 35578335 - Overview of ICD-11 architecture
 - PMID 35581649 - Postcoordination of codes

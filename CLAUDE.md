@@ -9,12 +9,11 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 **Completed:**
 - `config.toml` - Unified server configuration (test/docker/official)
 - `notes/` - Obsidian vault with structure:
-  - `learning-goals.md` - Learning path and checklist (moved from README.md)
-  - `questions.md` - Open questions for exploration
+  - `questions.md` - Open questions for exploration (primary tracking file)
   - `papers/` - For reading notes (PDFs in root `papers/` folder)
   - `concepts/` - For concept documentation
   - `explorations/` - For session logs
-- `python-api-exploration/` - Python API exploration toolkit
+- `python-api-exploration/` - Python API exploration toolkit (all commands tested)
   - `config.py` - Reads `config.toml` for server selection
   - `auth.py` - OAuth2 token management (for official server)
   - `client.py` - HTTP client with caching and rate limiting
@@ -29,14 +28,28 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 - `papers/` - Research papers (PDFs)
 - `.env` - API credentials (client_id, client_secret) - DO NOT COMMIT
 
+## Observations & Decisions
+
+- **Python REPL limitations**: Good for quick tests and with debugger, but not ideal for deep exploration of large JSON responses. Limited screen real estate in PyCharm debugger/console.
+- **Browser-based exploration needed**: A web UI would be better for exploring API responses interactively.
+- **Pivot the React app scope**: Instead of just embedding ECTs, expand to be an API/JSON exploration tool with FastAPI backend. Can still embed ECTs but also show raw API responses, entity details, etc.
+
 ## Next Steps
 
-1. **Start exploring the API** using the Python toolkit
-   - Follow the learning path in `notes/learning-goals.md`
-   - Document findings in `notes/explorations/`
+1. **Build React + FastAPI exploration app** (evolved from `react-ect-exploration-instructions.md`)
+   - FastAPI backend that proxies ICD-11 API calls
+   - React frontend for browsing entities, viewing JSON, exploring relationships
+   - Embed ECT components where useful
+   - Read server config from `config.toml`
 
-2. **Build React ECT exploration** per `react-ect-exploration-instructions.md`
-   - Should read server from `config.toml`
+2. **Continue domain learning** via `notes/questions.md`
+   - Answer questions through exploration
+   - Document findings in `notes/explorations/` or `notes/concepts/`
+
+## Conventions
+
+- `[sg]` in any file = question, comment, or instruction from user that Claude should address
+- Commit after changes but don't push without permission
 
 ## Key ICD-11 Concepts (for context)
 
