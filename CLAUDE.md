@@ -22,6 +22,15 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
   - `explore.py` - Core exploration functions and REPL
   - `cache.py` - Response caching for offline analysis
   - `run.py` - Entry point
+- `api/` - FastAPI backend for web exploration
+  - `main.py` - API routes (config, foundation, mms, code, search, entity)
+  - `icd_client.py` - Async HTTP client for ICD-11 API
+  - `config.py` - Reads `config.toml` for server selection
+  - `auth.py` - OAuth2 token management (for official server)
+- `web/` - React + TypeScript frontend (Vite)
+  - ECT integration (Coding Tool + Browser)
+  - Entity detail viewer with raw JSON
+  - Quick lookup by code, foundation ID, or MMS ID
 
 **Other files:**
 - `README.md` - Main readme with server options, running instructions
@@ -29,23 +38,29 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 - `react-ect-exploration-instructions.md` - Task spec for React ECT integration
 - `.env` - API credentials (client_id, client_secret) - DO NOT COMMIT
 
-## Observations & Decisions
+## Running the App
 
-- **Python REPL limitations**: Good for quick tests and with debugger, but not ideal for deep exploration of large JSON responses. Limited screen real estate in PyCharm debugger/console.
-- **Browser-based exploration needed**: A web UI would be better for exploring API responses interactively.
-- **Pivot the React app scope**: Instead of just embedding ECTs, expand to be an API/JSON exploration tool with FastAPI backend. Can still embed ECTs but also show raw API responses, entity details, etc.
+```bash
+# Terminal 1: Start FastAPI backend (port 8000)
+cd api && source .venv/bin/activate && uv run python main.py
+
+# Terminal 2: Start React frontend (port 5173)
+cd web && npm run dev
+```
+
+Then open http://localhost:5173
 
 ## Next Steps
 
-1. **Build React + FastAPI exploration app** (evolved from `react-ect-exploration-instructions.md`)
-   - FastAPI backend that proxies ICD-11 API calls
-   - React frontend for browsing entities, viewing JSON, exploring relationships
-   - Embed ECT components where useful
-   - Read server config from `config.toml`
-
-2. **Continue domain learning** via `notes/questions.md`
+1. **Continue domain learning** via `notes/questions.md`
    - Answer questions through exploration
    - Document findings in `notes/explorations/` or `notes/concepts/`
+
+2. **Enhance the exploration app**
+   - Link ECT Browser selection to entity detail view
+   - Add parent/child navigation
+   - Add postcoordination builder
+   - Foundation vs MMS side-by-side comparison
 
 ## Conventions
 
