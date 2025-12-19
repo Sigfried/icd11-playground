@@ -1,0 +1,12 @@
+# Cache directory
+.cache/
+
+# Saved entities for review
+saved/
+
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.pyc

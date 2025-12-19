@@ -6,50 +6,36 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 
 ## Current State
 
-**Existing files:**
-- `README.md` - Main readme with server options, running instructions, learning path
-- `icd11-api-exploration-instructions.md` - Task spec for building Python API exploration tools
-- `react-ect-exploration-instructions.md` - Task spec for React Embedded Classification Tool integration
-- `icd11-playground-readme.md` - Original Claude-generated overview (somewhat redundant with README.md now)
-- `.env` - API credentials (client_id, client_secret) - DO NOT COMMIT
+**Completed:**
+- `config.toml` - Unified server configuration (test/docker/official)
+- `notes/` - Obsidian vault with structure:
+  - `learning-goals.md` - Learning path and checklist (moved from README.md)
+  - `questions.md` - Open questions for exploration
+  - `papers/` - For reading notes (PDFs in root `papers/` folder)
+  - `concepts/` - For concept documentation
+  - `explorations/` - For session logs
+- `python-api-exploration/` - Python API exploration toolkit
+  - `config.py` - Reads `config.toml` for server selection
+  - `auth.py` - OAuth2 token management (for official server)
+  - `client.py` - HTTP client with caching and rate limiting
+  - `explore.py` - Core exploration functions and REPL
+  - `cache.py` - Response caching for offline analysis
+  - `run.py` - Entry point
 
-**Not yet created:**
-- `python-api-exploration/` - The actual Python tools
-- `react-ect-exploration/` - The actual React app
-- `config.toml` - Unified server configuration
-- `notes/` - Obsidian vault for research notes
+**Other files:**
+- `README.md` - Main readme with server options, running instructions
+- `icd11-api-exploration-instructions.md` - Original task spec (kept for reference)
+- `react-ect-exploration-instructions.md` - Task spec for React ECT integration
+- `papers/` - Research papers (PDFs)
+- `.env` - API credentials (client_id, client_secret) - DO NOT COMMIT
 
 ## Next Steps
 
-1. **Create `config.toml`** for server selection:
-- [sg] already done
-   ```toml
-   [api]
-   server = "test"  # "test", "docker", or "official"
+1. **Start exploring the API** using the Python toolkit
+   - Follow the learning path in `notes/learning-goals.md`
+   - Document findings in `notes/explorations/`
 
-   [servers]
-   test = "https://icd11restapi-developer-test.azurewebsites.net"
-   docker = "http://localhost:80"
-   official = "https://id.who.int"
-   ```
-
-2. **Create `notes/` folder** as an Obsidian vault with structure:
-- [sg] the folder is created, but go ahead and create the structure and move stuff into it,
-       including the Learning Goals section of README.md
-   ```
-   notes/
-   ├── papers/           # Reading notes per paper
-   ├── concepts/         # Understanding of ICD-11 concepts
-   ├── explorations/     # Logs of API exploration sessions
-   ├── questions.md      # Open questions
-   └── pdfs/             # Optional local paper storage
-   ```
-
-3. **Build Python API exploration tools** per `icd11-api-exploration-instructions.md`
-   - Auth helper, API client, exploration functions
-   - Should read server from `config.toml`
-
-4. **Build React ECT exploration** per `react-ect-exploration-instructions.md`
+2. **Build React ECT exploration** per `react-ect-exploration-instructions.md`
    - Should read server from `config.toml`
 
 ## Key ICD-11 Concepts (for context)

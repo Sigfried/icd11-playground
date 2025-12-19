@@ -1,0 +1,14 @@
+[project]
+name = "icd11-exploration"
+version = "0.1.0"
+description = "ICD-11 API exploration toolkit"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.28.0",
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipython",
+]

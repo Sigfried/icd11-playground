@@ -50,12 +50,14 @@ Then access at `http://localhost/icd/entity/257068234`
 
 ```bash
 cd python-api-exploration
-uv venv && source .venv/bin/activate
-uv pip install requests python-dotenv
-python explore.py  # or whatever scripts get created
+uv sync                  # Install dependencies (first time only)
+uv run python run.py     # Start interactive REPL
 ```
 
-See `icd11-api-exploration-instructions.md` for the full task spec.
+Or use functions directly:
+```bash
+uv run python -c "from explore import get_by_code, summarize_entity; summarize_entity(get_by_code('1A00'))"
+```
 
 ### React ECT Exploration
 
@@ -69,48 +71,7 @@ See `react-ect-exploration-instructions.md` for details on the Embedded Classifi
 
 ## Learning Goals
 
-The goal is to understand ICD-11 well enough to build tools that help authors understand existing structures when making change requests.
-
-### Core Concepts to Learn
-
-1. **Foundation vs Linearization (MMS)**
-   - Foundation: ~85k entities, polyhierarchy (multiple parents), no codes
-   - MMS: ~17k codes, single parent, mutually exclusive categories
-   - The `source` property links MMS entities back to Foundation
-
-2. **Postcoordination**
-   - Stem codes: standalone diagnoses
-   - Extension codes (Chapter X): add detail (severity, laterality, histopathology)
-   - Clusters: stem + extensions linked together
-   - Some postcoordination is mandatory ("code also")
-
-3. **Content Model Properties**
-   - `title`, `definition`, `synonym`
-   - `parent`/`child` relationships
-   - `postcoordinationScale` - what axes are available
-   - `foundationChildElsewhere` - "gray children" that live elsewhere in MMS
-
-### Suggested Learning Path
-
-**Phase 1: API Familiarity**
-- [ ] Fetch a few entities (Cholera: 257068234, Breast cancer: 254546711)
-- [ ] Compare Foundation vs MMS representations of the same concept
-- [ ] Understand what properties are available and how they're structured
-
-**Phase 2: Hierarchy Understanding**
-- [ ] Navigate parent/child relationships
-- [ ] Find an entity with multiple Foundation parents, see how it linearizes to one MMS parent
-- [ ] Explore "gray children" (foundationChildElsewhere)
-
-**Phase 3: Postcoordination**
-- [ ] Find entities with postcoordinationScale
-- [ ] Understand which axes are required vs optional
-- [ ] Explore Chapter X extension codes and how they relate to stem codes
-
-**Phase 4: Search and Discovery**
-- [ ] Use the search endpoint to find entities
-- [ ] Understand code lookup vs entity lookup
-- [ ] Try the ECT components (Coding Tool and Browser)
+See [notes/learning-goals.md](notes/learning-goals.md) for the full learning path and checklist.
 
 ## Key Test Entities
 
