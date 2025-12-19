@@ -1,6 +1,6 @@
 # ICD-11 Tooling
 
-**PDF**: `papers/ICD11Tooling.pdf`
+**PDF**: `files/ICD11Tooling.pdf`
 
 ## Key Topics
 - API structure

@@ -1,7 +1,7 @@
 # Mabon et al 2022 - Postcoordination of Codes in ICD-11
 
 **PMID**: 35581649
-**PDF**: `papers/Mabon et al. - 2022 - Postcoordination of codes in ICD-11.pdf`
+**PDF**: `files/Mabon et al. - 2022 - Postcoordination of codes in ICD-11.pdf`
 
 ## Key Topics
 - Stem codes vs extension codes

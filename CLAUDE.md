@@ -10,9 +10,11 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 - `config.toml` - Unified server configuration (test/docker/official)
 - `notes/` - Obsidian vault with structure:
   - `questions.md` - Open questions for exploration (primary tracking file)
-  - `papers/` - For reading notes (PDFs in root `papers/` folder)
+  - `papers/` - Reading notes and PDFs
+    - `files/` - PDF files
+    - `*.md` - Individual paper notes
+    - `README.md` - Index with links to PDFs, PubMed, and notes
   - `concepts/` - For concept documentation
-  - `explorations/` - For session logs
 - `python-api-exploration/` - Python API exploration toolkit (all commands tested)
   - `config.py` - Reads `config.toml` for server selection
   - `auth.py` - OAuth2 token management (for official server)
@@ -25,7 +27,6 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 - `README.md` - Main readme with server options, running instructions
 - `icd11-api-exploration-instructions.md` - Original task spec (kept for reference)
 - `react-ect-exploration-instructions.md` - Task spec for React ECT integration
-- `papers/` - Research papers (PDFs)
 - `.env` - API credentials (client_id, client_secret) - DO NOT COMMIT
 
 ## Observations & Decisions
@@ -72,16 +73,9 @@ Exploration tools to understand the ICD-11 API and data model. The end goal is b
 - Breast cancer: Foundation 254546711, MMS 2C6Y
 - Extension codes root: 1920852714
 
-## Papers to Track
+## Papers
 
-User has papers in Zotero. Key PMIDs mentioned:
-- 35578335 - ICD-11 architecture overview
-- 35581649 - Postcoordination
-- 34753461 - Extension codes
-- 34753471 - Three-part model for healthcare harms
-- 36894925 - Implementation studies
-
-Need to build out a more complete paper list with reading notes.
+See `notes/papers/README.md` for full list with links to PDFs, PubMed, and reading notes.
 
 ## Technical Preferences (from user's global CLAUDE.md)
 

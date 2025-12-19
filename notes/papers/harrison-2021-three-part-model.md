@@ -1,7 +1,7 @@
 # Harrison et al 2021 - ICD-11: Three-Part Model for Healthcare Harms
 
 **PMID**: 34753471
-**PDF**: `papers/Harrison et al. - 2021 - ICD-11 an international classification of disease.pdf`
+**PDF**: `files/Harrison et al. - 2021 - ICD-11 an international classification of disease.pdf`
 
 ## Key Topics
 - Patient safety classification
