@@ -13,5 +13,8 @@
 <!-- Add your notes here -->
 
 ## Questions Raised
-
+- [ ] Fig. 1a -- looks like there are no links that skip levels. Is that true?
+- [ ] P. 5 Post-coordination: what's the functional index?
+	- probably: [International Classification of Functioning, Disability and Health (ICF)](https://icd.who.int/dev11/l-icf/en)
+- [ ] P. 5 Sanctioning rules: post-coordination value sets -- where do these live?
 <!-- Questions that came up while reading -->

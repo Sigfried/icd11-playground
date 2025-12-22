@@ -46,6 +46,12 @@ body {
   font-weight: 600;
 }
 
+.header-right {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
 /* Config display */
 .config-display {
   display: flex;
@@ -81,22 +87,33 @@ body {
   color: var(--color-text-muted);
 }
 
-/* Search bar */
-.search-bar {
-  background: var(--color-surface);
-  padding: 0.75rem 1.5rem;
+/* Section labels */
+.section-label {
+  display: block;
+  padding: 0.5rem 1rem;
+  background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-/* Coding Tool */
+/* Coding Tool section */
+.coding-tool-section {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .coding-tool {
   position: relative;
-  max-width: 600px;
+  padding: 0.75rem 1rem;
 }
 
 .coding-tool .ctw-input {
   width: 100%;
+  max-width: 600px;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: 4px;
@@ -107,6 +124,14 @@ body {
 
 .coding-tool .ctw-input::placeholder {
   color: var(--color-text-muted);
+}
+
+/* Browser section */
+.browser-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Browser container */
@@ -125,26 +150,16 @@ body {
   height: 100% !important;
 }
 
-/* Footer */
-.app-footer {
-  background: var(--color-surface);
-  padding: 0.5rem 1.5rem;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-shrink: 0;
-}
-
+/* View JSON button */
 .view-json-button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   background: var(--color-accent);
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .view-json-button:hover:not(:disabled) {
@@ -155,13 +170,4 @@ body {
   background: var(--color-border);
   color: var(--color-text-muted);
   cursor: not-allowed;
-}
-
-.current-entity {
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-  font-family: monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

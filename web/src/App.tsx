@@ -9,7 +9,7 @@ function App() {
   const [config, setConfig] = useState<ApiConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [currentEntityUri, setCurrentEntityUri] = useState<string | null>(null);
+  const currentEntityUri = useRef<string | null>(null);
   const ectInitialized = useRef(false);
 
   useEffect(() => {
@@ -35,17 +35,14 @@ function App() {
         selectedEntityFunction: (entity: SelectedEntity) => {
           console.log("ECT selected:", entity);
           const uri = entity.linearizationUri || entity.foundationUri;
-          if (uri && window.ECT?.Handler?.setBrowserUri) {
-            window.ECT.Handler.setBrowserUri("2", uri);
-          }
-          setCurrentEntityUri(uri || null);
+          currentEntityUri.current = uri || null;
         },
         browserLoadedFunction: () => {
           console.log("ECT Browser loaded");
         },
         browserChangedFunction: (browserContent: { uri?: string }) => {
           console.log("ECT Browser changed:", browserContent);
-          setCurrentEntityUri(browserContent?.uri || null);
+          currentEntityUri.current = browserContent?.uri || null;
         },
       }
     );
@@ -60,14 +57,14 @@ function App() {
   }, [config]);
 
   const handleViewJson = useCallback(() => {
-    if (!currentEntityUri) {
+    if (!currentEntityUri.current) {
       alert("No entity selected. Browse to an entity first.");
       return;
     }
 
     // Extract the entity ID from the URI
     // URI format: http://id.who.int/icd/entity/257068234
-    const match = currentEntityUri.match(/\/(\d+)$/);
+    const match = currentEntityUri.current.match(/\/(\d+)$/);
     if (!match) {
       alert("Could not extract entity ID from URI");
       return;
@@ -164,16 +161,25 @@ function App() {
       </html>
     `);
     popup.document.close();
-  }, [currentEntityUri]);
+  }, []);
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>ICD-11 Explorer</h1>
-        <ConfigDisplay config={config} loading={configLoading} error={configError} />
+        <div className="header-right">
+          <button
+            className="view-json-button"
+            onClick={handleViewJson}
+          >
+            View JSON
+          </button>
+          <ConfigDisplay config={config} loading={configLoading} error={configError} />
+        </div>
       </header>
 
-      <div className="search-bar">
+      <div className="coding-tool-section">
+        <label className="section-label">Coding Tool (search → select code)</label>
         <div className="coding-tool">
           <input
             type="text"
@@ -186,24 +192,14 @@ function App() {
         </div>
       </div>
 
-      <div className="browser-container">
-        <div className="browser">
-          <div className="ctw-eb-window" data-ctw-ino="2"></div>
+      <div className="browser-section">
+        <label className="section-label">Browser (hierarchy navigation)</label>
+        <div className="browser-container">
+          <div className="browser">
+            <div className="ctw-eb-window" data-ctw-ino="2"></div>
+          </div>
         </div>
       </div>
-
-      <footer className="app-footer">
-        <button
-          className="view-json-button"
-          onClick={handleViewJson}
-          disabled={!currentEntityUri}
-        >
-          View JSON
-        </button>
-        {currentEntityUri && (
-          <span className="current-entity">Current: {currentEntityUri}</span>
-        )}
-      </footer>
     </div>
   );
 }
