@@ -1,4 +1,4 @@
-# Harrison et al 2021 - ICD-11: Three-Part Model for Healthcare Harms
+# Harrison et al 2021 - ICD-11: an international classification of diseases for the twenty-first century
 
 **PMID**: 34753471
 **PDF**: `files/Harrison et al. - 2021 - ICD-11 an international classification of disease.pdf`
