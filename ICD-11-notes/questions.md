@@ -1,9 +1,5 @@
 # Open Questions
-
-Questions that arise during exploration of ICD-11. Check off as answered and add notes/links to answers.
-
-## Exploration Tasks
-
+## Exploration Tasks  (Claude suggestions)
 ### Phase 1: API Familiarity
 - [x] Fetch a few entities (Cholera: 257068234, Breast cancer: 254546711)
 - [ ] Compare Foundation vs MMS representations of the same concept
@@ -12,7 +8,6 @@ Questions that arise during exploration of ICD-11. Check off as answered and add
   - Compare the JSON side-by-side; note `source` property in MMS pointing back to Foundation
 - [ ] Understand what properties are available and how they're structured
   - See: [ICD-11 API Reference](https://icd.who.int/icdapi/docs2/ICDAPI-EntityEndpoint/)
-
 ### Phase 2: Hierarchy Understanding
 - [ ] Navigate parent/child relationships
   - Use `parent` and `child` arrays in entity responses
@@ -22,7 +17,6 @@ Questions that arise during exploration of ICD-11. Check off as answered and add
 - [ ] Explore "gray children" (foundationChildElsewhere)
   - These are children that exist in Foundation but are placed elsewhere in MMS
   - Look for `foundationChildElsewhere` property in MMS entity responses
-
 ### Phase 3: Postcoordination
 - [ ] Find entities with postcoordinationScale
   - Try breast cancer (2C6Y) - has histopathology, laterality axes
@@ -33,7 +27,6 @@ Questions that arise during exploration of ICD-11. Check off as answered and add
 - [ ] Explore Chapter X extension codes and how they relate to stem codes
   - Extension codes root: `f 1920852714`
   - Paper: [[drosler-2021-extension-codes]]
-
 ### Phase 4: Search and Discovery
 - [ ] Use the search endpoint to find entities
   - `s <term>` in REPL
@@ -51,7 +44,6 @@ Questions that arise during exploration of ICD-11. Check off as answered and add
 - **Understanding ICD-11 nomenclature**
 	- [ ] What does "*Exclusions from above levels*" mean?
 		- e.g., [Foundation browser --> breast cancer](https://icd.who.int/browse/2025-01/foundation/en#1047754165) ![[Pasted image 20251219085834.png]]
-
 ### API & Data Model
 - [ ] How does the `source` property work when an MMS entity maps to multiple Foundation entities?
   - Explore: Find an MMS residual category (e.g., "Other specified...") and check its `source`
