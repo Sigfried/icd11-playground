@@ -1,5 +1,6 @@
 {
   "showLineNumber": true,
   "strictLineBreaks": false,
-  "readableLineLength": true
+  "readableLineLength": true,
+  "alwaysUpdateLinks": true
 }

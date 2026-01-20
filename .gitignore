@@ -3,4 +3,6 @@ ICD11Tooling.pdf
 .idea
 
 # Obsidian - ignore editor state, keep shared config
-notes/.obsidian/workspace.json
+ICD-11-notes/.obsidian/workspace.json
+ICD-11-notes/.obsidian/graph.json
+ICD-11-notes/.obsidian/cache
