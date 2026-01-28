@@ -1,23 +1,11 @@
 # ICD-11 API Configuration
-# Change 'server' to switch which API all tools use
 
 [api]
-# Options: "test", "docker", "official"
-server = "test"
-
-# API version and language settings
+server = "docker"  # Options: "docker", "official"
 version = "v2"
 language = "en"
-
-# MMS release version (used in URL paths)
-mms_release = "2024-01"
+release = "2024-01"
 
 [servers]
-test = "https://icd11restapi-developer-test.azurewebsites.net"
 docker = "http://localhost:80"
 official = "https://id.who.int"
-
-[servers.notes]
-test = "No auth required, may have stale data"
-docker = "No auth, no rate limits - run: docker run -p 80:80 -e acceptLicense=true whoicd/icd-api"
-official = "Requires OAuth2 credentials in .env"

@@ -43,17 +43,17 @@ class ICD11Client:
 
     def mms_path(self, entity_id: str | int) -> str:
         """Build MMS entity path."""
-        release = self.settings["mms_release"]
+        release = self.settings["release"]
         return f"/icd/release/11/{release}/mms/{entity_id}"
 
     def search_path(self, query: str) -> str:
         """Build search path."""
-        release = self.settings["mms_release"]
+        release = self.settings["release"]
         return f"/icd/release/11/{release}/mms/search?q={query}"
 
     def code_path(self, code: str) -> str:
         """Build code lookup path."""
-        release = self.settings["mms_release"]
+        release = self.settings["release"]
         return f"/icd/release/11/{release}/mms/codeinfo/{code}"
 
 

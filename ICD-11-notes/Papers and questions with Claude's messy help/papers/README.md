@@ -14,3 +14,14 @@ PDFs are in `files/`. Notes are in individual .md files.
 | [Forster et al - 2023](Forster%20et%20al.%20-%202023%20-%20ICD-11%20A%20catalyst%20for%20advancing%20patient%20safety%20su.pdf) | Patient safety surveillance | [36894925](https://pubmed.ncbi.nlm.nih.gov/36894925/) | [notes](forster-2023-patient-safety.md)   |
 | [ICD11Tooling.pdf](ICD11Tooling.pdf)                                                                                            | ICD-11 API/Tooling          | -                                                     | [notes](icd11-tooling.md)                 |
 | [nihms373006.pdf](nihms373006.pdf)                                                                                              | WebProtégé                  | https://doi.org/10.3233/SW-2012-005                   | [notes](tudorache-2013-webprotege.md)     |
+
+
+
+- iCAT info (only 1.0 I think)
+	- https://ceur-ws.org/Vol-809/paper-09.pdf
+	- https://pmc.ncbi.nlm.nih.gov/articles/PMC3041458/
+	- https://link.springer.com/chapter/10.1007/978-3-642-41338-4_13
+	- https://en.wikipedia.org/wiki/Wikipedia:WikiProject_Medicine/ICD11
+	- 
+	
+

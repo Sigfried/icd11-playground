@@ -98,5 +98,5 @@ export interface ApiConfig {
   serverUrl: string;
   version: string;
   language: string;
-  mmsRelease: string;
+  release: string;
 }

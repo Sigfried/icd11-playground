@@ -8,8 +8,8 @@ from config import get_api_settings, get_server_url
 from icd_client import icd_client
 
 app = FastAPI(
-    title="ICD-11 Exploration API",
-    description="Backend proxy for exploring ICD-11 Foundation and MMS",
+    title="ICD-11 Foundation API",
+    description="Backend proxy for exploring ICD-11 Foundation",
 )
 
 app.add_middleware(
@@ -30,7 +30,7 @@ async def get_config():
         "serverUrl": get_server_url(),
         "version": settings["version"],
         "language": settings["language"],
-        "mmsRelease": settings["mms_release"],
+        "release": settings["release"],
     }
 
 

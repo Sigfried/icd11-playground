@@ -31,7 +31,7 @@ def get_api_settings() -> dict:
     return {
         "version": config["api"].get("version", "v2"),
         "language": config["api"].get("language", "en"),
-        "mms_release": config["api"].get("mms_release", "2024-01"),
+        "release": config["api"].get("release", "2024-01"),
         "server": config["api"]["server"],
     }
 
