@@ -142,7 +142,7 @@ Legend:
 
 ### 2. Node-Link Diagram (Secondary)
 
-For exploring local neighborhood structure when the tree view doesn't convey relationships clearly.
+A more visual way to explore the local neighborhood structure.
 
 ```mermaid
 flowchart TD
