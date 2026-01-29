@@ -164,7 +164,7 @@ flowchart TD
 |----------------------|-------------|
 | **Hierarchical layout**  | Should be a layered/hierarchical layout, not force-directed.
 | **Focus + context**      | Center on selected concept, show N hops of parents/children |
-| **Click to navigate**    | Clicking a node in the diagram updates the tree view and diagram focus |
+| **Click to navigate**    | Node clicks will update indented tree view focus and will allow expanding/collapsing adjacent node links |
 | **Parent/child badges**  | Same `[N↑]` `[N↓]` badges as tree view |
 
 **Layout options to evaluate:**
