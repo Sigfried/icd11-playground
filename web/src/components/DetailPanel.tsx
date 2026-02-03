@@ -1,4 +1,5 @@
-import { useGraph } from '../providers/GraphProvider';
+import { useState, useCallback, useEffect } from 'react';
+import { useGraph, type ConceptNode } from '../providers/GraphProvider';
 import './DetailPanel.css';
 
 /**
@@ -14,8 +15,90 @@ import './DetailPanel.css';
  *
  * See icd11-visual-interface-spec.md for full requirements.
  */
+
+interface RelationListProps {
+  title: string;
+  ids: string[];
+  expectedCount: number;
+  onLoadMore?: () => void;
+  onSelect: (id: string) => void;
+  graph: ReturnType<typeof useGraph>['graph'];
+}
+
+function RelationList({ title, ids, expectedCount, onLoadMore, onSelect, graph }: RelationListProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded(prev => !prev);
+  }, []);
+
+  const loadedCount = ids.length;
+  const hasMore = loadedCount < expectedCount;
+
+  return (
+    <div className={`detail-section ${isExpanded ? '' : 'collapsed'}`}>
+      <h3 className="section-header" onClick={toggleExpanded}>
+        <span className="section-toggle">{isExpanded ? '▼' : '▶'}</span>
+        {title}
+        <span className="section-count">
+          {loadedCount}{hasMore ? `/${expectedCount}` : ''}
+        </span>
+      </h3>
+      {isExpanded && (
+        <div className="section-content">
+          {ids.length === 0 && !hasMore ? (
+            <div className="no-items">None</div>
+          ) : (
+            <ul className="relation-list">
+              {ids.map(id => {
+                const node: ConceptNode | null = graph.hasNode(id)
+                  ? graph.getNodeAttributes(id)
+                  : null;
+                return (
+                  <li key={id} onClick={() => onSelect(id)}>
+                    {node?.title ?? `Entity ${id}`}
+                    {node?.parentCount && node.parentCount > 1 && (
+                      <span className="inline-badge">{node.parentCount}↑</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {hasMore && onLoadMore && (
+            <button className="load-more-btn" onClick={onLoadMore}>
+              Load {expectedCount - loadedCount} more...
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DetailPanel() {
-  const { selectedNodeId, graph } = useGraph();
+  const {
+    selectedNodeId,
+    graph,
+    graphVersion,
+    selectNode,
+    loadParents,
+    loadChildren,
+  } = useGraph();
+
+  // Force re-render when graph changes
+  void graphVersion;
+
+  // Auto-load parents when node is selected
+  useEffect(() => {
+    if (selectedNodeId && graph.hasNode(selectedNodeId)) {
+      const parentCount = graph.getNodeAttribute(selectedNodeId, 'parentCount');
+      const loadedParents = graph.inNeighbors(selectedNodeId).length;
+      if (parentCount > loadedParents) {
+        loadParents(selectedNodeId);
+      }
+    }
+  }, [selectedNodeId, graph, loadParents]);
 
   if (!selectedNodeId) {
     return (
@@ -30,10 +113,31 @@ export function DetailPanel() {
     );
   }
 
-  // TODO: Get node data from graph
-  const nodeData = graph.hasNode(selectedNodeId)
+  const nodeData: ConceptNode | null = graph.hasNode(selectedNodeId)
     ? graph.getNodeAttributes(selectedNodeId)
     : null;
+
+  // Get parents (inNeighbors = nodes pointing to this node)
+  const parentIds = graph.hasNode(selectedNodeId)
+    ? graph.inNeighbors(selectedNodeId)
+    : [];
+
+  // Get children (outNeighbors = nodes this node points to)
+  const childIds = graph.hasNode(selectedNodeId)
+    ? graph.outNeighbors(selectedNodeId)
+    : [];
+
+  const handleLoadParents = useCallback(() => {
+    if (selectedNodeId) {
+      loadParents(selectedNodeId);
+    }
+  }, [selectedNodeId, loadParents]);
+
+  const handleLoadChildren = useCallback(() => {
+    if (selectedNodeId) {
+      loadChildren(selectedNodeId);
+    }
+  }, [selectedNodeId, loadChildren]);
 
   return (
     <>
@@ -67,25 +171,28 @@ export function DetailPanel() {
           </div>
         </div>
 
-        {/* Parents section - TODO */}
-        <div className="detail-section collapsed">
-          <h3 className="section-header">
-            Parents
-            <span className="section-count">{nodeData?.parentCount ?? '?'}</span>
-          </h3>
-        </div>
+        <RelationList
+          title="Parents"
+          ids={parentIds}
+          expectedCount={nodeData?.parentCount ?? 0}
+          onLoadMore={handleLoadParents}
+          onSelect={selectNode}
+          graph={graph}
+        />
 
-        {/* Children section - TODO */}
-        <div className="detail-section collapsed">
-          <h3 className="section-header">
-            Children
-            <span className="section-count">{nodeData?.childCount ?? '?'}</span>
-          </h3>
-        </div>
+        <RelationList
+          title="Children"
+          ids={childIds}
+          expectedCount={nodeData?.childCount ?? 0}
+          onLoadMore={handleLoadChildren}
+          onSelect={selectNode}
+          graph={graph}
+        />
 
         {/* Proposals section - future */}
         <div className="detail-section collapsed">
           <h3 className="section-header">
+            <span className="section-toggle">▶</span>
             Proposals
             <span className="section-count coming-soon">coming soon</span>
           </h3>

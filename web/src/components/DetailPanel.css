@@ -60,7 +60,7 @@
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin: 0;
   padding: 8px 0;
   font-size: 0.9rem;
@@ -74,7 +74,14 @@
   color: var(--text-primary);
 }
 
+.section-toggle {
+  font-size: 0.7rem;
+  width: 12px;
+  color: var(--text-secondary);
+}
+
 .section-count {
+  margin-left: auto;
   font-size: 0.75rem;
   padding: 2px 6px;
   background: var(--bg-tertiary);
@@ -95,6 +102,12 @@
   padding: 8px 0;
 }
 
+.no-items {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 /* Parent/child lists */
 .relation-list {
   list-style: none;
@@ -103,6 +116,9 @@
 }
 
 .relation-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 0;
   font-size: 0.85rem;
   cursor: pointer;
@@ -110,4 +126,29 @@
 
 .relation-list li:hover {
   color: var(--accent-cyan);
+}
+
+.inline-badge {
+  font-size: 0.7rem;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--accent-cyan);
+  font-family: monospace;
+}
+
+.load-more-btn {
+  margin-top: 8px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.load-more-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
