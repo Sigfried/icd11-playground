@@ -12,37 +12,58 @@ Build a prototype visual interface to help ICD-11 proposal authors and reviewers
 ## Scope
 
 - **Foundation only** - No MMS or other linearizations/serializations
-- **Docker-based development** - Use local ICD-11 API container
-- **Official API support** - For production use with OAuth2
+- **Frontend-first** - Direct ICD-11 API calls from browser
+- **Shareable** - Colleagues need to review, so not just local dev
+
+## Technology Stack
+
+- **Frontend:** React, TypeScript, Vite, pnpm
+- **Graph:** graphology.js for data structure
+- **Visualization:** D3.js for rendering
+- **Layout:** elkjs (temporary — see note below)
+- **Data Source:** ICD-11 Foundation API (Docker local or official WHO)
+
+### Layout Engine Migration Plan
+
+Currently using **elkjs** for hierarchical DAG layout. Plan to migrate to **Python/igraph** backend because:
+- igraph supports **forced vertical layering** (nodes assigned to specific layers)
+- Better control over complex polyhierarchy layouts
+- Backend can also handle OAuth2 and caching
+
+If/when we add a Python backend (could run on Dreamhost), it would:
+1. Handle OAuth2 for the official WHO API
+2. Provide graph layout calculations via igraph
+3. Cache API responses for performance
 
 ## Future Integration
 
 - **iCAT2 API** - Used by the [Maintenance Platform](https://icd.who.int/dev11/f/en), access pending
 - **.NET Maintenance Platform** - Eventually integrate this tool into the existing platform
 
-## Technology Stack
-
-- **Frontend:** React, TypeScript, D3.js, graphology.js (Vite)
-- **Backend:** FastAPI (Python) for API proxying and caching
-- **Data Source:** ICD-11 API via Docker or official WHO
-
 ## Running the App
 
 ```bash
-# Terminal 1: Start FastAPI backend (port 8000)
-cd api && source .venv/bin/activate && uv run python main.py
-
-# Terminal 2: Start React frontend (port 5173)
-cd web && npm run dev
+cd web && pnpm dev
 ```
 
 Then open http://localhost:5173
 
+For local API without OAuth2:
+```bash
+docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
+```
+Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
+
 ## Project Structure
 
 ```
-├── web/                  # React + TypeScript frontend
-├── api/                  # FastAPI backend
+├── web/                  # React + TypeScript frontend (active)
+│   └── src/
+│       ├── api/          # ICD-11 API client
+│       ├── components/   # TreeView, NodeLinkView, DetailPanel
+│       ├── providers/    # GraphProvider (graphology state)
+│       └── archive/      # Old ECT-based components
+├── api/                  # FastAPI backend (dormant, may revive for igraph)
 ├── ICD-11-notes/         # Obsidian vault with notes and papers
 ├── design-stuff/         # Design explorations
 ├── icd11-visual-interface-spec.md  # Design specification (central doc)
@@ -54,7 +75,7 @@ Then open http://localhost:5173
 | Server | URL | Auth | Use |
 |--------|-----|------|-----|
 | Docker Local | `http://localhost:80` | None | Development |
-| Official WHO | `https://id.who.int` | OAuth2 | Production |
+| Official WHO | `https://id.who.int` | OAuth2 | Production/sharing |
 
 ## Test Entities
 
@@ -76,18 +97,19 @@ Then open http://localhost:5173
 ## Technical Preferences (from global CLAUDE.md)
 
 - Use ES modules, not CommonJS
-- Use `uv` for Python (not pip or poetry)
+- Use `uv` for Python, `pnpm` for Node
 - Prefer DRY code
-- Run typecheck after changes (`npm run typecheck` or `npx tsc --noEmit`)
+- Run typecheck after changes (`pnpm build` includes tsc)
 - Don't use `any` in TypeScript
 - Commit but don't push without permission
 
 ## Open Questions
 
-1. **TypeScript API calls** - Should frontend call ICD-11 API directly or through FastAPI?
-   - FastAPI provides caching and allows Python-based exploration
-   - Direct calls would simplify architecture
+1. **Canonical/linked parent distinction** - Does the public API expose this or only iCAT?
 
-2. **Canonical/linked parent distinction** - Does the public API expose this or only iCAT?
+2. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
 
-3. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
+3. **Deployment for review** - Options:
+   - Static hosting + Docker API somewhere
+   - Small Python backend on Dreamhost handling OAuth2
+   - Wait for WHO API access

@@ -13,9 +13,11 @@ See [Design Specification](icd11-visual-interface-spec.md) for detailed design d
 
 ## Technology Stack
 
-- **Frontend:** React, TypeScript, D3.js, graphology.js
-- **Backend:** FastAPI (Python) for API proxying
-- **Data Source:** ICD-11 API (Docker local or official WHO)
+- **Frontend:** React, TypeScript, Vite, pnpm
+- **Graph:** graphology.js for data structure
+- **Visualization:** D3.js for rendering
+- **Layout:** elkjs (temporary — may migrate to Python/igraph for better hierarchical control)
+- **Data Source:** ICD-11 Foundation API
 - **Future:** Integration with iCAT2 API and .NET Maintenance Platform
 
 ## Quick Links
@@ -28,11 +30,7 @@ See [Design Specification](icd11-visual-interface-spec.md) for detailed design d
 ## Running the App
 
 ```bash
-# Terminal 1: Start FastAPI backend (port 8000)
-cd api && source .venv/bin/activate && uv run python main.py
-
-# Terminal 2: Start React frontend (port 5173)
-cd web && npm run dev
+cd web && pnpm dev
 ```
 
 Then open http://localhost:5173
@@ -41,10 +39,10 @@ Then open http://localhost:5173
 
 | Server | URL | Auth | Use Case |
 |--------|-----|------|----------|
-| **Docker Local** | `http://localhost:80` | None | Development, no rate limits |
-| **Official WHO** | `https://id.who.int` | OAuth2 | Production, authoritative data |
+| **Docker Local** | `http://localhost:80` | None | Development |
+| **Official WHO** | `https://id.who.int` | OAuth2 | Production/sharing |
 
-### Docker Local (Recommended for Development)
+### Docker Local (for development without OAuth2)
 
 ```bash
 docker run -p 80:80 \
@@ -54,15 +52,13 @@ docker run -p 80:80 \
   whoicd/icd-api
 ```
 
+Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
+
 ### Official WHO API
 
 1. Register at https://icd.who.int/icdapi
 2. Get your API credentials (client_id and client_secret)
-3. Create `.env` in the root directory:
-   ```
-   client_id=your_client_id
-   client_secret=your_client_secret
-   ```
+3. For browser access, will need a small backend to handle OAuth2
 
 ## Reference Papers
 
@@ -89,11 +85,10 @@ docker run -p 80:80 \
 
 ```
 ├── web/                  # React + TypeScript frontend
-├── api/                  # FastAPI backend
 ├── ICD-11-notes/         # Obsidian vault with notes and papers
 ├── design-stuff/         # Design explorations
 ├── icd11-visual-interface-spec.md  # Design specification
-└── archive/              # Archived playground/exploration code
+└── archive/              # Archived code (Python API, old components)
 ```
 
 ## Key ICD-11 Concepts

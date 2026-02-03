@@ -1,73 +1,77 @@
-# React + TypeScript + Vite
+# ICD-11 Foundation Visual Maintenance Tool — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite application for visualizing and navigating the ICD-11 Foundation polyhierarchy.
 
-Currently, two official plugins are available:
+## Architecture
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+See [../icd11-visual-interface-spec.md](../icd11-visual-interface-spec.md) for full design specification.
 
-## React Compiler
+### Key Libraries
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Library | Purpose | Notes |
+|---------|---------|-------|
+| **graphology** | Graph data structure | Stores Foundation as polyhierarchy (DAG) |
+| **D3.js** | Node-link visualization | Renders neighborhood diagram |
+| **elkjs** | Hierarchical layout | Eclipse Layout Kernel for DAG layout |
 
-## Expanding the ESLint configuration
+### Layout Engine Note
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+We're currently using **elkjs** for hierarchical layout in the node-link view. However, we may migrate to a **Python/igraph backend** for layout calculation because:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- igraph supports **forced vertical layering** (assigning nodes to specific layers)
+- Better control over complex polyhierarchy layouts
+- Could run on a small server (e.g., Dreamhost) for colleagues to access
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+If we add a Python backend, it would:
+1. Handle OAuth2 for the official WHO API
+2. Provide graph layout calculations via igraph
+3. Cache API responses
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start dev server
+pnpm dev
+
+# Type check
+pnpm build   # includes tsc
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## API Access
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The app calls the ICD-11 Foundation API directly. Options:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Environment | API Base | Auth |
+|-------------|----------|------|
+| Local Docker | `http://localhost:80` | None |
+| Official WHO | `https://id.who.int` | OAuth2 |
+
+For local development without OAuth2:
+```bash
+docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
+```
+
+Then update `src/api/icd11.ts` to use `http://localhost:80`.
+
+## File Structure
+
+```
+src/
+├── api/
+│   └── icd11.ts          # ICD-11 API client
+├── components/
+│   ├── TreeView.tsx      # Indented tree navigation (primary)
+│   ├── NodeLinkView.tsx  # DAG visualization (secondary)
+│   └── DetailPanel.tsx   # Entity metadata panel
+├── providers/
+│   └── GraphProvider.tsx # Graph state management
+├── types/
+│   ├── icd.ts            # ICD-11 API types
+│   └── ect.d.ts          # (archived) ECT widget types
+├── archive/              # Old components (ECT-based)
+├── App.tsx
+└── main.tsx
 ```

@@ -1,9 +1,10 @@
 .env
-ICD11Tooling.pdf
+.envrc
 .idea
+ICD11Tooling.pdf
 
 # Obsidian - ignore editor state, keep shared config
-ICD-11-notes/.obsidian/workspace.json
-ICD-11-notes/.obsidian/graph.json
-ICD-11-notes/.obsidian/cache
+archive/ICD-11-notes/.obsidian/workspace.json
+archive/ICD-11-archive/notes/.obsidian/graph.json
+archive/ICD-11-notes/.obsidian/cache
 

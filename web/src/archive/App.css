@@ -1,0 +1,189 @@
+/* ICD-11 Explorer Styles */
+
+:root {
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-primary: #e8e8e8;
+  --color-accent: #e94560;
+  --color-text: #333;
+  --color-text-muted: #666;
+  --color-border: #ddd;
+  --color-success: #4caf50;
+  --color-warning: #ff9800;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.app-header {
+  background: var(--color-surface);
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.header-right {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Config display */
+.config-display {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.server-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.server-badge[data-server="test"] {
+  background: var(--color-warning);
+  color: #000;
+}
+
+.server-badge[data-server="docker"] {
+  background: var(--color-success);
+  color: #000;
+}
+
+.server-badge[data-server="official"] {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.config-detail {
+  color: var(--color-text-muted);
+}
+
+/* Section labels */
+.section-label {
+  display: block;
+  padding: 0.5rem 1rem;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Coding Tool section */
+.coding-tool-section {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.coding-tool {
+  position: relative;
+  padding: 0.75rem 1rem;
+}
+
+.coding-tool .ctw-input {
+  width: 100%;
+  max-width: 600px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.coding-tool .ctw-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Browser section */
+.browser-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Browser container */
+.browser-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--color-surface);
+}
+
+.browser {
+  height: 100%;
+  width: 100%;
+}
+
+.browser .ctw-eb-window {
+  height: 100% !important;
+}
+
+/* View JSON button */
+.view-json-button {
+  padding: 0.4rem 0.8rem;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.view-json-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.view-json-button:disabled {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* Foundation button */
+.foundation-button {
+  padding: 0.4rem 0.8rem;
+  background: var(--color-success);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.foundation-button:hover {
+  opacity: 0.9;
+}

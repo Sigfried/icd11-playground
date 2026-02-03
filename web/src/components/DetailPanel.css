@@ -1,0 +1,113 @@
+/* DetailPanel styles */
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-title {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent-yellow);
+}
+
+.detail-definition {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.detail-meta {
+  margin-bottom: 12px;
+}
+
+.detail-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+.meta-label {
+  color: var(--text-secondary);
+}
+
+.meta-value {
+  font-family: monospace;
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.detail-actions {
+  margin-top: 12px;
+}
+
+.detail-link {
+  color: var(--accent-cyan);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.detail-link:hover {
+  text-decoration: underline;
+}
+
+/* Collapsible sections */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-top: 1px solid var(--border-color);
+}
+
+.section-header:hover {
+  color: var(--text-primary);
+}
+
+.section-count {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+}
+
+.section-count.coming-soon {
+  font-style: italic;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.detail-section.collapsed .section-content {
+  display: none;
+}
+
+.section-content {
+  padding: 8px 0;
+}
+
+/* Parent/child lists */
+.relation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.relation-list li {
+  padding: 4px 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.relation-list li:hover {
+  color: var(--accent-cyan);
+}
