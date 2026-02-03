@@ -1,0 +1,10 @@
+services:
+  icd-api:
+    image: whoicd/icd-api
+    container_name: icd11-local
+    ports:
+      - "80:80"
+    environment:
+      - acceptLicense=true
+      - saveAnalytics=false
+      - include=2024-01_en

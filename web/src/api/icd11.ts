@@ -15,8 +15,9 @@
  * See CLAUDE.md for API configuration details.
  */
 
-// TODO: Make this configurable (env var or config file)
-const API_BASE = 'https://id.who.int';
+// For local Docker: 'http://localhost' (no auth needed)
+// For official WHO API: 'https://id.who.int' (requires OAuth2)
+const API_BASE = import.meta.env.VITE_ICD_API_BASE ?? 'http://localhost';
 const API_VERSION = 'v2';
 const LANGUAGE = 'en';
 
