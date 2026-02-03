@@ -113,3 +113,40 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
    - Static hosting + Docker API somewhere
    - Small Python backend on Dreamhost handling OAuth2
    - Wait for WHO API access
+
+## Next Steps (Implementation)
+
+**Current state:** Fresh component stubs created, dependencies installed, app builds and runs.
+
+**Ready to implement (in order):**
+
+1. **GraphProvider** - Wire up ICD-11 API calls
+   - `loadNode(id)` - fetch entity from API, add to graphology graph
+   - `loadChildren(id)` - fetch and add children
+   - Start with Foundation root on mount
+
+2. **TreeView** - Basic tree rendering
+   - Render nodes from graph
+   - Expand/collapse with lazy loading
+   - Show `[N↑]` `[N↓]` badges
+   - Selection state
+
+3. **DetailPanel** - Show selected node info
+   - Title, definition
+   - Parent/child lists
+   - Link to WHO browser
+
+4. **NodeLinkView** - D3 + elkjs visualization
+   - Render neighborhood of selected node
+   - Hierarchical layout (not force-directed)
+   - Click to navigate
+
+**API notes:**
+- For local dev: `docker run -p 80:80 -e acceptLicense=true whoicd/icd-api`
+- Then change `API_BASE` in `web/src/api/icd11.ts` to `http://localhost:80`
+- Official WHO API requires OAuth2 (need backend proxy for browser access)
+
+**Test entities:**
+- Foundation root: `/icd/entity`
+- Cholera: `257068234`
+- Diabetes: `1217915084`
