@@ -1,0 +1,204 @@
+{
+  "main": {
+    "id": "647a7ab9d6725b48",
+    "type": "split",
+    "children": [
+      {
+        "id": "995f197859024d75",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f492a40a8692be8d",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "fe48154801ba2a9c",
+    "type": "split",
+    "children": [
+      {
+        "id": "35007a74f5c2729a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c998992ffebe6b73",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "b540dcd13ab2f000",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "b2c556a1415c243f",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 414.5
+  },
+  "right": {
+    "id": "fd6b0972a8fb378e",
+    "type": "split",
+    "children": [
+      {
+        "id": "6d9dee14fac50410",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9f05c0921da6ed69",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "questions.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for questions"
+            }
+          },
+          {
+            "id": "0bb60e273cf965d8",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "questions.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from questions"
+            }
+          },
+          {
+            "id": "e92d97aae409e52e",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "57e6a19d041b8ab2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "questions.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of questions"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "f492a40a8692be8d",
+  "lastOpenFiles": [
+    "Papers and questions with Claude's messy help/papers/README.md",
+    "Papers and questions with Claude's messy help/papers/files/Chute and Çelik - 2022 - Overview of ICD-11 architecture and structure.pdf",
+    "Email with Chris 2026-01-16.md",
+    "questions.md",
+    "Design sketches.md",
+    "().md",
+    "Pasted image 20260121125517.png",
+    "Pasted image 20260121122600.png",
+    "Papers and questions with Claude's messy help/papers/chute-celik-2022-architecture.md",
+    "Notes from 01-20 mtg.md",
+    "Pasted image 20260120144227.png",
+    "Pasted image 20260120122044.png",
+    "Papers and questions with Claude's messy help/Pasted image 20251219085834.png",
+    "Papers and questions with Claude's messy help",
+    "Papers and questions with Claude's messy help/concepts/README.md",
+    "Papers and questions with Claude's messy help/papers/files/ICD11Tooling.pdf",
+    "Papers and questions with Claude's messy help/papers/harrison-2021-ICD-11.md",
+    "papers/harrison-2021-three-part-model.md",
+    "Papers and questions with Claude's messy help/papers/files/Harrison et al. - 2021 - ICD-11 an international classification of disease.pdf",
+    "Papers and questions with Claude's messy help/explorations/README.md",
+    "Papers and questions with Claude's messy help/papers/mabon-2022-postcoordination.md",
+    "Papers and questions with Claude's messy help/papers/files/Mabon et al. - 2022 - Postcoordination of codes in ICD-11.pdf",
+    "Papers and questions with Claude's messy help/papers/forster-2023-patient-safety.md",
+    "Papers and questions with Claude's messy help/papers/files/nihms373006.pdf",
+    "Papers and questions with Claude's messy help/papers/files/Forster et al. - 2023 - ICD-11 A catalyst for advancing patient safety su.pdf",
+    "Papers and questions with Claude's messy help/papers/files/Drösler et al. - 2021 - ICD-11 extension codes support detailed clinical a.pdf",
+    "Papers and questions with Claude's messy help/papers/files",
+    "Papers and questions with Claude's messy help/papers/tudorache-2013-webprotege.md",
+    "Papers and questions with Claude's messy help/papers/icd11-tooling.md",
+    "papers/cimino-2012-desiderata.md",
+    "questions.md.tmp.86219.1766159254944",
+    "Papers and questions with Claude's messy help/papers/drosler-2021-extension-codes.md",
+    "learning-goals.md"
+  ]
+}
