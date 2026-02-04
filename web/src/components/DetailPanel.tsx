@@ -122,10 +122,11 @@ export function DetailPanel() {
     ? graph.inNeighbors(selectedNodeId)
     : [];
 
-  // Get children (outNeighbors = nodes this node points to)
-  const childIds = graph.hasNode(selectedNodeId)
-    ? graph.outNeighbors(selectedNodeId)
-    : [];
+  // Get children in API order, filtered to loaded ones
+  const loadedChildren = new Set(
+    graph.hasNode(selectedNodeId) ? graph.outNeighbors(selectedNodeId) : []
+  );
+  const childIds = (nodeData?.childOrder ?? []).filter(id => loadedChildren.has(id));
 
   const handleLoadParents = useCallback(() => {
     if (selectedNodeId) {

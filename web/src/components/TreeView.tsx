@@ -48,8 +48,9 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     ? graph.getNodeAttributes(nodeId)
     : null;
 
-  // Get children from graph edges
-  const childIds = graph.hasNode(nodeId) ? graph.outNeighbors(nodeId) : [];
+  // Get children in API order (childOrder), filtered to only loaded ones
+  const loadedChildren = new Set(graph.hasNode(nodeId) ? graph.outNeighbors(nodeId) : []);
+  const childIds = (nodeData?.childOrder ?? []).filter(id => loadedChildren.has(id));
   const hasChildren = (nodeData?.childCount ?? 0) > 0 || childIds.length > 0;
 
   const handleExpandClick = useCallback((e: React.MouseEvent) => {

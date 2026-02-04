@@ -25,6 +25,7 @@ export interface ConceptNode {
   definition?: string;
   parentCount: number;
   childCount: number;
+  childOrder: string[]; // ordered child IDs from API
   loaded: boolean; // whether children have been fetched
 }
 
@@ -83,12 +84,15 @@ export function GraphProvider({ children }: GraphProviderProps) {
   /** Add a node from API response to the graph */
   const addNodeFromEntity = useCallback((entity: FoundationEntity): ConceptNode => {
     const id = extractIdFromUri(entity['@id']);
+    // Extract ordered child IDs from API response
+    const childOrder = (entity.child ?? []).map(uri => extractIdFromUri(uri));
     const nodeData: ConceptNode = {
       id,
       title: getTextValue(entity.title),
       definition: getTextValue(entity.definition) || getTextValue(entity.longDefinition),
       parentCount: entity.parent?.length ?? 0,
       childCount: entity.child?.length ?? 0,
+      childOrder,
       loaded: false,
     };
 

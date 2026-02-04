@@ -29,6 +29,7 @@
 - [ ] Click ▼ → collapses, hides children
 - [ ] Nodes with multiple parents show `[N↑]` badge (may need to drill down to find one)
 - [ ] Loading shows `⋯` indicator while fetching
+- [ ] **Child order matches WHO Foundation browser** - compare with https://icd.who.int/browse/2025-01/foundation/en
 
 ## 3. Node Selection
 
