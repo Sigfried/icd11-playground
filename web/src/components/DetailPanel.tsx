@@ -100,6 +100,20 @@ export function DetailPanel() {
     }
   }, [selectedNodeId, graph, loadParents]);
 
+  // IMPORTANT: All hooks must be called before any conditional return.
+  // Moving these after the early return caused "Rendered more hooks" error.
+  const handleLoadParents = useCallback(() => {
+    if (selectedNodeId) {
+      loadParents(selectedNodeId);
+    }
+  }, [selectedNodeId, loadParents]);
+
+  const handleLoadChildren = useCallback(() => {
+    if (selectedNodeId) {
+      loadChildren(selectedNodeId);
+    }
+  }, [selectedNodeId, loadChildren]);
+
   if (!selectedNodeId) {
     return (
       <>
@@ -127,18 +141,6 @@ export function DetailPanel() {
     graph.hasNode(selectedNodeId) ? graph.outNeighbors(selectedNodeId) : []
   );
   const childIds = (nodeData?.childOrder ?? []).filter(id => loadedChildren.has(id));
-
-  const handleLoadParents = useCallback(() => {
-    if (selectedNodeId) {
-      loadParents(selectedNodeId);
-    }
-  }, [selectedNodeId, loadParents]);
-
-  const handleLoadChildren = useCallback(() => {
-    if (selectedNodeId) {
-      loadChildren(selectedNodeId);
-    }
-  }, [selectedNodeId, loadChildren]);
 
   return (
     <>
