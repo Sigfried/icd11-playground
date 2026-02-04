@@ -25,15 +25,16 @@ Build a prototype visual interface to help ICD-11 proposal authors and reviewers
 
 ### Layout Engine Migration Plan
 
-Currently using **elkjs** for hierarchical DAG layout. Plan to migrate to **Python/igraph** backend because:
+Currently using **elkjs** for hierarchical DAG layout. May migrate to **Python/igraph** backend because:
 - igraph supports **forced vertical layering** (nodes assigned to specific layers)
 - Better control over complex polyhierarchy layouts
-- Backend can also handle OAuth2 and caching
 
-If/when we add a Python backend (could run on Dreamhost), it would:
-1. Handle OAuth2 for the official WHO API
-2. Provide graph layout calculations via igraph
-3. Cache API responses for performance
+### API Proxy (Cloudflare Worker)
+
+For production deployment, a Cloudflare Worker (`worker/`) handles OAuth2 for the WHO API:
+- Manages token acquisition and caching
+- Proxies requests to `https://id.who.int`
+- CORS enabled for GitHub Pages
 
 ## Future Integration
 
@@ -63,7 +64,7 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 │       ├── components/   # TreeView, NodeLinkView, DetailPanel
 │       ├── providers/    # GraphProvider (graphology state)
 │       └── archive/      # Old ECT-based components
-├── api/                  # FastAPI backend (dormant, may revive for igraph)
+├── worker/               # Cloudflare Worker for OAuth2 proxy
 ├── ICD-11-notes/         # Obsidian vault with notes and papers
 ├── design-stuff/         # Design explorations
 ├── icd11-visual-interface-spec.md  # Design specification (central doc)
@@ -108,11 +109,6 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 1. **Canonical/linked parent distinction** - Does the public API expose this or only iCAT?
 
 2. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
-
-3. **Deployment for review** - Options:
-   - Static hosting + Docker API somewhere
-   - Small Python backend on Dreamhost handling OAuth2
-   - Wait for WHO API access
 
 ## Current State
 

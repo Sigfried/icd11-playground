@@ -16,16 +16,10 @@ See [../icd11-visual-interface-spec.md](../icd11-visual-interface-spec.md) for f
 
 ### Layout Engine Note
 
-We're currently using **elkjs** for hierarchical layout in the node-link view. However, we may migrate to a **Python/igraph backend** for layout calculation because:
+We're currently using **elkjs** for hierarchical layout in the node-link view. May migrate to a **Python/igraph backend** for layout calculation because:
 
 - igraph supports **forced vertical layering** (assigning nodes to specific layers)
 - Better control over complex polyhierarchy layouts
-- Could run on a small server (e.g., Dreamhost) for colleagues to access
-
-If we add a Python backend, it would:
-1. Handle OAuth2 for the official WHO API
-2. Provide graph layout calculations via igraph
-3. Cache API responses
 
 ## Development
 
@@ -42,19 +36,19 @@ pnpm build   # includes tsc
 
 ## API Access
 
-The app calls the ICD-11 Foundation API directly. Options:
+The app auto-detects the environment:
 
-| Environment | API Base | Auth |
-|-------------|----------|------|
-| Local Docker | `http://localhost:80` | None |
-| Official WHO | `https://id.who.int` | OAuth2 |
+| Environment | API | Auth |
+|-------------|-----|------|
+| localhost | Docker container directly | None |
+| GitHub Pages | Cloudflare Worker proxy | OAuth2 (handled by worker) |
 
-For local development without OAuth2:
+For local development:
 ```bash
 docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
 ```
 
-Then update `src/api/icd11.ts` to use `http://localhost:80`.
+For production, deploy the Cloudflare Worker in `../worker/`.
 
 ## File Structure
 

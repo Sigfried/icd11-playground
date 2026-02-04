@@ -1,0 +1,12 @@
+name = "icd11-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Non-secret config
+WHO_API_BASE = "https://id.who.int"
+TOKEN_URL = "https://icdaccessmanagement.who.int/connect/token"
+
+# Secrets (set via `wrangler secret put`):
+# ICD_CLIENT_ID
+# ICD_CLIENT_SECRET

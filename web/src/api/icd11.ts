@@ -2,24 +2,38 @@
  * ICD-11 API Client
  *
  * Direct client for the ICD-11 Foundation API.
- * Currently configured for the official WHO API (requires OAuth2 for production).
  *
- * For development without OAuth2, you can:
- * 1. Run the Docker container locally: docker run -p 80:80 -e acceptLicense=true whoicd/icd-api
- * 2. Change API_BASE to 'http://localhost:80'
+ * Environment detection:
+ * - localhost: Uses Docker container directly (no auth needed)
+ * - GitHub Pages: Uses proxy backend that handles OAuth2
  *
- * For sharing with colleagues (non-local), options:
- * 1. Deploy a small proxy on Dreamhost that handles OAuth2
- * 2. Wait for WHO to provide access
+ * For local development:
+ *   docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
  *
  * See CLAUDE.md for API configuration details.
  */
 
-// For local Docker: 'http://localhost' (no auth needed)
-// For official WHO API: 'https://id.who.int' (requires OAuth2)
-const API_BASE = import.meta.env.VITE_ICD_API_BASE ?? 'http://localhost';
 const API_VERSION = 'v2';
 const LANGUAGE = 'en';
+
+// Auto-detect environment
+function getApiBase(): string {
+  // Allow explicit override via env var
+  if (import.meta.env.VITE_ICD_API_BASE) {
+    return import.meta.env.VITE_ICD_API_BASE;
+  }
+
+  // On localhost, use Docker directly
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost';
+  }
+
+  // On GitHub Pages or other deployment, use the Cloudflare Worker proxy
+  // Default URL after `wrangler deploy` - update if using custom domain
+  return import.meta.env.VITE_ICD_API_PROXY ?? 'https://icd11-proxy.<your-subdomain>.workers.dev';
+}
+
+const API_BASE = getApiBase();
 
 interface FetchOptions {
   /** OAuth2 access token (required for official WHO API) */
