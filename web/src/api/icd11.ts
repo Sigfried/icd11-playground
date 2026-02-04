@@ -29,8 +29,7 @@ function getApiBase(): string {
   }
 
   // On GitHub Pages or other deployment, use the Cloudflare Worker proxy
-  // Default URL after `wrangler deploy` - update if using custom domain
-  return import.meta.env.VITE_ICD_API_PROXY ?? 'https://icd11-proxy.<your-subdomain>.workers.dev';
+  return import.meta.env.VITE_ICD_API_PROXY ?? 'https://icd11-proxy.sigfried-icd11.workers.dev';
 }
 
 const API_BASE = getApiBase();
