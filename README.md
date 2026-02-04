@@ -81,6 +81,10 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 | Using Semantic Web in ICD-11: Three Years Down the Road (2013) | [Springer](https://link.springer.com/chapter/10.1007/978-3-642-41338-4_13) |
 | Wikipedia: ICD-11 WikiProject | [Wikipedia](https://en.wikipedia.org/wiki/Wikipedia:WikiProject_Medicine/ICD11) |
 
+## Testing
+
+See [Manual Test Plan](web/MANUAL-TEST-PLAN.md) for face-check testing procedures.
+
 ## Project Structure
 
 ```
