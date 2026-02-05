@@ -154,7 +154,7 @@ flowchart TD
         C --> CH2[Child 2]
         C --> CH3[Child 3]
     end
-    
+
     style C fill:#ff9,stroke:#333,stroke-width:3px
 ```
 
@@ -172,6 +172,46 @@ flowchart TD
 - d3-dag (Sugiyama layout for DAGs)  Not good for forcing nodes to particular vertical layers.
 - dagre (simpler, may suffice for local neighborhoods)  Have struggled with it in the past.
 - **If I use a python backend, igraph allows for forced vertical layering.**
+
+#### Scalability & Readability Problem
+
+The current implementation becomes unreadable when node count exceeds ~10. The view auto-scales to fit all nodes in the container, which shrinks everything to illegibility.
+
+![Unreadable node-link view](design-stuff/spec-assets/node-link-unreadable-example.png)
+*Example: 19 nodes renders labels too small to read*
+
+**Root causes:**
+1. Auto-fit scaling with no minimum scale threshold
+2. Showing full ancestor path to root (not just immediate parents)
+3. No user control over zoom/pan
+4. High-degree nodes (many children) create wide layouts
+
+#### Potential Solutions
+
+| Approach | Description | Pros | Cons |
+|----------|-------------|------|------|
+| **Pan + zoom** | Don't auto-fit; render at readable scale, let user navigate | Simple to implement; D3 has built-in support | User must manually navigate; may lose overview |
+| **Limit neighborhood** | Show only immediate parents/children (true 1-hop) | Keeps node count manageable | Loses context of where concept sits in hierarchy |
+| **Minimum scale** | Set floor (e.g., 0.5) on auto-scale | Preserves readability | Content may overflow; needs pan/zoom anyway |
+| **Collapsible clusters** | Group excess children into "N more..." placeholder | Controls sprawl while showing counts | Adds interaction complexity |
+| **Focus + context distortion** | Fisheye or semantic zoom - selected area large, periphery compressed | Shows everything at once | Can be disorienting; harder to implement |
+| **Radial layout** | Fan out from focus node | Better for high-degree nodes | Loses hierarchical clarity |
+| **Adaptive node sizing** | Shrink distant/less-important nodes | Maintains overview with readable focus | Visual hierarchy may confuse |
+
+#### Design Discussion
+
+> **[sg] Add your ideas and preferences here. What approaches seem most promising? What constraints should we consider?**
+
+<!-- Discussion notes will go here -->
+
+#### Wireframes & Screenshots
+
+Store working screenshots and wireframes in `design-stuff/spec-assets/`. These are working documents, not polished assets.
+
+Naming convention: `{component}-{description}-{date or version}.png`
+- `node-link-unreadable-example.png`
+- `node-link-zoom-wireframe-v1.png`
+- `tree-view-badges-screenshot.png`
 
 ### 3. Context Menu / Detail Panel
 
