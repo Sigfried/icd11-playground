@@ -54,6 +54,7 @@ export function NodeLinkView() {
   const { graph, graphVersion, selectedNodeId, selectNode, loadParents, loadChildren } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
 
@@ -146,13 +147,15 @@ export function NodeLinkView() {
     computeLayout();
   }, [selectedNodeId, graph, graphVersion]);
 
-  // D3 rendering
+  // D3 rendering with zoom
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
     if (layoutNodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
+
+    const containerRect = containerRef.current.getBoundingClientRect();
 
     // Calculate bounds
     const bounds = {
@@ -165,18 +168,39 @@ export function NodeLinkView() {
     const contentWidth = bounds.maxX - bounds.minX + 60;
     const contentHeight = bounds.maxY - bounds.minY + 60;
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const scale = Math.min(
+    // Calculate initial transform to fit content, with minimum scale for readability
+    const fitScale = Math.min(
       containerRect.width / contentWidth,
       containerRect.height / contentHeight,
       1 // Don't scale up
     );
+    const MIN_SCALE = 0.4;
+    const initialScale = Math.max(fitScale, MIN_SCALE);
 
-    const translateX = (containerRect.width - contentWidth * scale) / 2 - bounds.minX * scale + 30 * scale;
-    const translateY = (containerRect.height - contentHeight * scale) / 2 - bounds.minY * scale + 30 * scale;
+    const contentCenterX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
+    const contentCenterY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
+    const initialX = containerRect.width / 2 - contentCenterX * initialScale;
+    const initialY = containerRect.height / 2 - contentCenterY * initialScale;
 
-    const g = svg.append('g')
-      .attr('transform', `translate(${translateX}, ${translateY}) scale(${scale})`);
+    // Create container group first (referenced by zoom callback)
+    const g = svg.append('g');
+
+    // Create zoom behavior
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 3])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+      });
+
+    zoomRef.current = zoom;
+
+    svg.call(zoom);
+
+    // Set initial transform
+    const initialTransform = d3.zoomIdentity
+      .translate(initialX, initialY)
+      .scale(initialScale);
+    svg.call(zoom.transform, initialTransform);
 
     // Draw edges
     const edgesG = g.append('g').attr('class', 'edges');
@@ -278,6 +302,47 @@ export function NodeLinkView() {
     }
   }, [selectedNodeId, loadParents, loadChildren]);
 
+  const handleZoomIn = useCallback(() => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, 1.5);
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, 0.67);
+    }
+  }, []);
+
+  const handleFitToView = useCallback(() => {
+    if (!svgRef.current || !containerRef.current || !zoomRef.current || layoutNodes.length === 0) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const bounds = {
+      minX: Math.min(...layoutNodes.map(n => n.x)),
+      maxX: Math.max(...layoutNodes.map(n => n.x + n.width)),
+      minY: Math.min(...layoutNodes.map(n => n.y)),
+      maxY: Math.max(...layoutNodes.map(n => n.y + n.height)),
+    };
+
+    const contentWidth = bounds.maxX - bounds.minX + 60;
+    const contentHeight = bounds.maxY - bounds.minY + 60;
+
+    const scale = Math.min(
+      containerRect.width / contentWidth,
+      containerRect.height / contentHeight,
+      1
+    );
+
+    const contentCenterX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
+    const contentCenterY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
+    const x = containerRect.width / 2 - contentCenterX * scale;
+    const y = containerRect.height / 2 - contentCenterY * scale;
+
+    const transform = d3.zoomIdentity.translate(x, y).scale(scale);
+    d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.transform, transform);
+  }, [layoutNodes]);
+
   return (
     <>
       <div className="panel-header">
@@ -298,9 +363,14 @@ export function NodeLinkView() {
           </div>
         )}
         {selectedNodeId && layoutNodes.length > 0 && (
-          <button className="load-neighborhood-btn" onClick={handleLoadMore}>
-            Expand neighborhood
-          </button>
+          <div className="node-link-controls">
+            <button className="zoom-btn" onClick={handleZoomIn} title="Zoom in">+</button>
+            <button className="zoom-btn" onClick={handleZoomOut} title="Zoom out">−</button>
+            <button className="zoom-btn" onClick={handleFitToView} title="Fit to view">⊡</button>
+            <button className="load-neighborhood-btn" onClick={handleLoadMore}>
+              Expand neighborhood
+            </button>
+          </div>
         )}
       </div>
     </>
