@@ -126,8 +126,7 @@ export function TreeView() {
   return (
     <>
       <div className="panel-header">
-        Tree View
-        <span className="header-hint">Foundation hierarchy</span>
+        Tree View -- <span className="header-hint">Foundation hierarchy</span>
       </div>
       <div className="panel-content tree-content">
         {rootId ? (

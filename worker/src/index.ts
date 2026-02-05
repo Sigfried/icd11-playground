@@ -25,7 +25,7 @@ let tokenExpiresAt = 0;
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, API-Version, Accept-Language',
 };
 
 async function getAccessToken(env: Env): Promise<string> {

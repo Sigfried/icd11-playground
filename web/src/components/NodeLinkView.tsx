@@ -281,8 +281,7 @@ export function NodeLinkView() {
   return (
     <>
       <div className="panel-header">
-        Node-Link View
-        <span className="header-hint">
+        Node-Link View -- <span className="header-hint">
           {selectedNodeId ? `${layoutNodes.length} nodes` : 'Select a node'}
         </span>
       </div>
