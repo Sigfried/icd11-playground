@@ -26,7 +26,6 @@ export interface ConceptNode {
   definition?: string;
   parentCount: number;
   childCount: number;
-  parentOrder: string[]; // ordered parent IDs from API
   childOrder: string[]; // ordered child IDs from API
   loaded: boolean; // whether children have been fetched
 }
@@ -87,15 +86,13 @@ export function GraphProvider({ children }: GraphProviderProps) {
   /** Add a node from API response to the graph */
   const addNodeFromEntity = useCallback((entity: FoundationEntity): ConceptNode => {
     const id = extractIdFromUri(entity['@id']);
-    const parentOrder = (entity.parent ?? []).map(uri => extractIdFromUri(uri));
     const childOrder = (entity.child ?? []).map(uri => extractIdFromUri(uri));
     const nodeData: ConceptNode = {
       id,
       title: getTextValue(entity.title),
       definition: getTextValue(entity.definition) || getTextValue(entity.longDefinition),
-      parentCount: parentOrder.length,
+      parentCount: entity.parent?.length ?? 0,
       childCount: childOrder.length,
-      parentOrder,
       childOrder,
       loaded: false,
     };
@@ -246,30 +243,19 @@ export function GraphProvider({ children }: GraphProviderProps) {
    */
   const navigateToNode = useCallback(async (targetId: string): Promise<void> => {
     try {
-      // Ensure target node is loaded
-      if (!graph.hasNode(targetId) || !graph.getNodeAttribute(targetId, 'title')) {
-        const entity = await getFoundationEntity(targetId);
-        addNodeFromEntity(entity);
-      }
-
-      // Walk parent pointers (already in the graph) to build path from root
+      // Fetch ancestors up to the root
       const ancestorPath: string[] = [targetId];
       let currentId = targetId;
       const maxDepth = 20;
 
       for (let i = 0; i < maxDepth; i++) {
-        const parents: string[] = graph.getNodeAttribute(currentId, 'parentOrder');
-        if (!parents || parents.length === 0) break;
+        const entity = await getFoundationEntity(currentId);
+        addNodeFromEntity(entity);
 
-        // Follow first parent (canonical path)
-        const parentId = parents[0];
+        if (!entity.parent || entity.parent.length === 0) break;
+
+        const parentId = extractIdFromUri(entity.parent[0]);
         ancestorPath.unshift(parentId);
-
-        // Ensure parent node is in the graph
-        if (!graph.hasNode(parentId) || !graph.getNodeAttribute(parentId, 'title')) {
-          const entity = await getFoundationEntity(parentId);
-          addNodeFromEntity(entity);
-        }
         currentId = parentId;
       }
 
