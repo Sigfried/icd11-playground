@@ -62,6 +62,7 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 │   └── src/
 │       ├── api/          # ICD-11 API client
 │       ├── components/   # TreeView, NodeLinkView, DetailPanel
+│       ├── hooks/        # useUrlState (URL ↔ selected node sync)
 │       ├── providers/    # GraphProvider (graphology state)
 │       └── archive/      # Old ECT-based components
 ├── worker/               # Cloudflare Worker for OAuth2 proxy
@@ -110,10 +111,28 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 
 2. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
 
+## Graphology Usage
+
+**Use graphology's built-in methods** instead of manual traversal. Key methods for this project:
+- `graph.inNeighbors(id)` → parent nodes
+- `graph.outNeighbors(id)` → child nodes
+- `graph.inDegree(id)` / `graph.outDegree(id)` → counts
+- `graph.forEachInNeighbor()` / `graph.forEachOutNeighbor()` → iteration
+- See full reference: `.claude/projects/.../memory/graphology-cheatsheet.md`
+
+**Caveat:** `inNeighbors().length` only counts loaded edges. Use `parentCount`/`childCount` from `ConceptNode` for the API's true total.
+
+## Foundation Root
+
+The root entity's `@id` is `http://id.who.int/icd/entity` (no numeric suffix).
+- `extractIdFromUri` returns `'root'` for it
+- `getFoundationEntity('root')` routes to `/icd/entity`
+
 ## Current State
 
 Core visualization is implemented:
 - **GraphProvider** - ICD-11 API integration with lazy loading
+- **useUrlState** - URL ↔ selected node sync with `?node=ID`
 - **TreeView** - Path-based expansion for polyhierarchy, badges
 - **DetailPanel** - Collapsible parent/child lists
 - **NodeLinkView** - D3 + elkjs hierarchical layout
