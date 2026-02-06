@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import Graph from 'graphology';
 import {
   getFoundationEntity,
@@ -7,6 +7,7 @@ import {
   getTextValue,
   type FoundationEntity,
 } from '../api/icd11';
+import { useUrlState } from '../hooks/useUrlState';
 
 /**
  * Graph context for ICD-11 Foundation data
@@ -25,6 +26,7 @@ export interface ConceptNode {
   definition?: string;
   parentCount: number;
   childCount: number;
+  parentOrder: string[]; // ordered parent IDs from API
   childOrder: string[]; // ordered child IDs from API
   loaded: boolean; // whether children have been fetched
 }
@@ -72,6 +74,15 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
   const [rootId, setRootId] = useState<string | null>(null);
+  const pendingNodeIdRef = useRef<string | null>(null);
+
+  // TODO: remove debug helpers when no longer needed
+  useEffect(() => {
+    const w = window as Record<string, unknown>;
+    const idName = (id: string) => graph.hasNode(id) ? graph.getNodeAttribute(id, 'title') : `?(${id})`;
+    w._idName = idName;
+    w._idNames = (ids: string[]) => ids.map(idName);
+  }, [graph]);
 
   const incrementVersion = useCallback(() => {
     setGraphVersion(v => v + 1);
@@ -84,14 +95,15 @@ export function GraphProvider({ children }: GraphProviderProps) {
   /** Add a node from API response to the graph */
   const addNodeFromEntity = useCallback((entity: FoundationEntity): ConceptNode => {
     const id = extractIdFromUri(entity['@id']);
-    // Extract ordered child IDs from API response
+    const parentOrder = (entity.parent ?? []).map(uri => extractIdFromUri(uri));
     const childOrder = (entity.child ?? []).map(uri => extractIdFromUri(uri));
     const nodeData: ConceptNode = {
       id,
       title: getTextValue(entity.title),
       definition: getTextValue(entity.definition) || getTextValue(entity.longDefinition),
-      parentCount: entity.parent?.length ?? 0,
-      childCount: entity.child?.length ?? 0,
+      parentCount: parentOrder.length,
+      childCount: childOrder.length,
+      parentOrder,
       childOrder,
       loaded: false,
     };
@@ -236,6 +248,86 @@ export function GraphProvider({ children }: GraphProviderProps) {
     }
   }, [expandedPaths, graph, loadChildren]);
 
+  /**
+   * Navigate to a node: fetch its ancestors, load children along the path,
+   * then expand all path prefixes at once to show it in the tree.
+   */
+  const navigateToNode = useCallback(async (targetId: string): Promise<void> => {
+    try {
+      // Ensure target node is loaded
+      if (!graph.hasNode(targetId) || !graph.getNodeAttribute(targetId, 'title')) {
+        const entity = await getFoundationEntity(targetId);
+        addNodeFromEntity(entity);
+      }
+
+      // Walk parent pointers (already in the graph) to build path from root
+      const ancestorPath: string[] = [targetId];
+      let currentId = targetId;
+      const maxDepth = 20;
+
+      for (let i = 0; i < maxDepth; i++) {
+        const parents: string[] = graph.getNodeAttribute(currentId, 'parentOrder');
+        if (!parents || parents.length === 0) break;
+
+        // Follow first parent (canonical path)
+        const parentId = parents[0];
+        ancestorPath.unshift(parentId);
+
+        // Ensure parent node is in the graph
+        if (!graph.hasNode(parentId) || !graph.getNodeAttribute(parentId, 'title')) {
+          const entity = await getFoundationEntity(parentId);
+          addNodeFromEntity(entity);
+        }
+        currentId = parentId;
+      }
+
+      // Load children for each node along the path
+      for (const nodeId of ancestorPath) {
+        if (!graph.hasNode(nodeId) || !graph.getNodeAttribute(nodeId, 'loaded')) {
+          await loadChildren(nodeId);
+        }
+      }
+
+      // Batch-expand all path prefixes at once (avoids stale closure issues)
+      const pathKeys = ancestorPath.map((_, i) => pathKey(ancestorPath.slice(0, i + 1)));
+      console.log('[navigateToNode] ancestorPath:', ancestorPath, 'pathKeys:', pathKeys);
+      setExpandedPaths(prev => {
+        console.log('[navigateToNode] prev expandedPaths:', [...prev]);
+        const next = new Set(prev);
+        for (const key of pathKeys) next.add(key);
+        console.log('[navigateToNode] next expandedPaths:', [...next]);
+        return next;
+      });
+
+      setSelectedNodeId(targetId);
+    } catch (error) {
+      console.error('Failed to navigate to node:', targetId, error);
+    }
+  }, [addNodeFromEntity, graph, loadChildren]);
+
+  /** Handle URL state restoration */
+  const handleUrlState = useCallback((nodeId: string | null) => {
+    if (!nodeId) {
+      setSelectedNodeId(null);
+      return;
+    }
+
+    // Store for later if root hasn't loaded yet
+    if (!rootId) {
+      pendingNodeIdRef.current = nodeId;
+      return;
+    }
+
+    // Navigate to the node
+    navigateToNode(nodeId);
+  }, [rootId, navigateToNode]);
+
+  // URL state sync
+  useUrlState({
+    selectedNodeId,
+    onUrlState: handleUrlState,
+  });
+
   // Initial load: fetch Foundation root and its children
   useEffect(() => {
     let cancelled = false;
@@ -277,6 +369,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
         setExpandedPaths(new Set([id]));
 
         console.log('Foundation loaded:', graph.order, 'nodes');
+
+        // Handle pending URL navigation
+        const pendingNodeId = pendingNodeIdRef.current;
+        if (pendingNodeId) {
+          pendingNodeIdRef.current = null;
+          // Navigate after a tick to let state settle
+          setTimeout(() => navigateToNode(pendingNodeId), 0);
+        }
       } catch (error) {
         console.error('Failed to load Foundation root:', error);
       }
@@ -284,6 +384,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
     init();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- navigateToNode changes but we only want to run once
   }, [graph, addNodeFromEntity, incrementVersion]);
 
   const value: GraphContextValue = {

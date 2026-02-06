@@ -90,7 +90,8 @@ export async function getFoundationEntity(
   entityId: string,
   options: FetchOptions = {}
 ): Promise<FoundationEntity> {
-  return fetchJson(`/icd/entity/${entityId}`, options);
+  const path = entityId === 'root' ? '/icd/entity' : `/icd/entity/${entityId}`;
+  return fetchJson(path, options);
 }
 
 /**
@@ -114,13 +115,18 @@ export async function getEntityByUri(
   return fetchJson(uri, options);
 }
 
+const FOUNDATION_ROOT_URI = /^https?:\/\/id\.who\.int\/icd\/entity\/?$/;
+
 /**
- * Extract entity ID from a Foundation URI
+ * Extract entity ID from a Foundation URI.
  * e.g., "http://id.who.int/icd/entity/1234567890" -> "1234567890"
+ *       "http://id.who.int/icd/entity"            -> "root"
  */
 export function extractIdFromUri(uri: string): string {
   const match = uri.match(/\/(\d+)$/);
-  return match ? match[1] : uri;
+  if (match) return match[1];
+  if (FOUNDATION_ROOT_URI.test(uri)) return 'root';
+  throw new Error(`Unrecognized ICD-11 entity URI: ${uri}`);
 }
 
 /**
