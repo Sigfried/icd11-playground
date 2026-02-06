@@ -76,14 +76,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const [rootId, setRootId] = useState<string | null>(null);
   const pendingNodeIdRef = useRef<string | null>(null);
 
-  // TODO: remove debug helpers when no longer needed
-  useEffect(() => {
-    const w = window as Record<string, unknown>;
-    const idName = (id: string) => graph.hasNode(id) ? graph.getNodeAttribute(id, 'title') : `?(${id})`;
-    w._idName = idName;
-    w._idNames = (ids: string[]) => ids.map(idName);
-  }, [graph]);
-
   const incrementVersion = useCallback(() => {
     setGraphVersion(v => v + 1);
   }, []);
@@ -289,13 +281,11 @@ export function GraphProvider({ children }: GraphProviderProps) {
       }
 
       // Batch-expand all path prefixes at once (avoids stale closure issues)
-      const pathKeys = ancestorPath.map((_, i) => pathKey(ancestorPath.slice(0, i + 1)));
-      console.log('[navigateToNode] ancestorPath:', ancestorPath, 'pathKeys:', pathKeys);
       setExpandedPaths(prev => {
-        console.log('[navigateToNode] prev expandedPaths:', [...prev]);
         const next = new Set(prev);
-        for (const key of pathKeys) next.add(key);
-        console.log('[navigateToNode] next expandedPaths:', [...next]);
+        for (let i = 1; i <= ancestorPath.length; i++) {
+          next.add(pathKey(ancestorPath.slice(0, i)));
+        }
         return next;
       });
 
