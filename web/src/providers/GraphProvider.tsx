@@ -1,13 +1,14 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import {createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState} from 'react';
 import Graph from 'graphology';
 import {
+  extractIdFromUri,
+  type FoundationEntity,
   getFoundationEntity,
   getFoundationRoot,
-  extractIdFromUri,
   getTextValue,
-  type FoundationEntity,
 } from '../api/icd11';
-import { useUrlState } from '../hooks/useUrlState';
+import {loadAllPathsToRoot} from '../api/graphLoader';
+import {useUrlState} from '../hooks/useUrlState';
 
 /**
  * Graph context for ICD-11 Foundation data
@@ -20,6 +21,12 @@ import { useUrlState } from '../hooks/useUrlState';
  * (forced vertical layering). See icd11-visual-interface-spec.md.
  */
 
+declare global { // for debugging
+  interface Window {
+    graph: Graph<ConceptNode>;
+  }
+}
+
 export interface ConceptNode {
   id: string;
   title: string;
@@ -27,7 +34,6 @@ export interface ConceptNode {
   parentCount: number;
   childCount: number;
   childOrder: string[]; // ordered child IDs from API
-  loaded: boolean; // whether children have been fetched
 }
 
 /** Tree path from root to a node - enables multi-parent expansion */
@@ -44,18 +50,9 @@ interface GraphContextValue {
   toggleExpand: (path: TreePath) => Promise<void>;
   loadNode: (id: string) => Promise<ConceptNode | null>;
   loadChildren: (id: string) => Promise<void>;
-  loadParents: (id: string) => Promise<void>;
 }
 
 const GraphContext = createContext<GraphContextValue | null>(null);
-
-export function useGraph() {
-  const context = useContext(GraphContext);
-  if (!context) {
-    throw new Error('useGraph must be used within a GraphProvider');
-  }
-  return context;
-}
 
 interface GraphProviderProps {
   children: ReactNode;
@@ -68,6 +65,8 @@ function pathKey(path: TreePath): string {
 
 export function GraphProvider({ children }: GraphProviderProps) {
   const [graph] = useState(() => new Graph<ConceptNode>());
+  // for debugging
+  window.graph = graph
   const [graphVersion, setGraphVersion] = useState(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -83,9 +82,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
     setSelectedNodeId(id);
   }, []);
 
-  /** Add a node from API response to the graph */
+  /** Add a node from API response to the graph (memoized — only adds once per ID) */
+  const addedNodes = useRef(new Map<string, ConceptNode>());
+
   const addNodeFromEntity = useCallback((entity: FoundationEntity): ConceptNode => {
     const id = extractIdFromUri(entity['@id']);
+    const cached = addedNodes.current.get(id);
+    if (cached) return cached;
+
     const childOrder = (entity.child ?? []).map(uri => extractIdFromUri(uri));
     const nodeData: ConceptNode = {
       id,
@@ -94,15 +98,13 @@ export function GraphProvider({ children }: GraphProviderProps) {
       parentCount: entity.parent?.length ?? 0,
       childCount: childOrder.length,
       childOrder,
-      loaded: false,
     };
 
-    if (graph.hasNode(id)) {
-      graph.mergeNodeAttributes(id, nodeData);
-    } else {
+    if (!graph.hasNode(id)) {
       graph.addNode(id, nodeData);
     }
 
+    addedNodes.current.set(id, nodeData);
     return nodeData;
   }, [graph]);
 
@@ -130,90 +132,65 @@ export function GraphProvider({ children }: GraphProviderProps) {
     }
   }, [graph, addNodeFromEntity, incrementVersion]);
 
-  /** Load children for a node */
-  const loadChildren = useCallback(async (id: string): Promise<void> => {
-    if (graph.hasNode(id) && graph.getNodeAttribute(id, 'loaded')) {
-      return; // Already loaded
-    }
+  /** Load children for a node (memoized — only fetches once per ID) */
+  const loadChildrenCache = useRef(new Map<string, Promise<void>>());
 
-    try {
-      setLoadingNodes(prev => new Set(prev).add(id));
+  const loadChildren = useCallback((id: string): Promise<void> => {
+    const cached = loadChildrenCache.current.get(id);
+    if (cached) return cached;
 
-      // Fetch parent entity to get child URIs
-      const entity = await getFoundationEntity(id);
-      addNodeFromEntity(entity);
+    const promise = (async () => {
+      try {
+        setLoadingNodes(prev => new Set(prev).add(id));
 
-      if (entity.child) {
-        // Load each child and add edges
-        await Promise.all(
-          entity.child.map(async (childUri) => {
-            const childId = extractIdFromUri(childUri);
-            try {
-              const childEntity = await getFoundationEntity(childId);
-              addNodeFromEntity(childEntity);
+        const entity = await getFoundationEntity(id);
+        addNodeFromEntity(entity);
 
-              // Add edge parent -> child (if not exists)
-              if (!graph.hasEdge(id, childId)) {
-                graph.addEdge(id, childId);
+        if (entity.child) {
+          await Promise.all(
+            entity.child.map(async (childUri) => {
+              const childId = extractIdFromUri(childUri);
+              try {
+                const childEntity = await getFoundationEntity(childId);
+                addNodeFromEntity(childEntity);
+
+                if (!graph.hasEdge(id, childId)) {
+                  graph.addEdge(id, childId);
+                }
+              } catch (error) {
+                console.error('Failed to load child:', childId, error);
               }
-            } catch (error) {
-              console.error('Failed to load child:', childId, error);
-            }
-          })
-        );
+            })
+          );
+
+          // Eager parent path loading for multi-parent children
+          const multiParentChildren = (entity.child ?? [])
+            .map(uri => extractIdFromUri(uri))
+            .filter(childId =>
+              graph.hasNode(childId) && graph.getNodeAttribute(childId, 'parentCount') > 1
+            );
+
+          if (multiParentChildren.length > 0) {
+            Promise.all(multiParentChildren.map(childId => loadAllPathsToRoot(childId, graph, addNodeFromEntity)))
+              .then(() => incrementVersion())
+              .catch(err => console.error('Failed to load parent paths:', err));
+          }
+        }
+
+        incrementVersion();
+      } catch (error) {
+        console.error('Failed to load children for:', id, error);
+      } finally {
+        setLoadingNodes(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
+    })();
 
-      // Mark as loaded
-      graph.setNodeAttribute(id, 'loaded', true);
-      incrementVersion();
-    } catch (error) {
-      console.error('Failed to load children for:', id, error);
-    } finally {
-      setLoadingNodes(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
-  }, [graph, addNodeFromEntity, incrementVersion]);
-
-  /** Load parents for a node */
-  const loadParents = useCallback(async (id: string): Promise<void> => {
-    try {
-      setLoadingNodes(prev => new Set(prev).add(id));
-
-      const entity = await getFoundationEntity(id);
-      addNodeFromEntity(entity);
-
-      if (entity.parent) {
-        await Promise.all(
-          entity.parent.map(async (parentUri) => {
-            const parentId = extractIdFromUri(parentUri);
-            try {
-              const parentEntity = await getFoundationEntity(parentId);
-              addNodeFromEntity(parentEntity);
-
-              // Add edge parent -> child
-              if (!graph.hasEdge(parentId, id)) {
-                graph.addEdge(parentId, id);
-              }
-            } catch (error) {
-              console.error('Failed to load parent:', parentId, error);
-            }
-          })
-        );
-      }
-
-      incrementVersion();
-    } catch (error) {
-      console.error('Failed to load parents for:', id, error);
-    } finally {
-      setLoadingNodes(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
+    loadChildrenCache.current.set(id, promise);
+    return promise;
   }, [graph, addNodeFromEntity, incrementVersion]);
 
   /** Toggle expansion of a tree path */
@@ -229,13 +206,11 @@ export function GraphProvider({ children }: GraphProviderProps) {
         return next;
       });
     } else {
-      // Expand - load children if needed
-      if (!graph.hasNode(nodeId) || !graph.getNodeAttribute(nodeId, 'loaded')) {
-        await loadChildren(nodeId);
-      }
+      // Expand - load children if needed (loadChildren is memoized, safe to call again)
+      await loadChildren(nodeId);
       setExpandedPaths(prev => new Set(prev).add(key));
     }
-  }, [expandedPaths, graph, loadChildren]);
+  }, [expandedPaths, loadChildren]);
 
   /**
    * Navigate to a node: fetch its ancestors, load children along the path,
@@ -259,11 +234,9 @@ export function GraphProvider({ children }: GraphProviderProps) {
         currentId = parentId;
       }
 
-      // Load children for each node along the path
+      // Load children for each node along the path (loadChildren is memoized)
       for (const nodeId of ancestorPath) {
-        if (!graph.hasNode(nodeId) || !graph.getNodeAttribute(nodeId, 'loaded')) {
-          await loadChildren(nodeId);
-        }
+        await loadChildren(nodeId);
       }
 
       // Batch-expand all path prefixes at once (avoids stale closure issues)
@@ -318,28 +291,8 @@ export function GraphProvider({ children }: GraphProviderProps) {
         const id = rootNode.id;
         setRootId(id);
 
-        // Load root's children (the chapters)
-        if (rootEntity.child) {
-          await Promise.all(
-            rootEntity.child.map(async (childUri) => {
-              const childId = extractIdFromUri(childUri);
-              try {
-                const childEntity = await getFoundationEntity(childId);
-                if (cancelled) return;
-                addNodeFromEntity(childEntity);
-
-                if (!graph.hasEdge(id, childId)) {
-                  graph.addEdge(id, childId);
-                }
-              } catch (error) {
-                console.error('Failed to load chapter:', childId, error);
-              }
-            })
-          );
-        }
-
-        graph.setNodeAttribute(id, 'loaded', true);
-        incrementVersion();
+        // Load root's children (the chapters) via memoized loadChildren
+        await loadChildren(id);
 
         // Auto-expand root
         setExpandedPaths(new Set([id]));
@@ -360,7 +313,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
     init();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- navigateToNode changes but we only want to run once
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- navigateToNode/loadChildren change but we only want to run once
   }, [graph, addNodeFromEntity, incrementVersion]);
 
   const value: GraphContextValue = {
@@ -374,7 +327,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
     toggleExpand,
     loadNode,
     loadChildren,
-    loadParents,
   };
 
   return (
@@ -382,4 +334,12 @@ export function GraphProvider({ children }: GraphProviderProps) {
       {children}
     </GraphContext.Provider>
   );
+}
+
+export function useGraph() {
+  const context = useContext(GraphContext);
+  if (!context) {
+    throw new Error('useGraph must be used within a GraphProvider');
+  }
+  return context;
 }

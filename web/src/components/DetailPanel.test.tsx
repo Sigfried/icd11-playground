@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import React, { useState } from 'react';
 import { DetailPanel } from './DetailPanel';
-import { GraphProvider, useGraph } from '../providers/GraphProvider';
+import {GraphProvider, useGraph} from '../providers/GraphProvider';
 
 /**
  * Test for hooks ordering bug in DetailPanel.
@@ -76,7 +76,6 @@ describe('DetailPanel hooks ordering', () => {
             parentCount: 0,
             childCount: 0,
             childOrder: [],
-            loaded: true,
           });
         }
       }, [graph]);

@@ -1,7 +1,7 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
-import { useGraph, type ConceptNode } from '../providers/GraphProvider';
+import {type ConceptNode, useGraph} from '../providers/GraphProvider';
 import './NodeLinkView.css';
 
 /**
@@ -51,7 +51,7 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
 
 export function NodeLinkView() {
-  const { graph, graphVersion, selectedNodeId, selectNode, loadParents, loadChildren } = useGraph();
+  const { graph, graphVersion, selectedNodeId, selectNode, loadChildren } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -279,28 +279,11 @@ export function NodeLinkView() {
 
   }, [layoutNodes, layoutEdges, selectedNodeId, selectNode]);
 
-  // Load parents/children for better neighborhood when node selected
-  useEffect(() => {
-    if (selectedNodeId && graph.hasNode(selectedNodeId)) {
-      const nodeData = graph.getNodeAttributes(selectedNodeId);
-      const loadedParents = graph.inNeighbors(selectedNodeId).length;
-      const loadedChildren = graph.outNeighbors(selectedNodeId).length;
-
-      if (nodeData.parentCount > loadedParents) {
-        loadParents(selectedNodeId);
-      }
-      if (nodeData.childCount > loadedChildren && !nodeData.loaded) {
-        loadChildren(selectedNodeId);
-      }
-    }
-  }, [selectedNodeId, graph, loadParents, loadChildren]);
-
   const handleLoadMore = useCallback(() => {
     if (selectedNodeId) {
-      loadParents(selectedNodeId);
       loadChildren(selectedNodeId);
     }
-  }, [selectedNodeId, loadParents, loadChildren]);
+  }, [selectedNodeId, loadChildren]);
 
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {

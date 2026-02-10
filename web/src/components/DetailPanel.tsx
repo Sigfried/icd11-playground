@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useGraph, type ConceptNode } from '../providers/GraphProvider';
+import { useState, useCallback } from 'react';
+import {type ConceptNode, useGraph} from '../providers/GraphProvider';
 import './DetailPanel.css';
 
 /**
@@ -82,31 +82,14 @@ export function DetailPanel() {
     graph,
     graphVersion,
     selectNode,
-    loadParents,
     loadChildren,
   } = useGraph();
 
   // Force re-render when graph changes
   void graphVersion;
 
-  // Auto-load parents when node is selected
-  useEffect(() => {
-    if (selectedNodeId && graph.hasNode(selectedNodeId)) {
-      const parentCount = graph.getNodeAttribute(selectedNodeId, 'parentCount');
-      const loadedParents = graph.inNeighbors(selectedNodeId).length;
-      if (parentCount > loadedParents) {
-        loadParents(selectedNodeId);
-      }
-    }
-  }, [selectedNodeId, graph, loadParents]);
-
   // IMPORTANT: All hooks must be called before any conditional return.
   // Moving these after the early return caused "Rendered more hooks" error.
-  const handleLoadParents = useCallback(() => {
-    if (selectedNodeId) {
-      loadParents(selectedNodeId);
-    }
-  }, [selectedNodeId, loadParents]);
 
   const handleLoadChildren = useCallback(() => {
     if (selectedNodeId) {
@@ -178,7 +161,6 @@ export function DetailPanel() {
           title="Parents"
           ids={parentIds}
           expectedCount={nodeData?.parentCount ?? 0}
-          onLoadMore={handleLoadParents}
           onSelect={selectNode}
           graph={graph}
         />

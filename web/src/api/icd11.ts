@@ -84,14 +84,21 @@ export interface FoundationEntity {
 }
 
 /**
- * Get Foundation entity by ID
+ * Get Foundation entity by ID (memoized — same ID returns same promise)
  */
-export async function getFoundationEntity(
+const entityCache = new Map<string, Promise<FoundationEntity>>();
+
+export function getFoundationEntity(
   entityId: string,
   options: FetchOptions = {}
 ): Promise<FoundationEntity> {
+  const cached = entityCache.get(entityId);
+  if (cached) return cached;
+
   const path = entityId === 'root' ? '/icd/entity' : `/icd/entity/${entityId}`;
-  return fetchJson(path, options);
+  const promise = fetchJson<FoundationEntity>(path, options);
+  entityCache.set(entityId, promise);
+  return promise;
 }
 
 /**
