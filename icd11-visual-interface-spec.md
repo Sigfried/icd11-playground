@@ -16,6 +16,31 @@ A visual interface to the ICD-11 maintenance platform that helps proposal author
 
 ---
 
+## Implementation Status
+
+Legend: :green_circle: Implemented | :red_circle: Bug | :yellow_circle: Needs design | :white_circle: Not implemented | :black_circle: Not started
+
+| Area | Feature | Status |
+|------|---------|--------|
+| **Tree View** | Expand/collapse, lazy loading, badges | :green_circle: Implemented |
+| | Multi-path highlighting (all occurrences of selected node) | :green_circle: Implemented |
+| | Descendant count + depth badges | :yellow_circle: Needs design |
+| | First-occurring path expansion via URL | :red_circle: Bug — uses arbitrary parent, not first in Foundation order |
+| | Collapse heuristics for large trees | :white_circle: Not implemented |
+| **Node-Link View** | Hierarchical layout with elkjs | :green_circle: Implemented |
+| | Foundation ordering of sibling nodes | :white_circle: Not implemented |
+| | Hover/click interaction design | :yellow_circle: Needs design |
+| **Detail Panel** | Title, definition, Foundation browser link | :green_circle: Implemented |
+| | Collapsible parents/children lists | :green_circle: Implemented |
+| | Badge inconsistency (parents have badges, children don't) | :red_circle: Bug |
+| | Paths to root (replace flat parent list) | :yellow_circle: Needs design |
+| | Proposals section | :black_circle: Not started |
+| **Data Layer** | Memoized API, node creation, child loading | :green_circle: Implemented |
+| | Eager parent path loading for multi-parent nodes | :green_circle: Implemented |
+| **Proposal Authoring** | All features | :black_circle: Not started |
+
+---
+
 ## Data Model
 
 ### ICD-11 Foundation Structure
@@ -111,13 +136,17 @@ C1 and C2 are the same object appearing in two places. Selection or modification
 
 #### Key Behaviors
 
-| Feature | Description |
-|---------|-------------|
-| **Same object, multiple appearances** | All instances of a concept reference the same object. Selection/modification in one location reflects everywhere. |
-| **Parent count badge** | Each node displays `[N↑]` indicating total parent count. Visible at every occurrence so user knows the concept exists elsewhere. |
-| **Child count badge** | Display `[N↓]` for children. Click to expand or view in context menu. |
-| **Collapse heuristics** | If tree gets too large, collapse nodes based on depth, subtree size, or user preference. |
-| **Expand on demand** | Lazy-load children; don't render entire Foundation at once. |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Same object, multiple appearances** | All instances of a concept reference the same object. Selection/modification in one location reflects everywhere. | :green_circle: |
+| **Parent count badge** | Each node displays `[N↑]` indicating total parent count. Only shown when parentCount > 1. | :green_circle: |
+| **Child count badge** | Display `[N↓]` for direct children count. | :green_circle: |
+| **Descendant stats badge** | In addition to direct child count, show total descendant count and max depth. Requires crawling or caching subtree stats — nontrivial for large subtrees. | :yellow_circle: |
+| **Collapse heuristics** | If tree gets too large, collapse nodes based on depth, subtree size, or user preference. | :white_circle: |
+| **Expand on demand** | Lazy-load children; don't render entire Foundation at once. | :green_circle: |
+| **Multi-path highlighting** | When a node with multiple parents is selected, all occurrences in the tree are highlighted. | :green_circle: |
+| **First-occurring path expansion** | When navigating to a node via URL (`?node=ID`), the tree should expand the first-occurring path from root (per Foundation ordering), not an arbitrary parent. Currently uses `entity.parent[0]` which may not be first in Foundation order. | :red_circle: |
+| **Show all paths to root** | When a node has multiple parents, the UI should make it easy to discover and navigate to all locations where it appears in the tree. See Detail Panel section. | :yellow_circle: |
 
 #### UI Mockup
 
@@ -160,12 +189,14 @@ flowchart TD
 
 **Key behaviors:**
 
-| Feature              | Description |
-|----------------------|-------------|
-| **Hierarchical layout**  | Should be a layered/hierarchical layout, not force-directed.
-| **Focus + context**      | Center on selected concept, show N hops of parents/children |
-| **Click to navigate**    | Node clicks will update indented tree view focus and will allow expanding/collapsing adjacent node links |
-| **Parent/child badges**  | Same `[N↑]` `[N↓]` badges as tree view |
+| Feature              | Description | Status |
+|----------------------|-------------|--------|
+| **Hierarchical layout**  | Layered/hierarchical layout, not force-directed. Using elkjs. | :green_circle: |
+| **Focus + context**      | Center on selected concept, show N hops of parents/children (currently 1-hop). | :green_circle: |
+| **Click to navigate**    | Node clicks update selection (tree view and detail panel sync). | :green_circle: |
+| **Parent/child badges**  | Same `[N↑]` `[N↓]` badges as tree view. | :green_circle: |
+| **Foundation ordering**  | Nodes at the same layer should appear in Foundation order (matching the API's child ordering), not arbitrary. Currently arbitrary. | :white_circle: |
+| **Hover/click behavior** | Currently hover does nothing and click only refocuses selection. What should hover show? Should click expand the neighborhood, navigate in the tree, or something else? | :yellow_circle: |
 
 **Layout options to evaluate:**
 - elkjs (Eclipse Layout Kernel, more sophisticated routing) I've never tried it, might be good.
@@ -235,12 +266,26 @@ flowchart LR
 ```
 
 **Content:**
-- Concept title and metadata
-- Link to Foundation browser
-- Collapsible parents list (with checkboxes to show/hide in tree)
-- Collapsible children list (with checkboxes, click name to navigate)
-- Link to create new child proposal
-- Existing proposals summary with link to maintenance platform
+- Concept title and metadata — :green_circle:
+- Link to Foundation browser — :green_circle:
+- Collapsible parents list (click name to navigate) — :green_circle:
+- Collapsible children list (click name to navigate) — :green_circle:
+- Link to create new child proposal — :black_circle:
+- Existing proposals summary with link to maintenance platform — :black_circle: (placeholder shown)
+
+**Known issues:**
+- :red_circle: Parents list shows `[N↑]` badges on items but children list does not show `[N↓]` badges — inconsistent.
+- Parents/children lists are largely redundant with what the tree already shows. To add value, the detail panel should show information not visible in the tree.
+
+**:yellow_circle: Planned: Paths to Root**
+
+Instead of (or in addition to) a flat parents list, show all distinct paths from the selected node to root. Each path is a breadcrumb trail with clickable nodes. This directly addresses the polyhierarchy navigation problem: when a node has multiple parents, the user can see exactly where it lives in the hierarchy and click to expand/scroll to that location in the tree.
+
+```
+Paths to Root:
+  1. WHO Root > ICD Entity > ... > Bacterial intestinal infections > Abdominal actinomycosis
+  2. WHO Root > ICD Entity > ... > Other bacterial diseases > Actinomycosis > Abdominal actinomycosis
+```
 
 ---
 
@@ -337,15 +382,15 @@ flowchart TB
 
 ### Key Components
 
-| Component | Responsibility |
-|-----------|----------------|
-| `GraphProvider` | Loads and caches ICD-11 data in graphology instance |
-| `TreeView` | Renders indented tree with expand/collapse, badges, selection |
-| `TreeNode` | Individual node with badges, context menu trigger |
-| `NodeLinkView` | D3-based DAG visualization of local neighborhood |
-| `DetailPanel` | Shows concept metadata, parents, children, proposals |
-| `ProposalEditor` | TBD — authoring interface for new/modified proposals |
-| `DiffView` | TBD — visualization of proposed changes vs current state |
+| Component | Responsibility | Status |
+|-----------|----------------|--------|
+| `GraphProvider` | Loads and caches ICD-11 data in graphology instance. Memoized API calls, node creation, and child loading. Eagerly loads all paths to root for multi-parent children. | :green_circle: |
+| `TreeView` | Renders indented tree with expand/collapse, badges, selection | :green_circle: |
+| `TreeNode` | Individual node with badges, selection highlight | :green_circle: |
+| `NodeLinkView` | D3-based DAG visualization of local neighborhood (elkjs layout) | :green_circle: Basic |
+| `DetailPanel` | Shows concept metadata, parents, children, proposals | :green_circle: Partial |
+| `ProposalEditor` | Authoring interface for new/modified proposals | :black_circle: |
+| `DiffView` | Visualization of proposed changes vs current state | :black_circle: |
 
 ---
 

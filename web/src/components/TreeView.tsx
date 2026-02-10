@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useGraph, type TreePath, type ConceptNode } from '../providers/GraphProvider';
+import {type TreePath, type ConceptNode, useGraph} from '../providers/GraphProvider';
 import './TreeView.css';
 
 /**
