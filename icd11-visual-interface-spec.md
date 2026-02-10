@@ -22,22 +22,22 @@ Legend: :green_circle: Implemented | :red_circle: Bug | :yellow_circle: Needs de
 
 | Area | Feature | Status |
 |------|---------|--------|
-| **Tree View** | Expand/collapse, lazy loading, badges | :green_circle: Implemented |
-| | Multi-path highlighting (all occurrences of selected node) | :green_circle: Implemented |
-| | Descendant count + depth badges | :yellow_circle: Needs design |
-| | First-occurring path expansion via URL | :red_circle: Bug — uses arbitrary parent, not first in Foundation order |
-| | Collapse heuristics for large trees | :white_circle: Not implemented |
-| **Node-Link View** | Hierarchical layout with elkjs | :green_circle: Implemented |
-| | Foundation ordering of sibling nodes | :white_circle: Not implemented |
-| | Hover/click interaction design | :yellow_circle: Needs design |
-| **Detail Panel** | Title, definition, Foundation browser link | :green_circle: Implemented |
-| | Collapsible parents/children lists | :green_circle: Implemented |
-| | Badge inconsistency (parents have badges, children don't) | :red_circle: Bug |
-| | Paths to root (replace flat parent list) | :yellow_circle: Needs design |
-| | Proposals section | :black_circle: Not started |
-| **Data Layer** | Memoized API, node creation, child loading | :green_circle: Implemented |
-| | Eager parent path loading for multi-parent nodes | :green_circle: Implemented |
-| **Proposal Authoring** | All features | :black_circle: Not started |
+| [**Tree View**](#1-indented-tabular-view-primary) | [Expand/collapse, lazy loading, badges](#key-behaviors) | :green_circle: Implemented |
+| | [Multi-path highlighting](#key-behaviors) (all occurrences of selected node) | :green_circle: Implemented |
+| | [Descendant count + depth badges](#key-behaviors) | :yellow_circle: Needs design |
+| | [First-occurring path expansion via URL](#key-behaviors) | :red_circle: Bug — uses arbitrary parent, not first in Foundation order |
+| | [Collapse heuristics](#key-behaviors) for large trees | :white_circle: Not implemented |
+| [**Node-Link View**](#2-node-link-diagram-secondary) | [Hierarchical layout with elkjs](#2-node-link-diagram-secondary) | :green_circle: Implemented |
+| | [Foundation ordering of sibling nodes](#2-node-link-diagram-secondary) | :white_circle: Not implemented |
+| | [Hover/click interaction design](#2-node-link-diagram-secondary) | :yellow_circle: Needs design |
+| [**Detail Panel**](#3-context-menu--detail-panel) | [Title, definition, Foundation browser link](#3-context-menu--detail-panel) | :green_circle: Implemented |
+| | [Collapsible parents/children lists](#3-context-menu--detail-panel) | :green_circle: Implemented |
+| | [Badge inconsistency](#3-context-menu--detail-panel) (parents have badges, children don't) | :red_circle: Bug |
+| | [Paths to root](#3-context-menu--detail-panel) (replace flat parent list) | :yellow_circle: Needs design |
+| | [Proposals section](#proposal-authoring) | :black_circle: Not started |
+| [**Data Layer**](#component-architecture) | [Memoized API, node creation, child loading](#data-flow) | :green_circle: Implemented |
+| | [Eager parent path loading](#data-flow) for multi-parent nodes | :green_circle: Implemented |
+| [**Proposal Authoring**](#proposal-authoring) | [All features](#requirements) | :black_circle: Not started |
 
 ---
 
