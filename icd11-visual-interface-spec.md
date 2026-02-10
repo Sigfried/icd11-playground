@@ -208,7 +208,7 @@ flowchart TD
 
 The current implementation becomes unreadable when node count exceeds ~10. The view auto-scales to fit all nodes in the container, which shrinks everything to illegibility.
 
-![Unreadable node-link view](design-stuff/spec-assets/node-link-unreadable-example.png)
+![Unreadable node-link view](design-stuff/spec-assets/node-link-unreadable-example.png)<br/>
 *Example: 19 nodes renders labels too small to read*
 
 **Root causes:**

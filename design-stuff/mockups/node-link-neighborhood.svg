@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500">
+  <style>
+    .bg { fill: #1e1e1e; }
+    .node-link-node rect {
+      fill: #2d2d30;
+      stroke: #3c3c3c;
+      stroke-width: 1px;
+    }
+    .node-link-node:hover rect {
+      stroke: #4fc1ff;
+    }
+    .node-link-node.focus rect {
+      fill: rgba(220, 220, 170, 0.15);
+      stroke: #dcdcaa;
+      stroke-width: 2px;
+    }
+    .node-link-node text.node-title {
+      fill: #d4d4d4;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .node-link-node.focus text.node-title {
+      fill: #dcdcaa;
+    }
+    .node-link-edge {
+      fill: none;
+      stroke: #3c3c3c;
+      stroke-width: 1.5px;
+    }
+    .node-badge {
+      font-size: 9px;
+      fill: #808080;
+      font-family: monospace;
+    }
+    .node-badge.parents {
+      fill: #4fc1ff;
+    }
+    .node-badge.children {
+      fill: #dcdcaa;
+    }
+  </style>
+
+  <!-- Background -->
+  <rect class="bg" width="900" height="500"/>
+
+  <!-- Content group: shifted to center in the viewBox -->
+  <g transform="translate(70, 60) scale(0.6)">
+
+    <!-- ============ EDGES ============ -->
+    <g class="edges">
+      <!-- Focus -> children -->
+      <path class="node-link-edge" d="M204.857,252L204.857,272L982,272L982,312"/>
+      <path class="node-link-edge" d="M230.571,252L230.571,262L1202,262L1202,312"/>
+      <path class="node-link-edge" d="M102,252L102,312"/>
+      <path class="node-link-edge" d="M127.714,252L127.714,302L322,302L322,312"/>
+      <path class="node-link-edge" d="M153.429,252L153.429,292L542,292L542,312"/>
+      <path class="node-link-edge" d="M179.143,252L179.143,282L762,282L762,312"/>
+      <!-- Parent B -> Focus -->
+      <path class="node-link-edge" d="M237.286,152L237.286,162L196.286,162L196.286,212"/>
+      <!-- ICD Category -> Focus (direct) -->
+      <path class="node-link-edge" d="M136.286,52L136.286,212"/>
+      <!-- ICD Category -> Parent B -->
+      <path class="node-link-edge" d="M196.286,52L196.286,62L237.286,62L237.286,112"/>
+    </g>
+
+    <!-- ============ NODES ============ -->
+    <g class="nodes">
+
+      <!-- LAYER 0: Grandparent -->
+      <g class="node-link-node" transform="translate(76.286, 12)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">ICD Category</text>
+        <text x="8" y="30" class="node-badge children">28↓</text>
+      </g>
+
+      <!-- LAYER 1: Parent -->
+      <g class="node-link-node" transform="translate(147.286, 112)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Mental, behavioural ...</text>
+        <text x="8" y="30" class="node-badge children">24↓</text>
+      </g>
+
+      <!-- LAYER 2: Focus node -->
+      <g class="node-link-node focus" transform="translate(76.286, 212)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-wake disorders</text>
+        <text x="8" y="30" class="node-badge parents">2↑</text>
+        <text x="33" y="30" class="node-badge children">6↓</text>
+      </g>
+
+      <!-- LAYER 3: Children -->
+      <g class="node-link-node" transform="translate(12, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-related breath...</text>
+        <text x="8" y="30" class="node-badge parents">2↑</text>
+        <text x="33" y="30" class="node-badge children">5↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(232, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Insomnia disorders</text>
+        <text x="8" y="30" class="node-badge children">3↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(452, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Circadian rhythm sle...</text>
+        <text x="8" y="30" class="node-badge children">11↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(672, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Hypersomnolence diso...</text>
+        <text x="8" y="30" class="node-badge children">7↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(892, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-related moveme...</text>
+        <text x="8" y="30" class="node-badge parents">2↑</text>
+        <text x="33" y="30" class="node-badge children">10↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(1112, 312)" style="cursor: pointer;">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Parasomnia disorders</text>
+        <text x="8" y="30" class="node-badge children">3↓</text>
+      </g>
+
+    </g>
+  </g>
+</svg>

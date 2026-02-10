@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620">
+  <style>
+    .bg { fill: #1e1e1e; }
+    .node-link-node rect {
+      fill: #2d2d30;
+      stroke: #3c3c3c;
+      stroke-width: 1px;
+    }
+    .node-link-node:hover rect {
+      stroke: #4fc1ff;
+    }
+    .node-link-node.focus rect {
+      fill: rgba(220, 220, 170, 0.15);
+      stroke: #dcdcaa;
+      stroke-width: 2px;
+    }
+    .node-link-node text.node-title {
+      fill: #d4d4d4;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .node-link-node.focus text.node-title {
+      fill: #dcdcaa;
+    }
+    .node-link-edge {
+      fill: none;
+      stroke: #3c3c3c;
+      stroke-width: 1.5px;
+    }
+    .node-badge {
+      font-size: 9px;
+      fill: #808080;
+      font-family: monospace;
+    }
+    .node-badge.parents {
+      fill: #4fc1ff;
+    }
+    .node-badge.children {
+      fill: #dcdcaa;
+    }
+    .node-badge.partial {
+      opacity: 0.7;
+    }
+
+    /* Hover popup */
+    .popup-bg {
+      fill: #2d2d30;
+      stroke: #4fc1ff;
+      stroke-width: 1px;
+    }
+    .popup-header {
+      fill: #808080;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 10px;
+    }
+    .popup-item {
+      fill: #d4d4d4;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .popup-item.loaded {
+      fill: #808080;
+    }
+    .popup-dot {
+      font-size: 11px;
+      font-family: monospace;
+    }
+    .popup-dot.loaded { fill: #6a9955; }
+    .popup-dot.unloaded { fill: #808080; }
+    .popup-action {
+      fill: #4fc1ff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 10px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .popup-divider {
+      stroke: #3c3c3c;
+      stroke-width: 1px;
+    }
+
+    /* Annotation callouts */
+    .annotation {
+      fill: #ce9178;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-style: italic;
+    }
+    .annotation-line {
+      stroke: #ce9178;
+      stroke-width: 1px;
+      stroke-dasharray: 4 3;
+    }
+    .annotation-bg {
+      fill: #1e1e1e;
+      stroke: #ce9178;
+      stroke-width: 1px;
+      stroke-dasharray: 4 3;
+    }
+  </style>
+
+  <!-- Background -->
+  <rect class="bg" width="1100" height="620"/>
+
+  <!-- ==================== MAIN DIAGRAM ==================== -->
+  <g transform="translate(30, 30) scale(0.6)">
+
+    <!-- EDGES -->
+    <g class="edges">
+      <path class="node-link-edge" d="M204.857,252L204.857,272L982,272L982,312"/>
+      <path class="node-link-edge" d="M230.571,252L230.571,262L1202,262L1202,312"/>
+      <path class="node-link-edge" d="M102,252L102,312"/>
+      <path class="node-link-edge" d="M127.714,252L127.714,302L322,302L322,312"/>
+      <path class="node-link-edge" d="M153.429,252L153.429,292L542,292L542,312"/>
+      <path class="node-link-edge" d="M179.143,252L179.143,282L762,282L762,312"/>
+      <path class="node-link-edge" d="M237.286,152L237.286,162L196.286,162L196.286,212"/>
+      <path class="node-link-edge" d="M136.286,52L136.286,212"/>
+      <path class="node-link-edge" d="M196.286,52L196.286,62L237.286,62L237.286,112"/>
+    </g>
+
+    <!-- NODES -->
+    <g class="nodes">
+      <!-- LAYER 0: Grandparent -->
+      <g class="node-link-node" transform="translate(76.286, 12)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">ICD Category</text>
+        <text x="8" y="30" class="node-badge children">28↓</text>
+      </g>
+
+      <!-- LAYER 1: Parent -->
+      <g class="node-link-node" transform="translate(147.286, 112)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Mental, behavioural ...</text>
+        <text x="8" y="30" class="node-badge children partial">1/24↓</text>
+      </g>
+
+      <!-- LAYER 2: Focus node -->
+      <g class="node-link-node focus" transform="translate(76.286, 212)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-wake disorders</text>
+        <text x="8" y="30" class="node-badge parents">2↑</text>
+        <text x="33" y="30" class="node-badge children">6↓</text>
+      </g>
+
+      <!-- LAYER 3: Children -->
+      <g class="node-link-node" transform="translate(12, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-related breath...</text>
+        <text x="8" y="30" class="node-badge parents partial">1/2↑</text>
+        <text x="40" y="30" class="node-badge children">5↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(232, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Insomnia disorders</text>
+        <text x="8" y="30" class="node-badge children">3↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(452, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Circadian rhythm sle...</text>
+        <text x="8" y="30" class="node-badge children">11↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(672, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Hypersomnolence diso...</text>
+        <text x="8" y="30" class="node-badge children">7↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(892, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Sleep-related moveme...</text>
+        <text x="8" y="30" class="node-badge parents partial">1/2↑</text>
+        <text x="40" y="30" class="node-badge children">10↓</text>
+      </g>
+
+      <g class="node-link-node" transform="translate(1112, 312)">
+        <rect width="180" height="40" rx="4"/>
+        <text x="8" y="16" class="node-title">Parasomnia disorders</text>
+        <text x="8" y="30" class="node-badge children">3↓</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ==================== HOVER POPUP ==================== -->
+  <!-- Positioned below the "Sleep-related breath..." node -->
+  <g transform="translate(18, 250)">
+    <rect class="popup-bg" width="210" height="98" rx="4"/>
+
+    <text class="popup-header" x="10" y="16">1 of 2 parents displayed</text>
+    <line class="popup-divider" x1="8" y1="22" x2="202" y2="22"/>
+
+    <text class="popup-dot loaded" x="12" y="40">●</text>
+    <text class="popup-item loaded" x="24" y="40">Sleep-wake disorders</text>
+
+    <text class="popup-dot unloaded" x="12" y="56">○</text>
+    <text class="popup-item" x="24" y="56">Diseases of the resp...</text>
+
+    <line class="popup-divider" x1="8" y1="66" x2="202" y2="66"/>
+    <text class="popup-action" x="10" y="82">+ Show all parents</text>
+  </g>
+
+  <!-- Leader line: popup top edge to the 1/2↑ badge on "Sleep-related breath..." -->
+  <!-- Badge is at approx (30+12*0.6, 30+(312+30)*0.6) = (37, 235) in screen coords -->
+  <line class="annotation-line" x1="50" y1="250" x2="37" y2="238"/>
+
+  <!-- ==================== ANNOTATION: badge format ==================== -->
+  <g transform="translate(680, 80)">
+    <rect class="annotation-bg" width="370" height="78" rx="4"/>
+    <text class="annotation" x="10" y="18">Badge format:</text>
+    <text class="annotation" x="10" y="34">  "2↑" = all 2 parents visible in diagram</text>
+    <text class="annotation" x="10" y="50">  "1/2↑" = 1 of 2 parents visible (clickable)</text>
+    <text class="annotation" x="10" y="66">  "1/24↓" = 1 of 24 children visible</text>
+  </g>
+  <!-- Leader to "1/24↓" badge on Mental, behavioural node -->
+  <!-- Node at (30+147.286*0.6, 30+112*0.6) = (118, 97), badge at y+30*0.6=115 -->
+  <line class="annotation-line" x1="680" y1="105" x2="140" y2="115"/>
+
+  <!-- ==================== ANNOTATION: hover behavior ==================== -->
+  <g transform="translate(680, 185)">
+    <rect class="annotation-bg" width="370" height="94" rx="4"/>
+    <text class="annotation" x="10" y="18">Hover popup shows:</text>
+    <text class="annotation" x="10" y="34">  ● displayed items (green dot, dimmed text)</text>
+    <text class="annotation" x="10" y="50">  ○ not displayed (white dot, click to add)</text>
+    <text class="annotation" x="10" y="66">  "Show all" loads remaining into diagram</text>
+    <text class="annotation" x="10" y="82">  Clicking one item adds just that node</text>
+  </g>
+  <!-- Leader to the popup -->
+  <line class="annotation-line" x1="680" y1="240" x2="228" y2="280"/>
+
+</svg>
