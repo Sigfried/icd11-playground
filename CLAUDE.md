@@ -12,16 +12,17 @@ Build a prototype visual interface to help ICD-11 proposal authors and reviewers
 ## Scope
 
 - **Foundation only** - No MMS or other linearizations/serializations
-- **Frontend-first** - Direct ICD-11 API calls from browser
-- **Shareable** - Colleagues need to review, so not just local dev
+- **Frontend-first** - Full graph loaded at startup, entity details fetched on demand
+- **Shareable** - Deployed to GitHub Pages via CI
 
 ## Technology Stack
 
 - **Frontend:** React, TypeScript, Vite, pnpm
-- **Graph:** graphology.js for data structure
+- **Graph:** graphology.js for in-memory structure
 - **Visualization:** D3.js for rendering
 - **Layout:** elkjs (temporary — see note below)
-- **Data Source:** ICD-11 Foundation API (Docker local or official WHO)
+- **Data:** Pre-crawled Foundation graph (69k nodes) + on-demand ICD-11 API for details
+- **Cache:** IndexedDB (two-tier: graph structure + entity details)
 
 ### Layout Engine Migration Plan
 
@@ -49,22 +50,34 @@ cd web && pnpm dev
 
 Then open http://localhost:5173
 
-For local API without OAuth2:
+The app loads `foundation_graph.json` from `web/public/` at startup. No Docker API needed for navigation. The API is only called on-demand for entity details (definitions, synonyms, etc.).
+
+For local API (entity details without OAuth2):
 ```bash
 docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
 ```
-Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
+
+On localhost, `icd11.ts` auto-detects and uses `http://localhost`. On GitHub Pages, it uses the Cloudflare Worker proxy.
 
 ## Project Structure
 
 ```
-├── web/                  # React + TypeScript frontend (active)
+├── web/                  # React + TypeScript frontend
+│   ├── public/
+│   │   └── foundation_graph.json  # Pre-crawled graph (69k nodes, 11 MB)
 │   └── src/
-│       ├── api/          # ICD-11 API client
+│       ├── api/
+│       │   ├── foundationData.ts  # Unified data API (sync graph + async details)
+│       │   ├── foundationStore.ts # IndexedDB cache (graph + entities)
+│       │   └── icd11.ts           # ICD-11 REST API client
 │       ├── components/   # TreeView, NodeLinkView, DetailPanel
 │       ├── hooks/        # useUrlState (URL ↔ selected node sync)
-│       ├── providers/    # GraphProvider (graphology state)
+│       ├── providers/    # GraphProvider (React context, UI state)
 │       └── archive/      # Old ECT-based components
+├── analysis/             # Python scripts for crawling & analyzing Foundation
+│   ├── crawl.py          # BFS crawler + descendant stats computation
+│   ├── analyze.py        # Graph metrics and visualizations
+│   └── foundation_graph.json  # Source graph (copy to web/public/ after regen)
 ├── worker/               # Cloudflare Worker for OAuth2 proxy
 ├── ICD-11-notes/         # Obsidian vault with notes and papers
 ├── design-stuff/         # Design explorations
@@ -72,12 +85,36 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 └── archive/              # Archived playground/exploration code
 ```
 
+## Architecture
+
+### Data flow
+
+1. **Startup:** GraphProvider fetches `foundation_graph.json` (cached in IndexedDB after first load)
+2. **Init:** `foundationData.initGraph()` builds a graphology instance with all 69k nodes and 77k edges
+3. **Navigation:** Tree expand/collapse and node selection are **synchronous** — all structure is in memory
+4. **Details:** When a node is selected, `getDetail()` fetches definition/synonyms from IndexedDB cache or ICD-11 API
+
+### Three layers
+
+1. **`foundationStore.ts`** — IndexedDB cache. Stores/retrieves graph and entity data. No logic.
+2. **`foundationData.ts`** — Unified data API. Owns the graphology instance. Components call this, never graphology or IndexedDB directly.
+   - Sync: `getNode()`, `getChildren()`, `getParents()`, `hasNode()`
+   - Async: `getDetail()` (IndexedDB-cached API call)
+   - Escape hatch: `getGraph()` for NodeLinkView's ELK layout
+3. **`GraphProvider.tsx`** — React context. UI state (selection, expansion paths) and init. Exposes `foundationData` functions on context.
+
+### Key types
+
+- **`ConceptNode`** — Structural data from graph: id, title, parentCount, childCount, childOrder, descendantCount, maxDepth
+- **`EntityDetail`** — Rich metadata from API: definition, synonyms, narrowerTerms, inclusions, exclusions, browserUrl
+
 ## API Servers
 
 | Server | URL | Auth | Use |
 |--------|-----|------|-----|
-| Docker Local | `http://localhost:80` | None | Development |
-| Official WHO | `https://id.who.int` | OAuth2 | Production/sharing |
+| Docker Local | `http://localhost:80` | None | Development (entity details) |
+| Cloudflare Proxy | `https://icd11-proxy.sigfried-icd11.workers.dev` | Handled by worker | Production |
+| Official WHO | `https://id.who.int` | OAuth2 | Direct (needs auth) |
 
 ## Test Entities
 
@@ -87,7 +124,7 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 
 ## Key ICD-11 Concepts
 
-- **Foundation**: ~85k entities, polyhierarchy (DAG), no codes
+- **Foundation**: ~69k entities, polyhierarchy (DAG), no codes
 - **Canonical vs Linked parents**: Investigation needed (see design spec)
 - **Postcoordination**: Stem codes + Extension codes = clusters
 
@@ -105,11 +142,23 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 - Don't use `any` in TypeScript
 - Commit but don't push without permission
 
-## Open Questions
+## Regenerating the Graph
 
-1. **Canonical/linked parent distinction** - Does the public API expose this or only iCAT?
+If the Foundation data needs refreshing (e.g., new ICD-11 release):
 
-2. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
+```bash
+# Start Docker API
+docker run -p 80:80 -e acceptLicense=true -e include=2024-01_en whoicd/icd-api
+
+# Crawl and compute stats
+cd analysis && uv run crawl.py
+
+# Or just recompute stats on existing data
+cd analysis && uv run crawl.py --stats-only
+
+# Copy to web
+cp analysis/foundation_graph.json web/public/
+```
 
 ## Graphology Usage
 
@@ -120,23 +169,24 @@ Then update `web/src/api/icd11.ts` to use `http://localhost:80`.
 - `graph.forEachInNeighbor()` / `graph.forEachOutNeighbor()` → iteration
 - See full reference: `.claude/projects/.../memory/graphology-cheatsheet.md`
 
-**Caveat:** `inNeighbors().length` only counts loaded edges. Use `parentCount`/`childCount` from `ConceptNode` for the API's true total.
+**Caveat:** Components should use `foundationData` functions rather than raw graphology calls. Only NodeLinkView uses `getGraph()` directly for ELK layout edge iteration.
 
 ## Foundation Root
 
 The root entity's `@id` is `http://id.who.int/icd/entity` (no numeric suffix).
 - `extractIdFromUri` returns `'root'` for it
-- `getFoundationEntity('root')` routes to `/icd/entity`
+- In the graph JSON, the root key is `"root"`
 
-## Current State
+## Open Questions
 
-Core visualization is implemented:
-- **GraphProvider** - ICD-11 API integration with lazy loading
-- **useUrlState** - URL ↔ selected node sync with `?node=ID`
-- **TreeView** - Path-based expansion for polyhierarchy, badges
-- **DetailPanel** - Collapsible parent/child lists
-- **NodeLinkView** - D3 + elkjs hierarchical layout
+1. **Canonical/linked parent distinction** - Does the public API expose this or only iCAT?
+2. **iCAT2 API access** - Needed for understanding current maintenance platform capabilities
 
 ## Testing
+
+```bash
+cd web && npx vitest run     # Unit tests
+cd web && pnpm build         # Typecheck + production build
+```
 
 See [Manual Test Plan](web/MANUAL-TEST-PLAN.md) for face-check testing.
