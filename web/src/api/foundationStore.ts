@@ -21,7 +21,7 @@ export interface FoundationGraphJson {
 }
 
 const DB_NAME = 'icd11-foundation';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bumped: graph schema now includes depth/height/maxDepth
 const GRAPH_STORE = 'graph';
 const ENTITY_STORE = 'entities';
 
@@ -32,6 +32,10 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(GRAPH_STORE)) {
         db.createObjectStore(GRAPH_STORE);
+      } else {
+        // Clear stale graph data on schema upgrade
+        const tx = req.transaction!;
+        tx.objectStore(GRAPH_STORE).clear();
       }
       if (!db.objectStoreNames.contains(ENTITY_STORE)) {
         db.createObjectStore(ENTITY_STORE);

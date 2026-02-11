@@ -94,30 +94,47 @@ function getAncestorChain(
  * Build the neighborhood: ancestor chain + focus + children (with clustering).
  * Returns { nodeIds, clusterNodes, edges }.
  */
+interface ClusterInfo {
+  id: string;
+  parentId: string;
+  count: number;
+  childIds: string[];
+  totalDescendants: number;
+}
+
+interface Neighborhood {
+  /** Ordered: ancestors (root→down), parents, focus, visible children */
+  orderedIds: string[];
+  /** All real node IDs (for edge filtering) */
+  nodeIds: Set<string>;
+  clusterNodes: ClusterInfo[];
+}
+
 function buildNeighborhood(
   focusId: string,
   getParents: (id: string) => ConceptNode[],
   getChildren: (id: string) => ConceptNode[],
   expandedClusters: Set<string>,
-) {
+): Neighborhood {
+  const orderedIds: string[] = [];
   const nodeIds = new Set<string>();
-  const clusterNodes: Array<{
-    id: string;
-    parentId: string;
-    count: number;
-    childIds: string[];
-    totalDescendants: number;
-  }> = [];
+  const clusterNodes: ClusterInfo[] = [];
+
+  function add(id: string) {
+    if (!nodeIds.has(id)) {
+      nodeIds.add(id);
+      orderedIds.push(id);
+    }
+  }
 
   // 1. Ancestor chain (first-parent path, stops at ANCESTOR_MIN_DEPTH)
-  const ancestorChain = getAncestorChain(focusId, getParents);
-  for (const id of ancestorChain) nodeIds.add(id);
+  for (const id of getAncestorChain(focusId, getParents)) add(id);
 
-  // 2. Focus node
-  nodeIds.add(focusId);
+  // 2. All parents of focus (adds any not already in ancestor chain)
+  for (const p of getParents(focusId)) add(p.id);
 
-  // 3. All parents of focus (not just the first-parent chain)
-  for (const p of getParents(focusId)) nodeIds.add(p.id);
+  // 3. Focus node
+  add(focusId);
 
   // 4. Children of focus — cluster if too many
   const focusChildren = getChildren(focusId);
@@ -125,26 +142,23 @@ function buildNeighborhood(
   const clusterExpanded = expandedClusters.has(clusterId);
 
   if (focusChildren.length > MAX_VISIBLE_CHILDREN && !clusterExpanded) {
-    // Show first N, cluster the rest
     const visible = focusChildren.slice(0, MAX_VISIBLE_CHILDREN);
     const hidden = focusChildren.slice(MAX_VISIBLE_CHILDREN);
 
-    for (const c of visible) nodeIds.add(c.id);
+    for (const c of visible) add(c.id);
 
-    const totalDescendants = hidden.reduce((sum, c) => sum + c.descendantCount, 0);
     clusterNodes.push({
       id: clusterId,
       parentId: focusId,
       count: hidden.length,
       childIds: hidden.map(c => c.id),
-      totalDescendants,
+      totalDescendants: hidden.reduce((sum, c) => sum + c.descendantCount, 0),
     });
   } else {
-    // Show all children
-    for (const c of focusChildren) nodeIds.add(c.id);
+    for (const c of focusChildren) add(c.id);
   }
 
-  return { nodeIds, clusterNodes };
+  return { orderedIds, nodeIds, clusterNodes };
 }
 
 export function NodeLinkView() {
@@ -190,13 +204,13 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-      const { nodeIds, clusterNodes } = buildNeighborhood(
+      const { orderedIds, nodeIds, clusterNodes } = buildNeighborhood(
         selectedNodeId!, getParents, getChildren, expandedClusters,
       );
 
-      // Build ELK graph
+      // Build ELK graph — order matters for NODES_AND_EDGES model order
       const elkNodes = [
-        ...Array.from(nodeIds).map(id => ({
+        ...orderedIds.map(id => ({
           id,
           width: NODE_WIDTH,
           height: NODE_HEIGHT,
@@ -241,6 +255,7 @@ export function NodeLinkView() {
             'elk.spacing.nodeNode': '40',
             'elk.layered.spacing.nodeNodeBetweenLayers': '60',
             'elk.edgeRouting': 'ORTHOGONAL',
+            'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
           },
           children: elkNodes,
           edges: elkEdges,
