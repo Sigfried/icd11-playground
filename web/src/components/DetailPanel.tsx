@@ -1,15 +1,15 @@
-import { useState, useCallback } from 'react';
-import {type ConceptNode, useGraph} from '../providers/GraphProvider';
+import { useState, useCallback, useEffect } from 'react';
+import { type ConceptNode, type EntityDetail, useGraph } from '../providers/GraphProvider';
 import './DetailPanel.css';
 
 /**
  * Detail Panel / Context Menu
  *
  * Shows metadata for the selected concept:
- * - Title and definition
+ * - Title and definition (async-loaded)
  * - Link to Foundation browser
- * - Collapsible parents list
- * - Collapsible children list
+ * - Collapsible parents list (all in memory)
+ * - Collapsible children list (all in memory)
  * - Existing proposals summary (future)
  * - Link to create new proposal (future)
  *
@@ -18,57 +18,39 @@ import './DetailPanel.css';
 
 interface RelationListProps {
   title: string;
-  ids: string[];
-  expectedCount: number;
-  onLoadMore?: () => void;
+  nodes: ConceptNode[];
   onSelect: (id: string) => void;
-  graph: ReturnType<typeof useGraph>['graph'];
 }
 
-function RelationList({ title, ids, expectedCount, onLoadMore, onSelect, graph }: RelationListProps) {
+function RelationList({ title, nodes, onSelect }: RelationListProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);
   }, []);
 
-  const loadedCount = ids.length;
-  const hasMore = loadedCount < expectedCount;
-
   return (
     <div className={`detail-section ${isExpanded ? '' : 'collapsed'}`}>
       <h3 className="section-header" onClick={toggleExpanded}>
         <span className="section-toggle">{isExpanded ? '▼' : '▶'}</span>
         {title}
-        <span className="section-count">
-          {loadedCount}{hasMore ? `/${expectedCount}` : ''}
-        </span>
+        <span className="section-count">{nodes.length}</span>
       </h3>
       {isExpanded && (
         <div className="section-content">
-          {ids.length === 0 && !hasMore ? (
+          {nodes.length === 0 ? (
             <div className="no-items">None</div>
           ) : (
             <ul className="relation-list">
-              {ids.map(id => {
-                const node: ConceptNode | null = graph.hasNode(id)
-                  ? graph.getNodeAttributes(id)
-                  : null;
-                return (
-                  <li key={id} onClick={() => onSelect(id)}>
-                    {node?.title ?? `Entity ${id}`}
-                    {node?.parentCount && node.parentCount > 1 && (
-                      <span className="inline-badge">{node.parentCount}↑</span>
-                    )}
-                  </li>
-                );
-              })}
+              {nodes.map(node => (
+                <li key={node.id} onClick={() => onSelect(node.id)}>
+                  {node.title}
+                  {node.parentCount > 1 && (
+                    <span className="inline-badge">{node.parentCount}↑</span>
+                  )}
+                </li>
+              ))}
             </ul>
-          )}
-          {hasMore && onLoadMore && (
-            <button className="load-more-btn" onClick={onLoadMore}>
-              Load {expectedCount - loadedCount} more...
-            </button>
           )}
         </div>
       )}
@@ -79,23 +61,38 @@ function RelationList({ title, ids, expectedCount, onLoadMore, onSelect, graph }
 export function DetailPanel() {
   const {
     selectedNodeId,
-    graph,
-    graphVersion,
     selectNode,
-    loadChildren,
+    getNode,
+    getParents,
+    getChildren,
+    getDetail,
   } = useGraph();
 
-  // Force re-render when graph changes
-  void graphVersion;
+  const [detail, setDetail] = useState<EntityDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  // IMPORTANT: All hooks must be called before any conditional return.
-  // Moving these after the early return caused "Rendered more hooks" error.
-
-  const handleLoadChildren = useCallback(() => {
-    if (selectedNodeId) {
-      loadChildren(selectedNodeId);
+  // Fetch detail when selection changes
+  useEffect(() => {
+    if (!selectedNodeId) {
+      setDetail(null);
+      return;
     }
-  }, [selectedNodeId, loadChildren]);
+
+    let cancelled = false;
+    setDetailLoading(true);
+
+    getDetail(selectedNodeId).then(d => {
+      if (!cancelled) {
+        setDetail(d);
+        setDetailLoading(false);
+      }
+    }).catch(err => {
+      console.error('Failed to load detail:', err);
+      if (!cancelled) setDetailLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedNodeId, getDetail]);
 
   if (!selectedNodeId) {
     return (
@@ -110,20 +107,10 @@ export function DetailPanel() {
     );
   }
 
-  const nodeData: ConceptNode | null = graph.hasNode(selectedNodeId)
-    ? graph.getNodeAttributes(selectedNodeId)
-    : null;
-
-  // Get parents (inNeighbors = nodes pointing to this node)
-  const parentIds = graph.hasNode(selectedNodeId)
-    ? graph.inNeighbors(selectedNodeId)
-    : [];
-
-  // Get children in API order, filtered to loaded ones
-  const loadedChildren = new Set(
-    graph.hasNode(selectedNodeId) ? graph.outNeighbors(selectedNodeId) : []
-  );
-  const childIds = (nodeData?.childOrder ?? []).filter(id => loadedChildren.has(id));
+  const nodeData: ConceptNode | null = getNode(selectedNodeId);
+  const parentNodes = getParents(selectedNodeId);
+  const childNodes = getChildren(selectedNodeId);
+  const definition = detail?.definition || detail?.longDefinition;
 
   return (
     <>
@@ -134,15 +121,23 @@ export function DetailPanel() {
             {nodeData?.title ?? `Entity ${selectedNodeId}`}
           </h2>
 
-          {nodeData?.definition && (
-            <p className="detail-definition">{nodeData.definition}</p>
-          )}
+          {detailLoading ? (
+            <p className="detail-definition loading">Loading definition...</p>
+          ) : definition ? (
+            <p className="detail-definition">{definition}</p>
+          ) : null}
 
           <div className="detail-meta">
             <div className="detail-meta-item">
               <span className="meta-label">ID:</span>
               <code className="meta-value">{selectedNodeId}</code>
             </div>
+            {nodeData && (
+              <div className="detail-meta-item">
+                <span className="meta-label">Descendants:</span>
+                <span className="meta-value">{nodeData.descendantCount.toLocaleString()}</span>
+              </div>
+            )}
           </div>
 
           <div className="detail-actions">
@@ -159,19 +154,14 @@ export function DetailPanel() {
 
         <RelationList
           title="Parents"
-          ids={parentIds}
-          expectedCount={nodeData?.parentCount ?? 0}
+          nodes={parentNodes}
           onSelect={selectNode}
-          graph={graph}
         />
 
         <RelationList
           title="Children"
-          ids={childIds}
-          expectedCount={nodeData?.childCount ?? 0}
-          onLoadMore={handleLoadChildren}
+          nodes={childNodes}
           onSelect={selectNode}
-          graph={graph}
         />
 
         {/* Proposals section - future */}

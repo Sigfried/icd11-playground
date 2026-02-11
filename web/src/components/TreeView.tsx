@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import {type TreePath, type ConceptNode, useGraph} from '../providers/GraphProvider';
+import { type TreePath, type ConceptNode, useGraph } from '../providers/GraphProvider';
 import './TreeView.css';
 
 /**
@@ -12,8 +12,7 @@ import './TreeView.css';
  * Key features (per spec):
  * - [N↑] parent count badge on each node
  * - [N↓] child count badge on each node
- * - Lazy loading of children on expand
- * - Muted style for "linked" (non-canonical) children (if API exposes this)
+ * - Instant expand/collapse (full graph in memory)
  *
  * See icd11-visual-interface-spec.md for full requirements.
  */
@@ -26,32 +25,20 @@ interface TreeNodeProps {
 
 function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const {
-    graph,
-    graphVersion,
     selectedNodeId,
     expandedPaths,
-    loadingNodes,
     selectNode,
     toggleExpand,
+    getNode,
+    getChildren,
   } = useGraph();
-
-  // Force re-render when graph changes
-  void graphVersion;
 
   const pathKey = path.join('/');
   const isExpanded = expandedPaths.has(pathKey);
   const isSelected = selectedNodeId === nodeId;
-  const isLoading = loadingNodes.has(nodeId);
 
-  // Get node data from graph
-  const nodeData: ConceptNode | null = graph.hasNode(nodeId)
-    ? graph.getNodeAttributes(nodeId)
-    : null;
-
-  // Get children in API order (childOrder), filtered to only loaded ones
-  const loadedChildren = new Set(graph.hasNode(nodeId) ? graph.outNeighbors(nodeId) : []);
-  const childIds = (nodeData?.childOrder ?? []).filter(id => loadedChildren.has(id));
-  const hasChildren = (nodeData?.childCount ?? 0) > 0 || childIds.length > 0;
+  const nodeData: ConceptNode | null = getNode(nodeId);
+  const hasChildren = (nodeData?.childCount ?? 0) > 0;
 
   const handleExpandClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,6 +58,9 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     );
   }
 
+  // Get children in API order (all in memory)
+  const childNodes = isExpanded ? getChildren(nodeId) : [];
+
   return (
     <div className="tree-node-container">
       <div
@@ -82,7 +72,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
           className="tree-node-expand"
           onClick={handleExpandClick}
         >
-          {isLoading ? '⋯' : hasChildren ? (isExpanded ? '▼' : '▶') : '·'}
+          {hasChildren ? (isExpanded ? '▼' : '▶') : '·'}
         </span>
         <span className="tree-node-title" title={nodeData.title}>
           {nodeData.title}
@@ -101,13 +91,13 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
         </span>
       </div>
 
-      {isExpanded && childIds.length > 0 && (
+      {isExpanded && childNodes.length > 0 && (
         <div className="tree-children">
-          {childIds.map(childId => (
+          {childNodes.map(child => (
             <TreeNode
-              key={`${pathKey}/${childId}`}
-              nodeId={childId}
-              path={[...path, childId]}
+              key={`${pathKey}/${child.id}`}
+              nodeId={child.id}
+              path={[...path, child.id]}
               depth={depth + 1}
             />
           ))}
@@ -118,10 +108,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 }
 
 export function TreeView() {
-  const { rootId, graphVersion } = useGraph();
-
-  // Force re-render when graph changes
-  void graphVersion;
+  const { rootId, graphLoading } = useGraph();
 
   return (
     <>
@@ -129,10 +116,12 @@ export function TreeView() {
         Tree View -- <span className="header-hint">Foundation hierarchy</span>
       </div>
       <div className="panel-content tree-content">
-        {rootId ? (
+        {graphLoading ? (
+          <div className="placeholder">Loading Foundation...</div>
+        ) : rootId ? (
           <TreeNode nodeId={rootId} path={[rootId]} depth={0} />
         ) : (
-          <div className="placeholder">Loading Foundation...</div>
+          <div className="placeholder">Failed to load Foundation</div>
         )}
       </div>
     </>

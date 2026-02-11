@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
-import {type ConceptNode, useGraph} from '../providers/GraphProvider';
+import { type ConceptNode, useGraph } from '../providers/GraphProvider';
 import './NodeLinkView.css';
 
 /**
@@ -51,36 +51,44 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
 
 export function NodeLinkView() {
-  const { graph, graphVersion, selectedNodeId, selectNode, loadChildren } = useGraph();
+  const { selectedNodeId, selectNode, getNode, getParents, getChildren, getGraph } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
 
-  // Force re-render when graph changes
-  void graphVersion;
-
   // Extract 1-hop neighborhood and compute layout
   useEffect(() => {
-    if (!selectedNodeId || !graph.hasNode(selectedNodeId)) {
+    if (!selectedNodeId) {
+      setLayoutNodes([]);
+      setLayoutEdges([]);
+      return;
+    }
+
+    const nodeData = getNode(selectedNodeId);
+    if (!nodeData) {
       setLayoutNodes([]);
       setLayoutEdges([]);
       return;
     }
 
     async function computeLayout() {
+      const graph = getGraph();
+
       // Collect neighborhood: selected node + parents + children
       const neighborhoodIds = new Set<string>();
       neighborhoodIds.add(selectedNodeId!);
 
       // Parents
-      const parentIds = graph.inNeighbors(selectedNodeId!);
-      parentIds.forEach(id => neighborhoodIds.add(id));
+      for (const p of getParents(selectedNodeId!)) {
+        neighborhoodIds.add(p.id);
+      }
 
       // Children
-      const childIds = graph.outNeighbors(selectedNodeId!);
-      childIds.forEach(id => neighborhoodIds.add(id));
+      for (const c of getChildren(selectedNodeId!)) {
+        neighborhoodIds.add(c.id);
+      }
 
       // Build ELK graph
       const elkNodes = Array.from(neighborhoodIds).map(id => ({
@@ -92,8 +100,8 @@ export function NodeLinkView() {
       const elkEdges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
 
       // Add edges within neighborhood
-      neighborhoodIds.forEach(id => {
-        graph.outNeighbors(id).forEach(childId => {
+      for (const id of neighborhoodIds) {
+        for (const childId of graph.outNeighbors(id)) {
           if (neighborhoodIds.has(childId)) {
             elkEdges.push({
               id: `${id}->${childId}`,
@@ -101,8 +109,8 @@ export function NodeLinkView() {
               targets: [childId],
             });
           }
-        });
-      });
+        }
+      }
 
       try {
         const elkGraph = await elk.layout({
@@ -124,11 +132,10 @@ export function NodeLinkView() {
           y: elkNode.y ?? 0,
           width: elkNode.width ?? NODE_WIDTH,
           height: elkNode.height ?? NODE_HEIGHT,
-          data: graph.getNodeAttributes(elkNode.id),
+          data: getNode(elkNode.id)!,
         }));
 
         const edges: LayoutEdge[] = (elkGraph.edges ?? []).map(elkEdge => {
-          // After layout, edges have sections with routing info
           const sections = (elkEdge as { sections?: LayoutEdge['sections'] }).sections;
           return {
             source: elkEdge.sources[0],
@@ -145,7 +152,7 @@ export function NodeLinkView() {
     }
 
     computeLayout();
-  }, [selectedNodeId, graph, graphVersion]);
+  }, [selectedNodeId, getNode, getParents, getChildren, getGraph]);
 
   // D3 rendering with zoom
   useEffect(() => {
@@ -279,12 +286,6 @@ export function NodeLinkView() {
 
   }, [layoutNodes, layoutEdges, selectedNodeId, selectNode]);
 
-  const handleLoadMore = useCallback(() => {
-    if (selectedNodeId) {
-      loadChildren(selectedNodeId);
-    }
-  }, [selectedNodeId, loadChildren]);
-
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {
       d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, 1.5);
@@ -350,9 +351,6 @@ export function NodeLinkView() {
             <button className="zoom-btn" onClick={handleZoomIn} title="Zoom in">+</button>
             <button className="zoom-btn" onClick={handleZoomOut} title="Zoom out">−</button>
             <button className="zoom-btn" onClick={handleFitToView} title="Fit to view">⊡</button>
-            <button className="load-neighborhood-btn" onClick={handleLoadMore}>
-              Expand neighborhood
-            </button>
           </div>
         )}
       </div>

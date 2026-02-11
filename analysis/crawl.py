@@ -108,13 +108,75 @@ async def crawl(concurrency: int = 50) -> dict:
     return graph
 
 
+def compute_descendant_stats(graph: dict) -> None:
+    """Add descendantCount and maxDepth to each node using memoized DFS.
+
+    descendantCount = number of unique descendants (no double-counting in DAG).
+    maxDepth = longest path from this node to any leaf.
+    """
+    desc_cache: dict[str, set[str]] = {}
+    depth_cache: dict[str, int] = {}
+
+    def get_descendants(node_id: str) -> set[str]:
+        if node_id in desc_cache:
+            return desc_cache[node_id]
+        # Mark in-progress to handle cycles gracefully
+        desc_cache[node_id] = set()
+        children = graph.get(node_id, {}).get("children", [])
+        result: set[str] = set()
+        for child_id in children:
+            if child_id in graph:
+                result.add(child_id)
+                result |= get_descendants(child_id)
+        desc_cache[node_id] = result
+        return result
+
+    def get_max_depth(node_id: str) -> int:
+        if node_id in depth_cache:
+            return depth_cache[node_id]
+        depth_cache[node_id] = 0  # cycle guard
+        children = graph.get(node_id, {}).get("children", [])
+        if not children:
+            depth_cache[node_id] = 0
+            return 0
+        max_child = max(
+            (get_max_depth(c) for c in children if c in graph),
+            default=-1,
+        )
+        depth_cache[node_id] = max_child + 1
+        return max_child + 1
+
+    # Increase recursion limit for deep hierarchies
+    old_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(old_limit, len(graph) + 1000))
+
+    for node_id in graph:
+        graph[node_id]["descendantCount"] = len(get_descendants(node_id))
+        graph[node_id]["maxDepth"] = get_max_depth(node_id)
+
+    sys.setrecursionlimit(old_limit)
+    print(f"Computed descendant stats for {len(graph)} nodes", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Crawl ICD-11 Foundation hierarchy")
     parser.add_argument("--out", default="foundation_graph.json", help="Output file")
     parser.add_argument("--concurrency", type=int, default=50, help="Max concurrent requests")
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="Skip crawling; just add descendant stats to existing JSON",
+    )
     args = parser.parse_args()
 
-    graph = asyncio.run(crawl(args.concurrency))
+    if args.stats_only:
+        with open(args.out) as f:
+            graph = json.load(f)
+        print(f"Loaded {len(graph)} entities from {args.out}", file=sys.stderr)
+    else:
+        graph = asyncio.run(crawl(args.concurrency))
+
+    compute_descendant_stats(graph)
 
     with open(args.out, "w") as f:
         json.dump(graph, f)
@@ -125,12 +187,16 @@ def main():
     leaf = sum(1 for v in graph.values() if len(v["children"]) == 0)
     max_children = max(len(v["children"]) for v in graph.values())
     max_parents = max(len(v["parents"]) for v in graph.values())
+    max_desc = max(v["descendantCount"] for v in graph.values())
+    max_depth = max(v["maxDepth"] for v in graph.values())
     print(f"\nSummary:")
     print(f"  Total entities:       {len(graph)}")
     print(f"  Multi-parent nodes:   {multi_parent}")
     print(f"  Leaf nodes:           {leaf}")
     print(f"  Max children:         {max_children}")
     print(f"  Max parents:          {max_parents}")
+    print(f"  Max descendants:      {max_desc}")
+    print(f"  Max depth:            {max_depth}")
 
 
 if __name__ == "__main__":

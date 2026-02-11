@@ -84,42 +84,14 @@ export interface FoundationEntity {
 }
 
 /**
- * Get Foundation entity by ID (memoized — same ID returns same promise)
+ * Get Foundation entity by ID
  */
-const entityCache = new Map<string, Promise<FoundationEntity>>();
-
 export function getFoundationEntity(
   entityId: string,
   options: FetchOptions = {}
 ): Promise<FoundationEntity> {
-  const cached = entityCache.get(entityId);
-  if (cached) return cached;
-
   const path = entityId === 'root' ? '/icd/entity' : `/icd/entity/${entityId}`;
-  const promise = fetchJson<FoundationEntity>(path, options);
-  entityCache.set(entityId, promise);
-  return promise;
-}
-
-/**
- * Get Foundation root entity
- */
-export async function getFoundationRoot(
-  options: FetchOptions = {}
-): Promise<FoundationEntity> {
-  return fetchJson('/icd/entity', options);
-}
-
-/**
- * Get entity by full URI
- */
-export async function getEntityByUri(
-  uri: string,
-  options: FetchOptions = {}
-): Promise<FoundationEntity> {
-  // The API returns URIs like http://id.who.int/icd/entity/123
-  // We can fetch these directly
-  return fetchJson(uri, options);
+  return fetchJson<FoundationEntity>(path, options);
 }
 
 const FOUNDATION_ROOT_URI = /^https?:\/\/id\.who\.int\/icd\/entity\/?$/;
