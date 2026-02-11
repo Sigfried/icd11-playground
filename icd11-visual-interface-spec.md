@@ -230,49 +230,77 @@ Even with the fixes above, nodes with many children (e.g., 331 children for some
 
 #### Potential Solutions
 
-| Approach | Description | Status | Pros | Cons |
-|----------|-------------|--------|------|------|
-| **Pan + zoom** | Render at readable scale, let user navigate | :green_circle: Done | Simple; D3 built-in | May lose overview |
-| **Minimum scale** | Floor (0.4) on auto-scale | :green_circle: Done | Preserves readability | Content overflows; needs pan/zoom |
-| **Limit neighborhood** | Show only immediate parents/children (true 1-hop) | :green_circle: Done | Keeps node count manageable | Loses context of where concept sits in hierarchy |
-| **Collapsible clusters** | Group excess children into "N more..." placeholder | :white_circle: | Controls sprawl while showing counts | Adds interaction complexity |
-| **Focus + context distortion** | Fisheye or semantic zoom — selected area large, periphery compressed | :white_circle: | Shows everything at once | Can be disorienting; harder to implement |
-| **Radial layout** | Fan out from focus node | :white_circle: | Better for high-degree nodes | Loses hierarchical clarity |
-| **Adaptive node sizing** | Shrink distant/less-important nodes | :white_circle: | Maintains overview with readable focus | Visual hierarchy may confuse |
+| # | Approach | Description | Status | Pros | Cons |
+|---|----------|-------------|--------|------|------|
+| — | **Pan + zoom** | Render at readable scale, let user navigate | :green_circle: Done | Simple; D3 built-in | May lose overview |
+| — | **Minimum scale** | Floor (0.4) on auto-scale | :green_circle: Done | Preserves readability | Content overflows; needs pan/zoom |
+| 1 | **Ancestors beyond 1-hop** | Show ancestor chain to root, not just immediate parents | :white_circle: | Context of where concept sits in hierarchy | More nodes to fit |
+| 2 | **Collapsible clusters** | Group excess children into "N more..." placeholder | :white_circle: | Controls sprawl while showing counts | Adds interaction complexity |
+| 3 | **Hover shows hidden neighbors** | On hover, transiently show parents/children not in view | :white_circle: | Exploration without committing to layout change | Transient state; can be jarring |
+| 4 | **Right-click/long-click toggle** | Context menu to pin/unpin specific neighbors | :white_circle: | Fine-grained control over what's visible | UI complexity |
+| 5 | **Close individual nodes** | X button to hide specific non-focus nodes | :white_circle: | Declutter on demand | What happens when node would reappear? |
+| 6 | **Area-proportional badges** | Badges for parents/children/descendants sized so area ∝ count, with median count = default size. Separate median baselines per badge type. Badges on right side of concept name. | :white_circle: | Three independent visual channels without affecting node rectangle | Need to compute medians; very small/large counts need clamping |
+| — | **Fisheye distortion** | Magnify area near cursor, compress periphery | :white_circle: | Shows everything at once | Disorienting; try if others don't suffice |
+| 7 | **Staggered levels** | Labella.js-style label placement to avoid overlap | :white_circle: | Better use of horizontal space | New dependency; may not integrate with elkjs |
+| 8 | **Resizable panels** | Make the three main panels resizable | :white_circle: | Low-hanging fruit; more room for node-link | Minor implementation effort |
 
-#### Design Discussion <!-- Discussion notes will go here -->
-> **[sg] Add your ideas and preferences here. What approaches seem most promising? What constraints should we consider?**
-> - **Existing solution ideas**
->   - Limit neighborhood: maybe one-hop limit unnecessary for ancestors
->   - Collapsible clusters: good idea. Will have to try some things and see how it works with other techniques we
->     might use
->   - Fisheye: good technique for unreadable stuff; try if other approaches don't fully solve the problem.
->     I don't know what you mean by semantic zoom
->   - Radial layout: no
->   - Adaptive node sizing: interesting idea. might be especially confusing along with other techniques
-> - **More ideas**
->     - Hover/click/context menus/close (these may only apply to not-selected nodes)
->       - On hover: 
->         - Show any parents/children not already shown (only while hovering)
->           - Could consider ideas from ../dynamic-model-var-docs/src/components/ (e.g., FloatingBoxManager, 
->             LayoutManager, TransitoryBox)
->         - Highlight in tree; show in details
->       - On click: switch selected (current behavior)
->       - On long click or right click:
->         - Show lists of shown/not shown parents and children to allow toggling
->           of shown state
->         - Anything else?
->       - Close: provide close icon to close specific nodes (not sure what to do
->         with closed state when returning to a state that would normally show
->         the closed node)
->     - Expandable/collapsible with node sizing:
->       - Node size based on descendant count (later might be proposal count, or that
->         could be indicated with color)
->       - If there are edge types or other ways of grouping neighboring nodes, show them as groups
->         that can be explored or expanded
->     - Staggered levels. See https://twitter.github.io/labella.js/. Try both simple and overlap algorithms
->     - Horizontal flow. See https://twitter.github.io/labella.js/with_text.html
->     - No brainer: make three panels resizable.
+#### Feature Compatibility Analysis
+
+![Combined features sketch](design-stuff/spec-assets/node-link-features-sketch.svg)
+
+**Works well together:**
+- **2+6** (Clusters + Badges): Collapsed clusters can show aggregate badge values — e.g., total descendants across clustered children.
+- **3+4** (Hover + Toggle): Natural progression — hover previews, right-click pins. "I'm curious about this" → "I want to keep seeing this."
+- **4+5** (Toggle + Close): Really the same feature — unify as a per-node visibility state managed via context menu and close button.
+- **2+3** (Clusters + Hover): Hover over a cluster to preview its contents without expanding.
+- **6** (Badges): Orthogonal to all other features — badges render independently within each node regardless of layout, clustering, or visibility state.
+
+**Needs care:**
+- **5+2** (Close + Clusters): Closed nodes should rejoin a cluster counter, not vanish entirely. E.g., "2 parents (1 hidden)."
+- **3+5** (Hover + Close): Hover should temporarily show closed nodes. This means the state model is three-valued per node (see below).
+
+**Node visibility state model:**
+
+Each non-focus node needs a visibility state:
+| State | Meaning | How it gets there |
+|-------|---------|-------------------|
+| **default** | Shown/hidden by the neighborhood algorithm | Initial state |
+| **pinned** | Always shown regardless of neighborhood | Right-click toggle on |
+| **closed** | Hidden unless hovered over | Close button or right-click toggle off |
+
+Hover temporarily overrides `closed` → visible (transient). Changing focus node resets all states to `default`.
+
+#### Design Notes
+
+> **[sg]**
+> - Limit neighborhood (#1): maybe one-hop limit unnecessary for ancestors
+> - Collapsible clusters (#2): good idea. Will have to try some things and see how it works with other techniques
+> - Fisheye: good technique for unreadable stuff; try if other approaches don't fully solve the problem
+> - Radial layout: no
+> - Area-proportional badges (#6): don't size the rectangles — size individual badges. Badges on right side of concept name, area ∝ count, median count = default size, separate medians for parent/child/descendant badges
+> - Hover (#3): could consider ideas from `../dynamic-model-var-docs/src/components/` (FloatingBoxManager, LayoutManager, TransitoryBox) — prior art for persistent/transitory info display in crowded spaces
+> - If there are edge types or other ways of grouping neighboring nodes, show them as groups that can be explored or expanded
+> - Staggered levels (#7): see https://twitter.github.io/labella.js/ — try both simple and overlap algorithms
+> - Horizontal flow: see https://twitter.github.io/labella.js/with_text.html
+> - Resizable panels (#8): no brainer
+
+#### Implementation Priority
+
+**Phase 1 — High impact, low/medium effort:**
+- **#8 Resizable panels** — trivial, immediately useful, gives node-link view more room
+- **#2 Collapsible clusters** — the single biggest readability fix for high-degree nodes
+- **#1 Ancestors beyond 1-hop** — easy with full graph in memory, gives critical hierarchy context
+
+**Phase 2 — Medium impact, medium effort:**
+- **#6 Area-proportional badges** — descendant data already on every node, orthogonal to layout
+- **#3 Hover preview** — valuable for exploration, moderate complexity (overlay positioning outside ELK layout)
+
+**Phase 3 — Depends on Phase 2:**
+- **#4+5 Toggle/Close** (unified as visibility state) — most useful once clusters and hover exist
+- **#7 Staggered levels** — evaluate after clusters; may require replacing elkjs
+
+**Defer:**
+- **Fisheye** — only if the above doesn't suffice
 
 #### Wireframes & Screenshots
 
