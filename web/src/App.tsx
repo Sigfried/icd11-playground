@@ -17,7 +17,7 @@ function App() {
     <GraphProvider>
       <div className="app">
         <header className="app-header">
-          <h1>ICD-11 Foundation Explorer</h1>
+          <h1><a href={import.meta.env.BASE_URL}>ICD-11 Foundation Explorer</a></h1>
           <span className="app-subtitle">Visual Maintenance Tool Prototype</span>
         </header>
 

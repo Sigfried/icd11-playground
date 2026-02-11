@@ -50,7 +50,15 @@ body {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.app-header h1 a {
   color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.app-header h1 a:hover {
+  text-decoration: underline;
 }
 
 .app-subtitle {
