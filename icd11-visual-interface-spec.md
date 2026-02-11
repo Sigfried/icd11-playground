@@ -95,7 +95,9 @@ interface ConceptNode {
   childCount: number;
   childOrder: string[];      // children in Foundation order
   descendantCount: number;   // unique descendants (pre-computed)
-  maxDepth: number;          // longest path to leaf (pre-computed)
+  height: number;            // longest downward path to any leaf (leaf=0)
+  depth: number;             // shortest path from root (root=0)
+  maxDepth: number;          // longest path from root (root=0)
 }
 
 // Rich metadata — fetched on-demand from ICD-11 API, cached in IndexedDB
@@ -150,7 +152,7 @@ C1 and C2 are the same object appearing in two places. Selection or modification
 | **Same object, multiple appearances** | All instances of a concept reference the same object. Selection/modification in one location reflects everywhere. | :green_circle: |
 | **Parent count badge** | Each node displays `[N↑]` indicating total parent count. Only shown when parentCount > 1. | :green_circle: |
 | **Child count badge** | Display `[N↓]` for direct children count. | :green_circle: |
-| **Descendant stats badge** | In addition to direct child count, show total descendant count and max depth. Data is pre-computed and available on `ConceptNode`; badge display needs design (shown in DetailPanel, not yet in tree). | :yellow_circle: |
+| **Descendant stats badge** | In addition to direct child count, show total descendant count and height. Data is pre-computed and available on `ConceptNode`; badge display needs design (shown in DetailPanel, not yet in tree). | :yellow_circle: |
 | **Collapse heuristics** | If tree gets too large, collapse nodes based on depth, subtree size, or user preference. | :white_circle: |
 | **Expand on demand** | Children expand instantly from in-memory graph. Full Foundation loaded at startup. | :green_circle: |
 | **Multi-path highlighting** | When a node with multiple parents is selected, all occurrences in the tree are highlighted. | :green_circle: |
@@ -261,6 +263,9 @@ Even with the fixes above, nodes with many children (e.g., 331 children for some
 - **5+2** (Close + Clusters): Closed nodes should rejoin a cluster counter, not vanish entirely. E.g., "2 parents (1 hidden)."
 - **3+5** (Hover + Close): Hover should temporarily show closed nodes. This means the state model is three-valued per node (see below).
 - **9** (Pop-out window): Cross-window state sync — selection changes in tree must propagate to pop-out and vice versa. `BroadcastChannel` or `window.opener` messaging. What happens to the inline panel when pop-out is open? Hide it? Show a "popped out" placeholder?
+  - **[sg] maybe just leave the middle panel alone and no communication between pop-out and tree/details,
+           just allow the user to explore the node-link view separately in a wide screen. hmm... after exploring
+           they might want to choose a new focal node, could allow just that
 - **10+1** (Hybrid layout + Ancestors): Ancestors are a linear chain → vertical makes sense. Children fan out → horizontal uses width better. elkjs supports `elk.direction` per node group but may need compound node grouping or a two-pass layout.
 
 **Node visibility state model:**
@@ -524,6 +529,7 @@ sequenceDiagram
 
 1. **Canonical/linked distinction**: Does the WHO API expose this or only iCAT?
 2. **Integration path**: How will this embed into the .NET maintenance platform?
+3. **Depth spread as maintenance signal**: Each node has `depth` (shortest path from root) and `maxDepth` (longest path from root). For polyhierarchy nodes these differ — 11,345 nodes (16%) have spread. Large spread may flag structural anomalies (e.g., a specific concept that's also directly under a high-level chapter). Consider surfacing depth range in the detail panel and/or using it as a filter/highlight for maintenance review. Cf. OHDSI/OMOP approach of storing both min and max path lengths.
 
 ---
 

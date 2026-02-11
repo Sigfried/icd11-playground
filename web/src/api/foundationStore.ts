@@ -14,7 +14,9 @@ export interface FoundationGraphJson {
     parents: string[];
     children: string[];
     descendantCount: number;
-    maxDepth: number;
+    height: number;   // longest downward path to any leaf (leaf=0)
+    depth: number;    // shortest path from root (root=0)
+    maxDepth: number; // longest path from root (root=0)
   };
 }
 

@@ -109,13 +109,14 @@ async def crawl(concurrency: int = 50) -> dict:
 
 
 def compute_descendant_stats(graph: dict) -> None:
-    """Add descendantCount and maxDepth to each node using memoized DFS.
+    """Add descendantCount, height, and depth to each node.
 
     descendantCount = number of unique descendants (no double-counting in DAG).
-    maxDepth = longest path from this node to any leaf.
+    height = longest path from this node down to any leaf (leaf=0).
+    depth = shortest path from root down to this node (root=0).
     """
     desc_cache: dict[str, set[str]] = {}
-    depth_cache: dict[str, int] = {}
+    height_cache: dict[str, int] = {}
 
     def get_descendants(node_id: str) -> set[str]:
         if node_id in desc_cache:
@@ -131,19 +132,19 @@ def compute_descendant_stats(graph: dict) -> None:
         desc_cache[node_id] = result
         return result
 
-    def get_max_depth(node_id: str) -> int:
-        if node_id in depth_cache:
-            return depth_cache[node_id]
-        depth_cache[node_id] = 0  # cycle guard
+    def get_height(node_id: str) -> int:
+        if node_id in height_cache:
+            return height_cache[node_id]
+        height_cache[node_id] = 0  # cycle guard
         children = graph.get(node_id, {}).get("children", [])
         if not children:
-            depth_cache[node_id] = 0
+            height_cache[node_id] = 0
             return 0
         max_child = max(
-            (get_max_depth(c) for c in children if c in graph),
+            (get_height(c) for c in children if c in graph),
             default=-1,
         )
-        depth_cache[node_id] = max_child + 1
+        height_cache[node_id] = max_child + 1
         return max_child + 1
 
     # Increase recursion limit for deep hierarchies
@@ -152,9 +153,45 @@ def compute_descendant_stats(graph: dict) -> None:
 
     for node_id in graph:
         graph[node_id]["descendantCount"] = len(get_descendants(node_id))
-        graph[node_id]["maxDepth"] = get_max_depth(node_id)
+        graph[node_id]["height"] = get_height(node_id)
+        # Remove old field if present
+        graph[node_id].pop("maxDepth", None)
 
     sys.setrecursionlimit(old_limit)
+
+    # BFS from root for depth (min distance) and maxDepth (max distance)
+    from collections import deque
+
+    for node_id in graph:
+        graph[node_id]["depth"] = -1
+        graph[node_id]["maxDepth"] = -1
+
+    if "root" in graph:
+        # BFS for min depth
+        queue: deque[str] = deque(["root"])
+        graph["root"]["depth"] = 0
+        while queue:
+            nid = queue.popleft()
+            d = graph[nid]["depth"]
+            for child_id in graph[nid].get("children", []):
+                if child_id in graph and graph[child_id]["depth"] == -1:
+                    graph[child_id]["depth"] = d + 1
+                    queue.append(child_id)
+
+        # BFS for max depth (visit every edge, keep the largest)
+        queue = deque(["root"])
+        graph["root"]["maxDepth"] = 0
+        visited: set[tuple[str, str]] = set()  # track edges, not nodes
+        while queue:
+            nid = queue.popleft()
+            d = graph[nid]["maxDepth"]
+            for child_id in graph[nid].get("children", []):
+                if child_id in graph and (nid, child_id) not in visited:
+                    visited.add((nid, child_id))
+                    if d + 1 > graph[child_id]["maxDepth"]:
+                        graph[child_id]["maxDepth"] = d + 1
+                        queue.append(child_id)
+
     print(f"Computed descendant stats for {len(graph)} nodes", file=sys.stderr)
 
 
@@ -188,7 +225,10 @@ def main():
     max_children = max(len(v["children"]) for v in graph.values())
     max_parents = max(len(v["parents"]) for v in graph.values())
     max_desc = max(v["descendantCount"] for v in graph.values())
-    max_depth = max(v["maxDepth"] for v in graph.values())
+    max_height = max(v["height"] for v in graph.values())
+    deepest_min = max(v["depth"] for v in graph.values())
+    deepest_max = max(v["maxDepth"] for v in graph.values())
+    spread_nodes = sum(1 for v in graph.values() if v["maxDepth"] > v["depth"])
     print(f"\nSummary:")
     print(f"  Total entities:       {len(graph)}")
     print(f"  Multi-parent nodes:   {multi_parent}")
@@ -196,7 +236,10 @@ def main():
     print(f"  Max children:         {max_children}")
     print(f"  Max parents:          {max_parents}")
     print(f"  Max descendants:      {max_desc}")
-    print(f"  Max depth:            {max_depth}")
+    print(f"  Max height:           {max_height}")
+    print(f"  Max depth (min path): {deepest_min}")
+    print(f"  Max depth (max path): {deepest_max}")
+    print(f"  Nodes with spread:    {spread_nodes} (depth != maxDepth)")
 
 
 if __name__ == "__main__":

@@ -60,9 +60,11 @@ const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
 const MAX_VISIBLE_CHILDREN = 2;
 
+const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
+
 /**
  * Walk ancestors from focusId toward root, following the first parent at each level.
- * Stops at the second level (excludes root node, whose children are top-level chapters).
+ * Stops at ANCESTOR_MIN_DEPTH (excludes root and top-level chapters).
  * Returns array of ancestor IDs in order from highest → ... → focusId's immediate parent.
  */
 function getAncestorChain(
@@ -71,20 +73,18 @@ function getAncestorChain(
 ): string[] {
   const chain: string[] = [];
   let currentId = focusId;
-  const maxDepth = 30;
+  const maxIter = 30;
   const visited = new Set<string>([focusId]);
 
-  for (let i = 0; i < maxDepth; i++) {
+  for (let i = 0; i < maxIter; i++) {
     const parents = getParents(currentId);
     if (parents.length === 0) break;
-    const firstParent = parents[0].id;
-    if (visited.has(firstParent)) break;
-    // Stop before root — if this parent has no parents, it's root
-    const grandparents = getParents(firstParent);
-    if (grandparents.length === 0) break;
-    visited.add(firstParent);
-    chain.unshift(firstParent);
-    currentId = firstParent;
+    const firstParent = parents[0];
+    if (visited.has(firstParent.id)) break;
+    if (firstParent.depth < ANCESTOR_MIN_DEPTH) break;
+    visited.add(firstParent.id);
+    chain.unshift(firstParent.id);
+    currentId = firstParent.id;
   }
 
   return chain;
@@ -109,7 +109,7 @@ function buildNeighborhood(
     totalDescendants: number;
   }> = [];
 
-  // 1. Ancestor chain to root (first-parent path)
+  // 1. Ancestor chain (first-parent path, stops at ANCESTOR_MIN_DEPTH)
   const ancestorChain = getAncestorChain(focusId, getParents);
   for (const id of ancestorChain) nodeIds.add(id);
 

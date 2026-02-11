@@ -55,7 +55,9 @@ describe('ConceptNode childOrder storage', () => {
       childCount: 5,
       childOrder: ['child-a', 'child-b', 'child-c', 'child-d', 'child-e'],
       descendantCount: 100,
-      maxDepth: 3,
+      height: 3,
+      depth: 2,
+      maxDepth: 2,
     };
 
     graph.addNode('parent-1', nodeData);

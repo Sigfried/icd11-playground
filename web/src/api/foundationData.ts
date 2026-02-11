@@ -17,7 +17,9 @@ export interface ConceptNode {
   childCount: number;
   childOrder: string[];
   descendantCount: number;
-  maxDepth: number;
+  height: number;   // longest downward path to any leaf (leaf=0)
+  depth: number;    // shortest path from root (root=0)
+  maxDepth: number; // longest path from root (root=0); differs from depth for polyhierarchy nodes
 }
 
 export interface EntityDetail {
@@ -51,6 +53,8 @@ export function initGraph(data: FoundationGraphJson): void {
       childCount: entry.children.length,
       childOrder: entry.children,
       descendantCount: entry.descendantCount,
+      height: entry.height,
+      depth: entry.depth,
       maxDepth: entry.maxDepth,
     });
   }

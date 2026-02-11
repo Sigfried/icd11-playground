@@ -38,8 +38,8 @@ vi.mock('../api/icd11', () => ({
 
 // Mock the fetch for foundation_graph.json
 const mockGraphData = {
-  root: { title: 'Root', parents: [], children: ['test-123'], descendantCount: 1, maxDepth: 1 },
-  'test-123': { title: 'Test Node', parents: ['root'], children: [], descendantCount: 0, maxDepth: 0 },
+  root: { title: 'Root', parents: [], children: ['test-123'], descendantCount: 1, height: 1, depth: 0, maxDepth: 0 },
+  'test-123': { title: 'Test Node', parents: ['root'], children: [], descendantCount: 0, height: 0, depth: 1, maxDepth: 1 },
 };
 
 // Override global fetch for the graph JSON
