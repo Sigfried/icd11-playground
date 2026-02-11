@@ -240,11 +240,39 @@ Even with the fixes above, nodes with many children (e.g., 331 children for some
 | **Radial layout** | Fan out from focus node | :white_circle: | Better for high-degree nodes | Loses hierarchical clarity |
 | **Adaptive node sizing** | Shrink distant/less-important nodes | :white_circle: | Maintains overview with readable focus | Visual hierarchy may confuse |
 
-#### Design Discussion
-
+#### Design Discussion <!-- Discussion notes will go here -->
 > **[sg] Add your ideas and preferences here. What approaches seem most promising? What constraints should we consider?**
-
-<!-- Discussion notes will go here -->
+> - **Existing solution ideas**
+>   - Limit neighborhood: maybe one-hop limit unnecessary for ancestors
+>   - Collapsible clusters: good idea. Will have to try some things and see how it works with other techniques we
+>     might use
+>   - Fisheye: good technique for unreadable stuff; try if other approaches don't fully solve the problem.
+>     I don't know what you mean by semantic zoom
+>   - Radial layout: no
+>   - Adaptive node sizing: interesting idea. might be especially confusing along with other techniques
+> - **More ideas**
+>     - Hover/click/context menus/close (these may only apply to not-selected nodes)
+>       - On hover: 
+>         - Show any parents/children not already shown (only while hovering)
+>           - Could consider ideas from ../dynamic-model-var-docs/src/components/ (e.g., FloatingBoxManager, 
+>             LayoutManager, TransitoryBox)
+>         - Highlight in tree; show in details
+>       - On click: switch selected (current behavior)
+>       - On long click or right click:
+>         - Show lists of shown/not shown parents and children to allow toggling
+>           of shown state
+>         - Anything else?
+>       - Close: provide close icon to close specific nodes (not sure what to do
+>         with closed state when returning to a state that would normally show
+>         the closed node)
+>     - Expandable/collapsible with node sizing:
+>       - Node size based on descendant count (later might be proposal count, or that
+>         could be indicated with color)
+>       - If there are edge types or other ways of grouping neighboring nodes, show them as groups
+>         that can be explored or expanded
+>     - Staggered levels. See https://twitter.github.io/labella.js/. Try both simple and overlap algorithms
+>     - Horizontal flow. See https://twitter.github.io/labella.js/with_text.html
+>     - No brainer: make three panels resizable.
 
 #### Wireframes & Screenshots
 
