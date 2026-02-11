@@ -58,11 +58,12 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
 const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
-const MAX_VISIBLE_CHILDREN = 5;
+const MAX_VISIBLE_CHILDREN = 2;
 
 /**
- * Walk ancestors from focusId up to root, following the first parent at each level.
- * Returns array of ancestor IDs in order from root → ... → focusId's immediate parent.
+ * Walk ancestors from focusId toward root, following the first parent at each level.
+ * Stops at the second level (excludes root node, whose children are top-level chapters).
+ * Returns array of ancestor IDs in order from highest → ... → focusId's immediate parent.
  */
 function getAncestorChain(
   focusId: string,
@@ -78,6 +79,9 @@ function getAncestorChain(
     if (parents.length === 0) break;
     const firstParent = parents[0].id;
     if (visited.has(firstParent)) break;
+    // Stop before root — if this parent has no parents, it's root
+    const grandparents = getParents(firstParent);
+    if (grandparents.length === 0) break;
     visited.add(firstParent);
     chain.unshift(firstParent);
     currentId = firstParent;

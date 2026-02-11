@@ -234,15 +234,17 @@ Even with the fixes above, nodes with many children (e.g., 331 children for some
 |---|----------|-------------|--------|------|------|
 | — | **Pan + zoom** | Render at readable scale, let user navigate | :green_circle: Done | Simple; D3 built-in | May lose overview |
 | — | **Minimum scale** | Floor (0.4) on auto-scale | :green_circle: Done | Preserves readability | Content overflows; needs pan/zoom |
-| 1 | **Ancestors beyond 1-hop** | Show ancestor chain to root, not just immediate parents | :white_circle: | Context of where concept sits in hierarchy | More nodes to fit |
-| 2 | **Collapsible clusters** | Group excess children into "N more..." placeholder | :white_circle: | Controls sprawl while showing counts | Adds interaction complexity |
+| 1 | **Ancestors beyond 1-hop** | Show ancestor chain to second level (skip root), not just immediate parents | :yellow_circle: In progress | Context of where concept sits in hierarchy | More nodes to fit |
+| 2 | **Collapsible clusters** | Group excess children into "N more..." placeholder (threshold: 2 visible) | :yellow_circle: In progress | Controls sprawl while showing counts | Adds interaction complexity |
 | 3 | **Hover shows hidden neighbors** | On hover, transiently show parents/children not in view | :white_circle: | Exploration without committing to layout change | Transient state; can be jarring |
 | 4 | **Right-click/long-click toggle** | Context menu to pin/unpin specific neighbors | :white_circle: | Fine-grained control over what's visible | UI complexity |
 | 5 | **Close individual nodes** | X button to hide specific non-focus nodes | :white_circle: | Declutter on demand | What happens when node would reappear? |
 | 6 | **Area-proportional badges** | Badges for parents/children/descendants sized so area ∝ count, with median count = default size. Separate median baselines per badge type. Badges on right side of concept name. | :white_circle: | Three independent visual channels without affecting node rectangle | Need to compute medians; very small/large counts need clamping |
 | — | **Fisheye distortion** | Magnify area near cursor, compress periphery | :white_circle: | Shows everything at once | Disorienting; try if others don't suffice |
 | 7 | **Staggered levels** | Labella.js-style label placement to avoid overlap | :white_circle: | Better use of horizontal space | New dependency; may not integrate with elkjs |
-| 8 | **Resizable panels** | Make the three main panels resizable | :white_circle: | Low-hanging fruit; more room for node-link | Minor implementation effort |
+| 8 | **Resizable panels** | Make the three main panels resizable | :green_circle: Done | Low-hanging fruit; more room for node-link | Minor implementation effort |
+| 9 | **Pop-out window** | Open node-link view in a separate browser window for full-screen use | :white_circle: | Full screen width; dual-monitor friendly | Cross-window state sync; interaction model questions |
+| 10 | **Hybrid layout** | Vertical flow for ancestors, horizontal flow for children/descendants | :white_circle: | Better use of space; ancestors are a linear chain, children fan out | May need custom elkjs config or forked layout code |
 
 #### Feature Compatibility Analysis
 
@@ -258,6 +260,8 @@ Even with the fixes above, nodes with many children (e.g., 331 children for some
 **Needs care:**
 - **5+2** (Close + Clusters): Closed nodes should rejoin a cluster counter, not vanish entirely. E.g., "2 parents (1 hidden)."
 - **3+5** (Hover + Close): Hover should temporarily show closed nodes. This means the state model is three-valued per node (see below).
+- **9** (Pop-out window): Cross-window state sync — selection changes in tree must propagate to pop-out and vice versa. `BroadcastChannel` or `window.opener` messaging. What happens to the inline panel when pop-out is open? Hide it? Show a "popped out" placeholder?
+- **10+1** (Hybrid layout + Ancestors): Ancestors are a linear chain → vertical makes sense. Children fan out → horizontal uses width better. elkjs supports `elk.direction` per node group but may need compound node grouping or a two-pass layout.
 
 **Node visibility state model:**
 
@@ -283,6 +287,8 @@ Hover temporarily overrides `closed` → visible (transient). Changing focus nod
 > - Staggered levels (#7): see https://twitter.github.io/labella.js/ — try both simple and overlap algorithms
 > - Horizontal flow: see https://twitter.github.io/labella.js/with_text.html
 > - Resizable panels (#8): no brainer
+> - Pop-out (#9): allow node-link view in a separate window for full-screen use
+> - Hybrid layout (#10): vertical for ancestors, horizontal for children — better space utilization. elkjs supports `elk.direction` per compound node, but doesn't cleanly isolate layout directions within a single graph. Practical approaches: (a) two-pass layout — lay out ancestors vertically, freeze coordinates, lay out children horizontally separately; (b) manual post-processing — rotate/translate child subgraph after layout; (c) switch to igraph which has explicit forced vertical layering.
 
 #### Implementation Priority
 
