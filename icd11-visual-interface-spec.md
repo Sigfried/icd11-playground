@@ -32,7 +32,7 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 | | Collapsible clusters (threshold: 2) | :green_circle: |
 | | Resizable panels | :green_circle: |
 | | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
-| | [Scalability features #3–10](#potential-solutions) | :white_circle: See design section |
+| | [Scalability features #3–12](#potential-solutions) | :white_circle: See design section |
 | **Detail Panel** | Title, definition (async), browser link | :green_circle: |
 | | Collapsible parents/children lists | :green_circle: |
 | | Children missing badges | :red_circle: |
@@ -207,7 +207,9 @@ The core design challenge. High-degree nodes (up to 331 children) make the view 
 | 7 | **Staggered levels** | :white_circle: | Labella.js-style overlap avoidance |
 | 8 | **Resizable panels** | :green_circle: | Drag dividers between three panels |
 | 9 | **Pop-out window** | :white_circle: | Full-screen node-link in separate window |
-| 10 | **Hybrid layout** | :white_circle: | Vertical ancestors, horizontal children |
+| 10 | **Full ancestor DAG** | :white_circle: | Show all paths to root (not just first-parent chain); allow child expansion on ancestor nodes |
+| 11 | **Scrollable clusters** | :white_circle: | Cluster summary in SVG; hover/click shows HTML child list overlay; pop children out into real nodes |
+| 12 | **Full-width bottom panel** | :white_circle: | Node-link takes full viewport width at bottom; RIGHT layout direction; native scroll for overflow |
 
 #### Feature Compatibility
 
@@ -219,13 +221,16 @@ The core design challenge. High-degree nodes (up to 331 children) make the view 
 - **4+5** (Toggle + Close): Unify as per-node visibility state via context menu + close button.
 - **2+3** (Clusters + Hover): Hover over cluster to preview contents.
 - **6** (Badges): Orthogonal to all others — renders independently within each node.
+- **10+2** (Ancestor DAG + Clusters): Ancestors can have clustered children too.
+- **11+2** (Scrollable Clusters replaces current Clusters): Evolution of cluster concept — avoids layout explosion on expand.
+- **12+11** (Bottom Panel + Scrollable Clusters): RIGHT layout in wide panel, scrollable clusters for children.
 
 **Needs care:**
 - **5+2** (Close + Clusters): Closed nodes rejoin cluster counter, e.g., "2 parents (1 hidden)."
 - **3+5** (Hover + Close): Hover temporarily shows closed nodes → three-valued visibility state.
 - **9** (Pop-out): Cross-window sync questions. Minimal viable approach: no sync with tree, just allow exploring and selecting a new focal node in the pop-out.
   - **[sg]** maybe just leave the middle panel alone and no communication between pop-out and tree/details, just allow the user to explore the node-link view separately in a wide screen. hmm... after exploring they might want to choose a new focal node, could allow just that
-- **10+1** (Hybrid + Ancestors): Ancestors are linear → vertical. Children fan out → horizontal. elkjs supports per-compound-node `elk.direction` but doesn't cleanly isolate directions. Practical approaches: two-pass layout, manual post-processing, or igraph.
+- **12+8** (Bottom Panel + Resizable): Two layout modes — (a) two rows: tree+detail on top, node-link on bottom, or (b) two columns: tree on left, detail+node-link on right. Draggable borders in either mode. Users switch based on whether tree or node-link is their focus.
 
 **Node visibility state model** (for #3, #4, #5):
 
@@ -246,20 +251,29 @@ Hover temporarily overrides `closed` → visible. Changing focus resets all to `
 > - Hover (#3): could consider ideas from `../dynamic-model-var-docs/src/components/` (FloatingBoxManager, LayoutManager, TransitoryBox) — prior art for persistent/transitory info display in crowded spaces
 > - If there are edge types or other ways of grouping neighboring nodes, show them as groups that can be explored or expanded
 > - Staggered levels (#7): see https://twitter.github.io/labella.js/ — try both simple and overlap algorithms. Horizontal flow: see https://twitter.github.io/labella.js/with_text.html
-> - Hybrid layout (#10): elkjs doesn't cleanly isolate directions. Practical approaches: (a) two-pass layout, (b) manual post-processing, (c) igraph.
+> - Hybrid layout (old #10): L-shaped split (manual vertical ancestors + ELK horizontal children) won't work because ancestor polyhierarchy means ancestors aren't linear, and child expansion on ancestors creates nodes in both sections.
+> - Scrollable clusters (#11): scrollable boxes don't work directly in SVG. Cluster node shows summary; hover/click expands to an HTML list overlay (could replace detail panel or float on top). Clicking a child in the list promotes it to a real graph node. Single edge from parent to cluster.
+> - Scroll vs zoom: zoom/pan is powerful but awkward. At a given zoom level, if content overflows, enable native scrolling. For RIGHT layout in full-width bottom panel, horizontal scroll is natural.
+> - Full ancestor DAG (#10): must come before layout experiments — need to see messy polyhierarchy neighborhoods to know what layout problems actually look like. This is the stress test.
 
 #### Implementation Priority
 
 **Phase 1 — High impact, low/medium effort:** :green_circle: Done
 - #8 Resizable panels, #2 Collapsible clusters, #1 Ancestors beyond 1-hop
 
-**Phase 2 — Medium impact, medium effort:**
+**Phase 2 — Stress test + medium effort features:**
+- #10 Full ancestor DAG — prerequisite stress test; need to see real polyhierarchy neighborhoods before tackling layout changes
 - #6 Area-proportional badges — descendant data already on every node, orthogonal to layout
 - #3 Hover preview — valuable for exploration, moderate complexity
 
 **Phase 3 — Depends on Phase 2:**
 - #4+5 Toggle/Close (unified as visibility state) — most useful once clusters and hover exist
 - #7 Staggered levels — evaluate after clusters; may require replacing elkjs
+
+**Layout exploration (after Phase 2):**
+- #12 Full-width bottom panel + RIGHT layout
+- #11 Scrollable clusters
+- Evaluate elkjs vs igraph vs manual layout once we see real polyhierarchy neighborhoods from #10
 
 **Defer:**
 - Fisheye — only if the above doesn't suffice
