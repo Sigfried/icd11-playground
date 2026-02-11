@@ -8,25 +8,16 @@ import './NodeLinkView.css';
  * Node-Link Diagram (Secondary View)
  *
  * D3-based DAG visualization of local neighborhood around the selected node.
- * Shows N hops of parents and children.
- *
- * Layout options (per spec):
- * - elkjs: Current implementation (Eclipse Layout Kernel)
- * - d3-dag: Alternative, but limited forced vertical layering
- * - dagre: Simpler, may struggle with complex graphs
- *
- * TODO: May switch to Python/igraph backend for layout calculation.
- * igraph supports forced vertical layering which is better for our use case.
- * See icd11-visual-interface-spec.md.
- *
- * Key features:
- * - Hierarchical (not force-directed) layout
- * - Focus + context: center on selected, show neighborhood
- * - Click to navigate (updates TreeView and this view)
- * - Same [N↑] [N↓] badges as TreeView
+ * Features:
+ * - Ancestor chain to root (not just 1-hop parents)
+ * - Collapsible clusters for high-degree nodes
+ * - Hierarchical elkjs layout
+ * - Click to navigate
  */
 
-interface LayoutNode {
+/** Real concept node in the layout */
+interface RealLayoutNode {
+  kind: 'node';
   id: string;
   x: number;
   y: number;
@@ -34,6 +25,22 @@ interface LayoutNode {
   height: number;
   data: ConceptNode;
 }
+
+/** Cluster pseudo-node representing grouped children */
+interface ClusterLayoutNode {
+  kind: 'cluster';
+  id: string;          // e.g. "cluster:parentId"
+  parentId: string;    // the parent whose children are clustered
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  count: number;       // how many children are hidden
+  childIds: string[];  // the hidden child IDs (for expanding)
+  totalDescendants: number;
+}
+
+type LayoutNode = RealLayoutNode | ClusterLayoutNode;
 
 interface LayoutEdge {
   source: string;
@@ -49,6 +56,92 @@ const elk = new ELK();
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
+const CLUSTER_WIDTH = 140;
+const CLUSTER_HEIGHT = 36;
+const MAX_VISIBLE_CHILDREN = 5;
+
+/**
+ * Walk ancestors from focusId up to root, following the first parent at each level.
+ * Returns array of ancestor IDs in order from root → ... → focusId's immediate parent.
+ */
+function getAncestorChain(
+  focusId: string,
+  getParents: (id: string) => ConceptNode[],
+): string[] {
+  const chain: string[] = [];
+  let currentId = focusId;
+  const maxDepth = 30;
+  const visited = new Set<string>([focusId]);
+
+  for (let i = 0; i < maxDepth; i++) {
+    const parents = getParents(currentId);
+    if (parents.length === 0) break;
+    const firstParent = parents[0].id;
+    if (visited.has(firstParent)) break;
+    visited.add(firstParent);
+    chain.unshift(firstParent);
+    currentId = firstParent;
+  }
+
+  return chain;
+}
+
+/**
+ * Build the neighborhood: ancestor chain + focus + children (with clustering).
+ * Returns { nodeIds, clusterNodes, edges }.
+ */
+function buildNeighborhood(
+  focusId: string,
+  getParents: (id: string) => ConceptNode[],
+  getChildren: (id: string) => ConceptNode[],
+  expandedClusters: Set<string>,
+) {
+  const nodeIds = new Set<string>();
+  const clusterNodes: Array<{
+    id: string;
+    parentId: string;
+    count: number;
+    childIds: string[];
+    totalDescendants: number;
+  }> = [];
+
+  // 1. Ancestor chain to root (first-parent path)
+  const ancestorChain = getAncestorChain(focusId, getParents);
+  for (const id of ancestorChain) nodeIds.add(id);
+
+  // 2. Focus node
+  nodeIds.add(focusId);
+
+  // 3. All parents of focus (not just the first-parent chain)
+  for (const p of getParents(focusId)) nodeIds.add(p.id);
+
+  // 4. Children of focus — cluster if too many
+  const focusChildren = getChildren(focusId);
+  const clusterId = `cluster:${focusId}`;
+  const clusterExpanded = expandedClusters.has(clusterId);
+
+  if (focusChildren.length > MAX_VISIBLE_CHILDREN && !clusterExpanded) {
+    // Show first N, cluster the rest
+    const visible = focusChildren.slice(0, MAX_VISIBLE_CHILDREN);
+    const hidden = focusChildren.slice(MAX_VISIBLE_CHILDREN);
+
+    for (const c of visible) nodeIds.add(c.id);
+
+    const totalDescendants = hidden.reduce((sum, c) => sum + c.descendantCount, 0);
+    clusterNodes.push({
+      id: clusterId,
+      parentId: focusId,
+      count: hidden.length,
+      childIds: hidden.map(c => c.id),
+      totalDescendants,
+    });
+  } else {
+    // Show all children
+    for (const c of focusChildren) nodeIds.add(c.id);
+  }
+
+  return { nodeIds, clusterNodes };
+}
 
 export function NodeLinkView() {
   const { selectedNodeId, selectNode, getNode, getParents, getChildren, getGraph } = useGraph();
@@ -57,8 +150,26 @@ export function NodeLinkView() {
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
 
-  // Extract 1-hop neighborhood and compute layout
+  // Reset expanded clusters when selection changes
+  useEffect(() => {
+    setExpandedClusters(new Set());
+  }, [selectedNodeId]);
+
+  const toggleCluster = useCallback((clusterId: string) => {
+    setExpandedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) {
+        next.delete(clusterId);
+      } else {
+        next.add(clusterId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Build neighborhood and compute layout
   useEffect(() => {
     if (!selectedNodeId) {
       setLayoutNodes([]);
@@ -75,34 +186,30 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-
-      // Collect neighborhood: selected node + parents + children
-      const neighborhoodIds = new Set<string>();
-      neighborhoodIds.add(selectedNodeId!);
-
-      // Parents
-      for (const p of getParents(selectedNodeId!)) {
-        neighborhoodIds.add(p.id);
-      }
-
-      // Children
-      for (const c of getChildren(selectedNodeId!)) {
-        neighborhoodIds.add(c.id);
-      }
+      const { nodeIds, clusterNodes } = buildNeighborhood(
+        selectedNodeId!, getParents, getChildren, expandedClusters,
+      );
 
       // Build ELK graph
-      const elkNodes = Array.from(neighborhoodIds).map(id => ({
-        id,
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
-      }));
+      const elkNodes = [
+        ...Array.from(nodeIds).map(id => ({
+          id,
+          width: NODE_WIDTH,
+          height: NODE_HEIGHT,
+        })),
+        ...clusterNodes.map(c => ({
+          id: c.id,
+          width: CLUSTER_WIDTH,
+          height: CLUSTER_HEIGHT,
+        })),
+      ];
 
       const elkEdges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
 
-      // Add edges within neighborhood
-      for (const id of neighborhoodIds) {
+      // Real edges between real nodes in the neighborhood
+      for (const id of nodeIds) {
         for (const childId of graph.outNeighbors(id)) {
-          if (neighborhoodIds.has(childId)) {
+          if (nodeIds.has(childId)) {
             elkEdges.push({
               id: `${id}->${childId}`,
               sources: [id],
@@ -110,6 +217,15 @@ export function NodeLinkView() {
             });
           }
         }
+      }
+
+      // Edges from parent to cluster pseudo-node
+      for (const c of clusterNodes) {
+        elkEdges.push({
+          id: `${c.parentId}->${c.id}`,
+          sources: [c.parentId],
+          targets: [c.id],
+        });
       }
 
       try {
@@ -126,14 +242,34 @@ export function NodeLinkView() {
           edges: elkEdges,
         });
 
-        const nodes: LayoutNode[] = (elkGraph.children ?? []).map(elkNode => ({
-          id: elkNode.id,
-          x: elkNode.x ?? 0,
-          y: elkNode.y ?? 0,
-          width: elkNode.width ?? NODE_WIDTH,
-          height: elkNode.height ?? NODE_HEIGHT,
-          data: getNode(elkNode.id)!,
-        }));
+        const clusterMap = new Map(clusterNodes.map(c => [c.id, c]));
+
+        const nodes: LayoutNode[] = (elkGraph.children ?? []).map(elkNode => {
+          const cluster = clusterMap.get(elkNode.id);
+          if (cluster) {
+            return {
+              kind: 'cluster' as const,
+              id: elkNode.id,
+              parentId: cluster.parentId,
+              x: elkNode.x ?? 0,
+              y: elkNode.y ?? 0,
+              width: elkNode.width ?? CLUSTER_WIDTH,
+              height: elkNode.height ?? CLUSTER_HEIGHT,
+              count: cluster.count,
+              childIds: cluster.childIds,
+              totalDescendants: cluster.totalDescendants,
+            };
+          }
+          return {
+            kind: 'node' as const,
+            id: elkNode.id,
+            x: elkNode.x ?? 0,
+            y: elkNode.y ?? 0,
+            width: elkNode.width ?? NODE_WIDTH,
+            height: elkNode.height ?? NODE_HEIGHT,
+            data: getNode(elkNode.id)!,
+          };
+        });
 
         const edges: LayoutEdge[] = (elkGraph.edges ?? []).map(elkEdge => {
           const sections = (elkEdge as { sections?: LayoutEdge['sections'] }).sections;
@@ -152,7 +288,7 @@ export function NodeLinkView() {
     }
 
     computeLayout();
-  }, [selectedNodeId, getNode, getParents, getChildren, getGraph]);
+  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters]);
 
   // D3 rendering with zoom
   useEffect(() => {
@@ -175,11 +311,11 @@ export function NodeLinkView() {
     const contentWidth = bounds.maxX - bounds.minX + 60;
     const contentHeight = bounds.maxY - bounds.minY + 60;
 
-    // Calculate initial transform to fit content, with minimum scale for readability
+    // Calculate initial transform to fit content
     const fitScale = Math.min(
       containerRect.width / contentWidth,
       containerRect.height / contentHeight,
-      1 // Don't scale up
+      1
     );
     const MIN_SCALE = 0.4;
     const initialScale = Math.max(fitScale, MIN_SCALE);
@@ -189,10 +325,8 @@ export function NodeLinkView() {
     const initialX = containerRect.width / 2 - contentCenterX * initialScale;
     const initialY = containerRect.height / 2 - contentCenterY * initialScale;
 
-    // Create container group first (referenced by zoom callback)
     const g = svg.append('g');
 
-    // Create zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 3])
       .on('zoom', (event) => {
@@ -200,10 +334,8 @@ export function NodeLinkView() {
       });
 
     zoomRef.current = zoom;
-
     svg.call(zoom);
 
-    // Set initial transform
     const initialTransform = d3.zoomIdentity
       .translate(initialX, initialY)
       .scale(initialScale);
@@ -225,8 +357,11 @@ export function NodeLinkView() {
           .x(d => d.x)
           .y(d => d.y);
 
+        // Cluster edges get dashed style
+        const isClusterEdge = edge.target.startsWith('cluster:');
+
         edgesG.append('path')
-          .attr('class', 'node-link-edge')
+          .attr('class', `node-link-edge${isClusterEdge ? ' cluster-edge' : ''}`)
           .attr('d', lineGenerator(points));
       }
     });
@@ -234,18 +369,55 @@ export function NodeLinkView() {
     // Draw nodes
     const nodesG = g.append('g').attr('class', 'nodes');
 
+    // Pre-compute focus neighbor sets for ancestor detection
+    const focusParentIds = selectedNodeId
+      ? new Set(getParents(selectedNodeId).map(p => p.id))
+      : new Set<string>();
+    const focusChildIds = selectedNodeId
+      ? new Set(getChildren(selectedNodeId).map(c => c.id))
+      : new Set<string>();
+
     layoutNodes.forEach(node => {
+      if (node.kind === 'cluster') {
+        // Cluster pseudo-node
+        const clusterG = nodesG.append('g')
+          .attr('class', 'node-link-cluster')
+          .attr('transform', `translate(${node.x}, ${node.y})`)
+          .style('cursor', 'pointer')
+          .on('click', () => toggleCluster(node.id));
+
+        clusterG.append('rect')
+          .attr('width', node.width)
+          .attr('height', node.height)
+          .attr('rx', 12);
+
+        clusterG.append('text')
+          .attr('x', node.width / 2)
+          .attr('y', 15)
+          .attr('text-anchor', 'middle')
+          .attr('class', 'cluster-label')
+          .text(`${node.count} more children`);
+
+        clusterG.append('text')
+          .attr('x', node.width / 2)
+          .attr('y', 28)
+          .attr('text-anchor', 'middle')
+          .attr('class', 'cluster-sublabel')
+          .text(`${node.totalDescendants.toLocaleString()} descendants`);
+
+        return;
+      }
+
+      // Real node
       const isFocus = node.id === selectedNodeId;
+      const isAncestorNode = !isFocus && !focusParentIds.has(node.id) && !focusChildIds.has(node.id);
 
       const nodeG = nodesG.append('g')
-        .attr('class', `node-link-node ${isFocus ? 'focus' : ''}`)
+        .attr('class', `node-link-node${isFocus ? ' focus' : ''}${isAncestorNode ? ' ancestor' : ''}`)
         .attr('transform', `translate(${node.x}, ${node.y})`)
         .style('cursor', 'pointer')
-        .on('click', () => {
-          selectNode(node.id);
-        });
+        .on('click', () => selectNode(node.id));
 
-      // Node rectangle
       nodeG.append('rect')
         .attr('width', node.width)
         .attr('height', node.height)
@@ -284,7 +456,7 @@ export function NodeLinkView() {
       }
     });
 
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, getParents, getChildren]);
 
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {

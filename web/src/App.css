@@ -68,11 +68,9 @@ body {
 
 .app-main {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr 350px;
-  grid-template-rows: 1fr;
-  gap: var(--panel-gap);
+  display: flex;
   padding: var(--panel-gap);
+  gap: 0;
   min-height: 0;
 }
 
@@ -83,18 +81,33 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 150px;
+  flex-shrink: 0;
 }
 
-.tree-panel {
-  min-width: 300px;
+.panel-divider {
+  width: var(--panel-gap);
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
 }
 
-.node-link-panel {
-  min-width: 300px;
+.panel-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 32px;
+  background: var(--border-color);
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
-.detail-panel {
-  min-width: 250px;
+.panel-divider:hover::after {
+  opacity: 1;
 }
 
 /* Panel headers */

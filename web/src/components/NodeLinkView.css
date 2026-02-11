@@ -35,6 +35,17 @@
   stroke-width: 2px;
 }
 
+/* Ancestor nodes (beyond direct parents) */
+.node-link-node.ancestor rect {
+  fill: var(--bg-tertiary);
+  stroke: var(--border-color);
+  opacity: 0.7;
+}
+
+.node-link-node.ancestor text.node-title {
+  opacity: 0.7;
+}
+
 .node-link-node text.node-title {
   fill: var(--text-primary);
   font-size: 11px;
@@ -61,6 +72,13 @@
   opacity: 0.5;
 }
 
+/* Cluster edge (dashed) */
+.node-link-edge.cluster-edge {
+  stroke: var(--accent-blue);
+  stroke-dasharray: 4 2;
+  opacity: 0.6;
+}
+
 /* Badges on nodes */
 .node-badge {
   font-size: 9px;
@@ -74,6 +92,34 @@
 
 .node-badge.children {
   fill: var(--accent-yellow);
+}
+
+/* Cluster pseudo-node */
+.node-link-cluster {
+  cursor: pointer;
+}
+
+.node-link-cluster rect {
+  fill: var(--bg-tertiary);
+  stroke: var(--accent-blue);
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 2;
+}
+
+.node-link-cluster:hover rect {
+  stroke: var(--accent-cyan);
+  fill: rgba(86, 156, 214, 0.1);
+}
+
+.cluster-label {
+  fill: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cluster-sublabel {
+  fill: var(--text-secondary);
+  font-size: 9px;
 }
 
 /* Controls container */
@@ -103,25 +149,6 @@
 }
 
 .zoom-btn:hover {
-  opacity: 1;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-/* Expand neighborhood button */
-.load-neighborhood-btn {
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.load-neighborhood-btn:hover {
   opacity: 1;
   background: var(--bg-secondary);
   color: var(--text-primary);
