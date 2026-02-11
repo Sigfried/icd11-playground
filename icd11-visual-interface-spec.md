@@ -10,9 +10,9 @@ A visual interface to the ICD-11 maintenance platform that helps proposal author
 - Support proposal authoring workflow
 - Provide hierarchical (not force-directed) visualizations
 
-**Technology stack:** React, TypeScript, D3.js, graphology.js
+**Technology stack:** React, TypeScript, D3.js, graphology.js, elkjs, IndexedDB
 
-**Deployment:** Standalone prototype initially; later integration with .NET maintenance platform
+**Deployment:** GitHub Pages (auto-deploy on push to main); later integration with .NET maintenance platform
 
 ---
 
@@ -22,21 +22,22 @@ Legend: :green_circle: Implemented | :red_circle: Bug | :yellow_circle: Needs de
 
 | Area | Feature | Status |
 |------|---------|--------|
-| [**Tree View**](#1-indented-tabular-view-primary) | [Expand/collapse, lazy loading, badges](#key-behaviors) | :green_circle: Implemented |
+| [**Tree View**](#1-indented-tabular-view-primary) | [Expand/collapse, badges](#key-behaviors) | :green_circle: Implemented |
 | | [Multi-path highlighting](#key-behaviors) (all occurrences of selected node) | :green_circle: Implemented |
-| | [Descendant count + depth badges](#key-behaviors) | :yellow_circle: Needs design |
+| | [Descendant count + depth badges](#key-behaviors) | :yellow_circle: Data available, badge display needs design |
 | | [First-occurring path expansion via URL](#key-behaviors) | :red_circle: Bug — uses arbitrary parent, not first in Foundation order |
 | | [Collapse heuristics](#key-behaviors) for large trees | :white_circle: Not implemented |
 | [**Node-Link View**](#2-node-link-diagram-secondary) | [Hierarchical layout with elkjs](#2-node-link-diagram-secondary) | :green_circle: Implemented |
+| | [Scalability & readability](#scalability--readability-problem) | :yellow_circle: Biggest design challenge — see discussion |
 | | [Foundation ordering of sibling nodes](#2-node-link-diagram-secondary) | :white_circle: Not implemented |
 | | [Hover/click interaction design](#2-node-link-diagram-secondary) | :yellow_circle: Needs design |
-| [**Detail Panel**](#3-context-menu--detail-panel) | [Title, definition, Foundation browser link](#3-context-menu--detail-panel) | :green_circle: Implemented |
-| | [Collapsible parents/children lists](#3-context-menu--detail-panel) | :green_circle: Implemented |
+| [**Detail Panel**](#3-context-menu--detail-panel) | [Title, definition, Foundation browser link](#3-context-menu--detail-panel) | :green_circle: Implemented (definition loads async) |
+| | [Collapsible parents/children lists](#3-context-menu--detail-panel) | :green_circle: Implemented (all in memory) |
 | | [Badge inconsistency](#3-context-menu--detail-panel) (parents have badges, children don't) | :red_circle: Bug |
 | | [Paths to root](#3-context-menu--detail-panel) (replace flat parent list) | :yellow_circle: Needs design |
 | | [Proposals section](#proposal-authoring) | :black_circle: Not started |
-| [**Data Layer**](#component-architecture) | [Memoized API, node creation, child loading](#data-flow) | :green_circle: Implemented |
-| | [Eager parent path loading](#data-flow) for multi-parent nodes | :green_circle: Implemented |
+| [**Data Layer**](#component-architecture) | [Full graph preload + IndexedDB cache](#data-flow) | :green_circle: Implemented |
+| | [On-demand entity detail fetch](#data-flow) | :green_circle: Implemented |
 | [**Proposal Authoring**](#proposal-authoring) | [All features](#requirements) | :black_circle: Not started |
 
 ---
@@ -83,25 +84,33 @@ In this example, "Diabetes mellitus in pregnancy" has two parents: "Diabetes mel
 
 ### Internal Representation
 
-Use graphology.js for the graph data structure:
+The full Foundation graph is pre-crawled and loaded at startup. graphology.js stores the in-memory structure:
 
 ```typescript
-import Graph from 'graphology';
-
+// Structural data — available synchronously after init
 interface ConceptNode {
-  id: string;           // ICD entity URI
-  title: string;        // Display name
+  id: string;
+  title: string;
+  parentCount: number;
+  childCount: number;
+  childOrder: string[];      // children in Foundation order
+  descendantCount: number;   // unique descendants (pre-computed)
+  maxDepth: number;          // longest path to leaf (pre-computed)
+}
+
+// Rich metadata — fetched on-demand from ICD-11 API, cached in IndexedDB
+interface EntityDetail {
   definition?: string;
-  // ... other metadata
+  longDefinition?: string;
+  synonyms: string[];
+  narrowerTerms: string[];
+  inclusions: string[];
+  exclusions: Array<{ label: string; foundationReference?: string }>;
+  browserUrl?: string;
 }
-
-interface ParentEdge {
-  type: 'is_a';         // or other relationship types if applicable
-  isCanonical?: boolean; // if we can determine this
-}
-
-const graph = new Graph<ConceptNode, ParentEdge>();
 ```
+
+Edges are untyped directed edges (parent → child). See `foundationData.ts` for the unified data API.
 
 ---
 
@@ -141,9 +150,9 @@ C1 and C2 are the same object appearing in two places. Selection or modification
 | **Same object, multiple appearances** | All instances of a concept reference the same object. Selection/modification in one location reflects everywhere. | :green_circle: |
 | **Parent count badge** | Each node displays `[N↑]` indicating total parent count. Only shown when parentCount > 1. | :green_circle: |
 | **Child count badge** | Display `[N↓]` for direct children count. | :green_circle: |
-| **Descendant stats badge** | In addition to direct child count, show total descendant count and max depth. Requires crawling or caching subtree stats — nontrivial for large subtrees. | :yellow_circle: |
+| **Descendant stats badge** | In addition to direct child count, show total descendant count and max depth. Data is pre-computed and available on `ConceptNode`; badge display needs design (shown in DetailPanel, not yet in tree). | :yellow_circle: |
 | **Collapse heuristics** | If tree gets too large, collapse nodes based on depth, subtree size, or user preference. | :white_circle: |
-| **Expand on demand** | Lazy-load children; don't render entire Foundation at once. | :green_circle: |
+| **Expand on demand** | Children expand instantly from in-memory graph. Full Foundation loaded at startup. | :green_circle: |
 | **Multi-path highlighting** | When a node with multiple parents is selected, all occurrences in the tree are highlighted. | :green_circle: |
 | **First-occurring path expansion** | When navigating to a node via URL (`?node=ID`), the tree should expand the first-occurring path from root (per Foundation ordering), not an arbitrary parent. Currently uses `entity.parent[0]` which may not be first in Foundation order. | :red_circle: |
 | **Show all paths to root** | When a node has multiple parents, the UI should make it easy to discover and navigate to all locations where it appears in the tree. See Detail Panel section. | :yellow_circle: |
@@ -212,22 +221,24 @@ The current implementation becomes unreadable when node count exceeds ~10. The v
 *Example: 19 nodes renders labels too small to read*
 
 **Root causes:**
-1. Auto-fit scaling with no minimum scale threshold
-2. Showing full ancestor path to root (not just immediate parents)
-3. No user control over zoom/pan
-4. High-degree nodes (many children) create wide layouts
+1. ~~Auto-fit scaling with no minimum scale threshold~~ — Fixed: minimum scale of 0.4
+2. ~~Showing full ancestor path to root (not just immediate parents)~~ — Fixed: now shows true 1-hop neighborhood
+3. ~~No user control over zoom/pan~~ — Fixed: D3 zoom/pan with controls
+4. High-degree nodes (many children) create wide layouts — **still a problem**
+
+Even with the fixes above, nodes with many children (e.g., 331 children for some Foundation categories) make the view unreadable. This is the core remaining challenge.
 
 #### Potential Solutions
 
-| Approach | Description | Pros | Cons |
-|----------|-------------|------|------|
-| **Pan + zoom** | Don't auto-fit; render at readable scale, let user navigate | Simple to implement; D3 has built-in support | User must manually navigate; may lose overview |
-| **Limit neighborhood** | Show only immediate parents/children (true 1-hop) | Keeps node count manageable | Loses context of where concept sits in hierarchy |
-| **Minimum scale** | Set floor (e.g., 0.5) on auto-scale | Preserves readability | Content may overflow; needs pan/zoom anyway |
-| **Collapsible clusters** | Group excess children into "N more..." placeholder | Controls sprawl while showing counts | Adds interaction complexity |
-| **Focus + context distortion** | Fisheye or semantic zoom - selected area large, periphery compressed | Shows everything at once | Can be disorienting; harder to implement |
-| **Radial layout** | Fan out from focus node | Better for high-degree nodes | Loses hierarchical clarity |
-| **Adaptive node sizing** | Shrink distant/less-important nodes | Maintains overview with readable focus | Visual hierarchy may confuse |
+| Approach | Description | Status | Pros | Cons |
+|----------|-------------|--------|------|------|
+| **Pan + zoom** | Render at readable scale, let user navigate | :green_circle: Done | Simple; D3 built-in | May lose overview |
+| **Minimum scale** | Floor (0.4) on auto-scale | :green_circle: Done | Preserves readability | Content overflows; needs pan/zoom |
+| **Limit neighborhood** | Show only immediate parents/children (true 1-hop) | :green_circle: Done | Keeps node count manageable | Loses context of where concept sits in hierarchy |
+| **Collapsible clusters** | Group excess children into "N more..." placeholder | :white_circle: | Controls sprawl while showing counts | Adds interaction complexity |
+| **Focus + context distortion** | Fisheye or semantic zoom — selected area large, periphery compressed | :white_circle: | Shows everything at once | Can be disorienting; harder to implement |
+| **Radial layout** | Fan out from focus node | :white_circle: | Better for high-degree nodes | Loses hierarchical clarity |
+| **Adaptive node sizing** | Shrink distant/less-important nodes | :white_circle: | Maintains overview with readable focus | Visual hierarchy may confuse |
 
 #### Design Discussion
 
@@ -346,49 +357,56 @@ Color coding:
 %%{init: {'themeVariables': { 'lineColor': 'rgba(0,0,0,0.3)' }}}%%
 flowchart TB
     subgraph "Data Layer"
+        JSON["foundation_graph.json<br/>(static, 69k nodes)"]
+        IDB[IndexedDB Cache]
         API[ICD-11 API Client]
-        G[Graphology Graph]
-        PS[Proposal Store]
+        FD["foundationData.ts<br/>(graphology instance)"]
+        FS["foundationStore.ts<br/>(IndexedDB wrapper)"]
     end
-    
+
     subgraph "State Management"
-        NS[Navigation State]
-        SS[Selection State]
-        ES[Expansion State]
+        GP["GraphProvider<br/>(React context)"]
     end
-    
+
     subgraph "View Components"
         TV[Tree View]
         NL[Node-Link View]
         DP[Detail Panel]
         PA[Proposal Authoring]
     end
-    
-    API --> G
-    G --> TV
-    G --> NL
-    G --> DP
-    
-    NS --> TV
-    NS --> NL
-    SS --> TV
-    SS --> NL
-    SS --> DP
-    ES --> TV
-    
-    PS --> PA
-    PS --> DP
+
+    JSON -->|"fetch once"| FD
+    FD <-->|"cache graph"| FS
+    FS <--> IDB
+    API -->|"entity details"| FD
+
+    FD -->|"sync: getNode, getChildren, getParents"| GP
+    FD -->|"async: getDetail"| GP
+
+    GP --> TV
+    GP --> NL
+    GP --> DP
+
+    GP -.-> PA
 ```
+
+### Three-Layer Architecture
+
+1. **`foundationStore.ts`** — IndexedDB cache. Stores/retrieves graph structure and entity details. No logic.
+2. **`foundationData.ts`** — Unified data API. Owns the graphology instance. Sync reads for structure, async for entity details.
+3. **`GraphProvider.tsx`** — React context. UI state (selection, expansion paths) and init. Exposes `foundationData` functions on context.
 
 ### Key Components
 
 | Component | Responsibility | Status |
 |-----------|----------------|--------|
-| `GraphProvider` | Loads and caches ICD-11 data in graphology instance. Memoized API calls, node creation, and child loading. Eagerly loads all paths to root for multi-parent children. | :green_circle: |
+| `foundationData` | Owns graphology instance. Sync structure reads, async detail fetch with IndexedDB caching. | :green_circle: |
+| `foundationStore` | IndexedDB wrapper for graph and entity cache. | :green_circle: |
+| `GraphProvider` | React context: init, selection, expansion paths. Exposes `foundationData` on context. | :green_circle: |
 | `TreeView` | Renders indented tree with expand/collapse, badges, selection | :green_circle: |
 | `TreeNode` | Individual node with badges, selection highlight | :green_circle: |
 | `NodeLinkView` | D3-based DAG visualization of local neighborhood (elkjs layout) | :green_circle: Basic |
-| `DetailPanel` | Shows concept metadata, parents, children, proposals | :green_circle: Partial |
+| `DetailPanel` | Shows concept metadata (async), parents, children, proposals | :green_circle: Partial |
 | `ProposalEditor` | Authoring interface for new/modified proposals | :black_circle: |
 | `DiffView` | Visualization of proposed changes vs current state | :black_circle: |
 
@@ -399,26 +417,43 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant TV as TreeView
-    participant G as Graph
+    participant GP as GraphProvider
+    participant FD as foundationData
+    participant IDB as IndexedDB
     participant API as ICD-11 API
-    participant NL as NodeLinkView
-    
-    U->>TV: Expand node
-    TV->>G: Get children of X
-    G-->>TV: Return from cache
-    TV->>TV: Render children
-    
-    U->>TV: Click parent badge [2↑]
-    TV->>G: Get parents of X
-    G-->>TV: Return parents
-    TV->>TV: Show context menu
-    
-    U->>TV: Node diagram will update
-    TV->>NL: Set focus to X
-    NL->>G: Get N-hop neighborhood
-    G-->>NL: Return subgraph
-    NL->>NL: Render with hierarchical layout
+
+    Note over GP,IDB: Startup
+    GP->>IDB: getGraph()
+    alt Cached
+        IDB-->>GP: graph JSON
+    else Not cached
+        GP->>GP: fetch foundation_graph.json
+        GP->>IDB: putGraph(data)
+    end
+    GP->>FD: initGraph(data)
+    Note over FD: 69k nodes + 77k edges in memory
+
+    Note over U,API: Navigation (all synchronous)
+    U->>GP: Expand node
+    GP->>FD: getChildren(id)
+    FD-->>GP: ConceptNode[] (instant)
+
+    U->>GP: Select node
+    GP->>FD: getNode(id), getParents(id), getChildren(id)
+    FD-->>GP: Sync results → TreeView, NodeLinkView, DetailPanel
+
+    Note over U,API: Detail fetch (async, on demand)
+    U->>GP: View selected node details
+    GP->>FD: getDetail(id)
+    FD->>IDB: getEntity(id)
+    alt Cached
+        IDB-->>FD: FoundationEntity
+    else Not cached
+        FD->>API: GET /icd/entity/{id}
+        API-->>FD: FoundationEntity
+        FD->>IDB: putEntity(id, entity)
+    end
+    FD-->>GP: EntityDetail
 ```
 
 ---
@@ -426,8 +461,7 @@ sequenceDiagram
 ## Open Questions / Future Investigation
 
 1. **Canonical/linked distinction**: Does the WHO API expose this or only iCAT?
-2. **Offline support**: Should the tool work with a local snapshot of the Foundation for faster iteration?
-3. **Integration path**: How will this embed into the .NET maintenance platform?
+2. **Integration path**: How will this embed into the .NET maintenance platform?
 
 ---
 
