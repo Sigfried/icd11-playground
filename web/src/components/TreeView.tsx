@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { type TreePath, type ConceptNode, useGraph } from '../providers/GraphProvider';
+import { Badge } from './Badge';
 import './TreeView.css';
 
 /**
@@ -79,16 +80,21 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
           {nodeData.title}
         </span>
         <span className="tree-node-badges">
-          {nodeData.parentCount > 1 && (
-            <span className="badge badge-parents" title={`${nodeData.parentCount} parents`}>
-              {nodeData.parentCount}↑
-            </span>
-          )}
-          {nodeData.childCount > 0 && (
-            <span className="badge badge-children" title={`${nodeData.childCount} children`}>
-              {nodeData.childCount}↓
-            </span>
-          )}
+          <span className="badge-slot">
+            {nodeData.parentCount > 1 && (
+              <Badge type="parents" count={nodeData.parentCount} />
+            )}
+          </span>
+          <span className="badge-slot">
+            {nodeData.childCount > 0 && (
+              <Badge type="children" count={nodeData.childCount} />
+            )}
+          </span>
+          <span className="badge-slot badge-slot-wide">
+            {nodeData.descendantCount > nodeData.childCount && (
+              <Badge type="descendants" count={nodeData.descendantCount} />
+            )}
+          </span>
         </span>
       </div>
 

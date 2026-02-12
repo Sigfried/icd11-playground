@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { type ConceptNode, type EntityDetail, useGraph } from '../providers/GraphProvider';
+import { Badge } from './Badge';
 import './DetailPanel.css';
 
 /**
@@ -46,7 +47,13 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
                 <li key={node.id} onClick={() => onSelect(node.id)}>
                   {node.title}
                   {node.parentCount > 1 && (
-                    <span className="inline-badge">{node.parentCount}↑</span>
+                    <Badge type="parents" count={node.parentCount} />
+                  )}
+                  {node.childCount > 0 && (
+                    <Badge type="children" count={node.childCount} />
+                  )}
+                  {node.descendantCount > node.childCount && (
+                    <Badge type="descendants" count={node.descendantCount} />
                   )}
                 </li>
               ))}

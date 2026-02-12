@@ -2,6 +2,8 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { type ConceptNode, useGraph } from '../providers/GraphProvider';
+import { renderBadgeHTML } from './Badge';
+import './Badge.css';
 import './NodeLinkView.css';
 
 /**
@@ -60,7 +62,7 @@ const NODE_HEIGHT = 40;
 const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
 const MAX_VISIBLE_CHILDREN = 2;
-const SVG_PADDING = 30;
+const SVG_PADDING = 80; // Extra room for hover expansion (scale + wider rect)
 
 const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
 
@@ -568,8 +570,8 @@ export function NodeLinkView() {
           const gEl = d3.select(this);
           gEl.raise();
 
-          // Hide badges (they'll be repositioned later in the #6 badge rework)
-          gEl.selectAll('.node-badge').attr('visibility', 'hidden');
+          // Hide badges during hover expansion (rect grows over them)
+          gEl.select('foreignObject').attr('visibility', 'hidden');
 
           // Wrap the full title into multi-line tspans
           const textEl = gEl.select<SVGTextElement>('.node-title').node()!;
@@ -604,7 +606,7 @@ export function NodeLinkView() {
           gEl.select('rect')
             .attr('width', node.width)
             .attr('height', node.height);
-          gEl.selectAll('.node-badge').attr('visibility', 'visible');
+          gEl.select('foreignObject').attr('visibility', 'visible');
           gEl.attr('transform', baseTransform);
           setHoveredNodeId(null);
         });
@@ -620,25 +622,30 @@ export function NodeLinkView() {
         .attr('class', 'node-title')
         .text(truncatedTitle);
 
-      // Badges
-      let badgeX = 8;
-      const badgeY = 30;
-
+      // Badges — rendered as HTML inside foreignObject, below the title
+      const badgeParts: string[] = [];
       if (node.data.parentCount > 1) {
-        nodeG.append('text')
-          .attr('x', badgeX)
-          .attr('y', badgeY)
-          .attr('class', 'node-badge parents')
-          .text(`${node.data.parentCount}↑`);
-        badgeX += 25;
+        badgeParts.push(renderBadgeHTML('parents', node.data.parentCount));
+      }
+      if (node.data.childCount > 0) {
+        badgeParts.push(renderBadgeHTML('children', node.data.childCount));
+      }
+      if (node.data.descendantCount > node.data.childCount) {
+        badgeParts.push(renderBadgeHTML('descendants', node.data.descendantCount));
       }
 
-      if (node.data.childCount > 0) {
-        nodeG.append('text')
-          .attr('x', badgeX)
-          .attr('y', badgeY)
-          .attr('class', 'node-badge children')
-          .text(`${node.data.childCount}↓`);
+      if (badgeParts.length > 0) {
+        nodeG.append('foreignObject')
+          .attr('x', 4)
+          .attr('y', 20)
+          .attr('width', NODE_WIDTH - 8)
+          .attr('height', 18)
+          .append('xhtml:div')
+          .style('display', 'flex')
+          .style('gap', '3px')
+          .style('align-items', 'center')
+          .style('font-size', '10px')
+          .html(badgeParts.join(''));
       }
     });
 

@@ -322,12 +322,11 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 
 **Phase 2 — Stress test + medium effort features:**
 - #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
-- #6 Area-proportional badges — descendant data already on every node, orthogonal to layout
+- #6 Area-proportional badges — :green_circle: done: shared Badge component with per-type count→font-weight bins, consistent colors (parents=cyan, children=green, descendants=orange) across all three panels, aligned columns in tree view, foreignObject in NL SVG
 - #3 Hover preview — :yellow_circle: partial: in-place node expansion with text wrapping, detail panel preview; tree highlight and transient neighbors still open
 - #12 Full-width bottom panel — :green_circle: done: two switchable layouts, RIGHT direction, viewBox zoom, scroll-to-focus, zoom controls
 
 **Phase 3 — Next up:**
-- #6 Area-proportional badges — badges on right side of concept name, area ∝ count
 - #11 Scrollable clusters — HTML overlay on cluster hover, replace current click-to-expand
 - #3 Tree highlight — highlight hovered node in tree view
 - #4+5 Toggle/Close (unified as visibility state)

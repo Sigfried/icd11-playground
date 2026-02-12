@@ -85,21 +85,6 @@
   opacity: 0.6;
 }
 
-/* Badges on nodes */
-.node-badge {
-  font-size: 9px;
-  fill: var(--text-secondary);
-  font-family: monospace;
-}
-
-.node-badge.parents {
-  fill: var(--accent-cyan);
-}
-
-.node-badge.children {
-  fill: var(--accent-green);
-}
-
 /* Cluster pseudo-node */
 .node-link-cluster {
   cursor: pointer;
