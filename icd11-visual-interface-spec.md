@@ -209,7 +209,7 @@ The core design challenge. High-degree nodes (up to 331 children) make the view 
 | 9 | **Pop-out window** | :white_circle: | Full-screen node-link in separate window |
 | 10 | **Full ancestor DAG** | :green_circle: | BFS through all parents to depth 2; [stress test results](#stress-test-high-parent-count-nodes) |
 | 11 | **Scrollable clusters** | :white_circle: | Cluster summary in SVG; hover/click shows HTML child list overlay; pop children out into real nodes |
-| 12 | **Full-width bottom panel** | :white_circle: | Node-link takes full viewport width at bottom; RIGHT layout direction; native scroll for overflow |
+| 12 | **Full-width bottom panel** | :green_circle: | Two switchable layouts (two-row / two-col); RIGHT direction; native scroll; zoom/pan removed |
 
 #### Feature Compatibility
 

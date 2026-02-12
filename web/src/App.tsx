@@ -1,75 +1,46 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { GraphProvider } from './providers/GraphProvider';
 import { TreeView } from './components/TreeView';
 import { NodeLinkView } from './components/NodeLinkView';
 import { DetailPanel } from './components/DetailPanel';
+import { useLayoutMode } from './hooks/useLayoutMode';
 import './App.css';
 
 /**
  * ICD-11 Foundation Visual Maintenance Tool
  *
- * Main application layout with three resizable panels:
- * - TreeView: Indented hierarchical navigation (primary)
- * - NodeLinkView: DAG visualization of local neighborhood
- * - DetailPanel: Entity metadata, parents, children, proposals
+ * Three panels in two switchable layouts:
+ * - Two-row: tree + detail on top, node-link full width on bottom
+ * - Two-col: tree on left, detail + node-link stacked on right
  */
 
-const DIVIDER_WIDTH = 8; // matches CSS --panel-gap
-const MIN_PANEL = 150;
-const INITIAL_RATIOS = [1, 1, 0.7];
-
-function usePanelResize() {
-  const containerRef = useRef<HTMLElement>(null);
-  const [widths, setWidths] = useState<number[] | null>(null);
-  const dragging = useRef<{ index: number; startX: number; startWidths: number[] } | null>(null);
-
-  // Initialize widths from container on mount
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const totalAvailable = containerRef.current.clientWidth - DIVIDER_WIDTH * 2;
-    const totalRatio = INITIAL_RATIOS.reduce((a, b) => a + b, 0);
-    setWidths(INITIAL_RATIOS.map(r => (r / totalRatio) * totalAvailable));
-  }, []);
-
-  const onMouseDown = useCallback((index: number, e: React.MouseEvent) => {
-    if (!widths) return;
-    e.preventDefault();
-    dragging.current = { index, startX: e.clientX, startWidths: [...widths] };
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const { index: i, startX, startWidths: sw } = dragging.current;
-      const dx = ev.clientX - startX;
-      const left = Math.max(MIN_PANEL, sw[i] + dx);
-      const right = Math.max(MIN_PANEL, sw[i + 1] - dx);
-      setWidths(prev => {
-        if (!prev) return prev;
-        const next = [...prev];
-        next[i] = left;
-        next[i + 1] = right;
-        return next;
-      });
-    };
-
-    const onMouseUp = () => {
-      dragging.current = null;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [widths]);
-
-  return { containerRef, widths, onMouseDown };
+function LayoutToggle({ mode, onToggle }: { mode: string; onToggle: () => void }) {
+  return (
+    <button
+      className="layout-toggle"
+      onClick={onToggle}
+      title={mode === 'two-row' ? 'Switch to column layout' : 'Switch to row layout'}
+    >
+      {mode === 'two-row' ? (
+        // Show the two-col icon (what you'll switch TO)
+        <svg width="20" height="16" viewBox="0 0 20 16">
+          <rect x="0.5" y="0.5" width="19" height="15" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
+          <line x1="8" y1="1" x2="8" y2="15" stroke="currentColor" strokeWidth="1" />
+          <line x1="8" y1="8" x2="19" y2="8" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      ) : (
+        // Show the two-row icon (what you'll switch TO)
+        <svg width="20" height="16" viewBox="0 0 20 16">
+          <rect x="0.5" y="0.5" width="19" height="15" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
+          <line x1="10" y1="1" x2="10" y2="9" stroke="currentColor" strokeWidth="1" />
+          <line x1="1" y1="9" x2="19" y2="9" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 function App() {
-  const { containerRef, widths, onMouseDown } = usePanelResize();
+  const { containerRef, mode, toggleMode, sizes, onDividerMouseDown } = useLayoutMode();
 
   return (
     <GraphProvider>
@@ -77,25 +48,54 @@ function App() {
         <header className="app-header">
           <h1><a href={import.meta.env.BASE_URL}>ICD-11 Foundation Explorer</a></h1>
           <span className="app-subtitle">Visual Maintenance Tool Prototype</span>
+          <LayoutToggle mode={mode} onToggle={toggleMode} />
         </header>
 
-        <main className="app-main" ref={containerRef}>
-          <div className="panel tree-panel" style={widths ? { width: widths[0] } : undefined}>
-            <TreeView />
-          </div>
-
-          <div className="panel-divider" onMouseDown={e => onMouseDown(0, e)} />
-
-          <div className="panel node-link-panel" style={widths ? { width: widths[1] } : undefined}>
-            <NodeLinkView />
-          </div>
-
-          <div className="panel-divider" onMouseDown={e => onMouseDown(1, e)} />
-
-          <div className="panel detail-panel" style={widths ? { width: widths[2] } : undefined}>
-            <DetailPanel />
-          </div>
-        </main>
+        {mode === 'two-row' ? (
+          <main className="app-main two-row" ref={containerRef}>
+            <div className="layout-top" style={sizes ? { height: sizes.twoRow.rows[0] } : undefined}>
+              <div className="panel tree-panel" style={sizes ? { width: sizes.twoRow.topCols[0] } : undefined}>
+                <TreeView />
+              </div>
+              <div
+                className="panel-divider vertical"
+                onMouseDown={e => onDividerMouseDown('two-row:topCols', e)}
+              />
+              <div className="panel detail-panel" style={sizes ? { width: sizes.twoRow.topCols[1] } : undefined}>
+                <DetailPanel />
+              </div>
+            </div>
+            <div
+              className="panel-divider horizontal"
+              onMouseDown={e => onDividerMouseDown('two-row:rows', e)}
+            />
+            <div className="panel node-link-panel" style={sizes ? { height: sizes.twoRow.rows[1] } : undefined}>
+              <NodeLinkView />
+            </div>
+          </main>
+        ) : (
+          <main className="app-main two-col" ref={containerRef}>
+            <div className="panel tree-panel" style={sizes ? { width: sizes.twoCol.cols[0] } : undefined}>
+              <TreeView />
+            </div>
+            <div
+              className="panel-divider vertical"
+              onMouseDown={e => onDividerMouseDown('two-col:cols', e)}
+            />
+            <div className="layout-right" style={sizes ? { width: sizes.twoCol.cols[1] } : undefined}>
+              <div className="panel detail-panel" style={sizes ? { height: sizes.twoCol.rightRows[0] } : undefined}>
+                <DetailPanel />
+              </div>
+              <div
+                className="panel-divider horizontal"
+                onMouseDown={e => onDividerMouseDown('two-col:rightRows', e)}
+              />
+              <div className="panel node-link-panel" style={sizes ? { height: sizes.twoCol.rightRows[1] } : undefined}>
+                <NodeLinkView />
+              </div>
+            </div>
+          </main>
+        )}
       </div>
     </GraphProvider>
   );

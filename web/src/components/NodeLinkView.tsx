@@ -11,7 +11,8 @@ import './NodeLinkView.css';
  * Features:
  * - Ancestor chain to root (not just 1-hop parents)
  * - Collapsible clusters for high-degree nodes
- * - Hierarchical elkjs layout
+ * - Hierarchical elkjs layout (RIGHT direction)
+ * - Native scroll for overflow
  * - Click to navigate
  */
 
@@ -59,6 +60,7 @@ const NODE_HEIGHT = 40;
 const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
 const MAX_VISIBLE_CHILDREN = 2;
+const SVG_PADDING = 30;
 
 const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
 
@@ -224,7 +226,6 @@ export function NodeLinkView() {
   const { selectedNodeId, selectNode, setHoveredNodeId, getNode, getParents, getChildren, getGraph } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
@@ -311,7 +312,7 @@ export function NodeLinkView() {
           id: 'root',
           layoutOptions: {
             'elk.algorithm': 'layered',
-            'elk.direction': 'DOWN',
+            'elk.direction': 'RIGHT',
             'elk.spacing.nodeNode': '40',
             'elk.layered.spacing.nodeNodeBetweenLayers': '60',
             'elk.edgeRouting': 'ORTHOGONAL',
@@ -370,7 +371,7 @@ export function NodeLinkView() {
     computeLayout();
   }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters]);
 
-  // D3 rendering with zoom
+  // D3 rendering — native scroll, no zoom
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
     if (layoutNodes.length === 0) return;
@@ -381,9 +382,7 @@ export function NodeLinkView() {
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-
-    // Calculate bounds
+    // Calculate bounds and size the SVG to fit content
     const bounds = {
       minX: Math.min(...layoutNodes.map(n => n.x)),
       maxX: Math.max(...layoutNodes.map(n => n.x + n.width)),
@@ -391,38 +390,16 @@ export function NodeLinkView() {
       maxY: Math.max(...layoutNodes.map(n => n.y + n.height)),
     };
 
-    const contentWidth = bounds.maxX - bounds.minX + 60;
-    const contentHeight = bounds.maxY - bounds.minY + 60;
+    const svgWidth = bounds.maxX - bounds.minX + SVG_PADDING * 2;
+    const svgHeight = bounds.maxY - bounds.minY + SVG_PADDING * 2;
 
-    // Calculate initial transform to fit content
-    const fitScale = Math.min(
-      containerRect.width / contentWidth,
-      containerRect.height / contentHeight,
-      1
-    );
-    const MIN_SCALE = 0.4;
-    const initialScale = Math.max(fitScale, MIN_SCALE);
+    svg
+      .attr('width', svgWidth)
+      .attr('height', svgHeight);
 
-    const contentCenterX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
-    const contentCenterY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
-    const initialX = containerRect.width / 2 - contentCenterX * initialScale;
-    const initialY = containerRect.height / 2 - contentCenterY * initialScale;
-
-    const g = svg.append('g');
-
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 3])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-      });
-
-    zoomRef.current = zoom;
-    svg.call(zoom);
-
-    const initialTransform = d3.zoomIdentity
-      .translate(initialX, initialY)
-      .scale(initialScale);
-    svg.call(zoom.transform, initialTransform);
+    // Offset all content so it starts at SVG_PADDING
+    const g = svg.append('g')
+      .attr('transform', `translate(${SVG_PADDING - bounds.minX}, ${SVG_PADDING - bounds.minY})`);
 
     // Draw edges
     const edgesG = g.append('g').attr('class', 'edges');
@@ -492,7 +469,6 @@ export function NodeLinkView() {
         ? fullTitle.substring(0, 20) + '...'
         : fullTitle;
 
-      // Scale on hover so node title matches the app's base font size
       const cx = node.x + node.width / 2;
       const cy = node.y + node.height / 2;
       const baseTransform = `translate(${node.x}, ${node.y})`;
@@ -503,86 +479,42 @@ export function NodeLinkView() {
         .style('cursor', 'pointer')
         .on('click', () => selectNode(node.id))
         .on('mouseenter', function () {
-          const g = d3.select(this);
-          g.raise();
+          const gEl = d3.select(this);
+          gEl.raise();
 
           // Hide badges (they'll be repositioned later in the #6 badge rework)
-          g.selectAll('.node-badge').attr('visibility', 'hidden');
+          gEl.selectAll('.node-badge').attr('visibility', 'hidden');
 
-          const svgEl = svgRef.current;
-          const container = containerRef.current;
-          if (!svgEl || !container) return;
-
-          const svgZoom = d3.zoomTransform(svgEl).k;
-          const renderedFontPx = 11 * svgZoom;
-          const targetFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-          let hoverScale = Math.max(1, targetFontPx / renderedFontPx);
-
-          // Compute available screen-space around the node, then derive
-          // the max SVG-space width we can use for text wrapping.
-          const containerW = container.clientWidth;
-          const containerH = container.clientHeight;
-          const t = d3.zoomTransform(svgEl);
-          const screenNodeX = t.apply([node.x, node.y])[0];
-          const screenNodeY = t.apply([node.x, node.y])[1];
-
-          // How much screen space is available from the node's left edge
-          // to the container's right edge, divided by the effective scale
-          const availScreenW = containerW - screenNodeX;
-          const availScreenH = containerH - screenNodeY;
-          // Convert to SVG-space width at hover scale
-          const maxSvgW = availScreenW / (svgZoom * hoverScale);
-          const maxSvgH = availScreenH / (svgZoom * hoverScale);
-
-          // Cap hover scale if even the base node size would overflow
-          if (node.width > maxSvgW || node.height > maxSvgH) {
-            const fitScale = Math.min(
-              availScreenW / (node.width * svgZoom),
-              availScreenH / (node.height * svgZoom),
-            );
-            hoverScale = Math.max(1, Math.min(hoverScale, fitScale));
-          }
-
-          // Wrap text to fit in the available space (with padding)
-          const wrapWidth = Math.max(
-            node.width - 16,
-            Math.min(HOVER_MAX_WIDTH, maxSvgW - 16),
-          );
-
-          const textEl = g.select<SVGTextElement>('.node-title').node()!;
-          const lineCount = wrapText(textEl, fullTitle, wrapWidth);
+          // Wrap the full title into multi-line tspans
+          const textEl = gEl.select<SVGTextElement>('.node-title').node()!;
+          const lineCount = wrapText(textEl, fullTitle, HOVER_MAX_WIDTH);
           const lineHeight = 13;
           const expandedWidth = Math.min(
             Math.max(node.width, textEl.getBBox().width + 16),
-            wrapWidth + 16,
+            HOVER_MAX_WIDTH + 16,
           );
           const expandedHeight = Math.max(node.height, 20 + lineCount * lineHeight);
 
-          // Re-cap scale if expanded dimensions overflow
-          const finalMaxScale = Math.min(
-            availScreenW / (expandedWidth * svgZoom),
-            availScreenH / (expandedHeight * svgZoom),
-          );
-          hoverScale = Math.min(hoverScale, Math.max(1, finalMaxScale));
-
-          g.select('rect')
+          gEl.select('rect')
             .attr('width', expandedWidth)
             .attr('height', expandedHeight);
 
-          g.attr('transform',
+          // Scale up slightly so text is comfortable to read at 1:1
+          const hoverScale = 1.3;
+          gEl.attr('transform',
             `translate(${cx}, ${cy}) scale(${hoverScale}) translate(${-cx}, ${-cy}) translate(${node.x}, ${node.y})`
           );
           setHoveredNodeId(node.id);
         })
         .on('mouseleave', function () {
-          const g = d3.select(this);
-          g.select('.node-title').text(null);
-          g.select('.node-title').text(truncatedTitle);
-          g.select('rect')
+          const gEl = d3.select(this);
+          gEl.select('.node-title').text(null);
+          gEl.select('.node-title').text(truncatedTitle);
+          gEl.select('rect')
             .attr('width', node.width)
             .attr('height', node.height);
-          g.selectAll('.node-badge').attr('visibility', 'visible');
-          g.attr('transform', baseTransform);
+          gEl.selectAll('.node-badge').attr('visibility', 'visible');
+          gEl.attr('transform', baseTransform);
           setHoveredNodeId(null);
         });
 
@@ -622,56 +554,6 @@ export function NodeLinkView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId is a stable useState setter
   }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds]);
 
-  const handleZoomIn = useCallback(() => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, 1.5);
-    }
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, 0.67);
-    }
-  }, []);
-
-  const handleFitToView = useCallback(() => {
-    if (!svgRef.current || !containerRef.current || !zoomRef.current || layoutNodes.length === 0) return;
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const bounds = {
-      minX: Math.min(...layoutNodes.map(n => n.x)),
-      maxX: Math.max(...layoutNodes.map(n => n.x + n.width)),
-      minY: Math.min(...layoutNodes.map(n => n.y)),
-      maxY: Math.max(...layoutNodes.map(n => n.y + n.height)),
-    };
-
-    const contentWidth = bounds.maxX - bounds.minX + 60;
-    const contentHeight = bounds.maxY - bounds.minY + 60;
-
-    const scale = Math.min(
-      containerRect.width / contentWidth,
-      containerRect.height / contentHeight,
-      1
-    );
-
-    const contentCenterX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
-    const contentCenterY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
-    const x = containerRect.width / 2 - contentCenterX * scale;
-    const y = containerRect.height / 2 - contentCenterY * scale;
-
-    const transform = d3.zoomIdentity.translate(x, y).scale(scale);
-    d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.transform, transform);
-  }, [layoutNodes]);
-
-  // Re-fit content when the panel is resized (e.g. divider drag, window resize)
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => handleFitToView());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [handleFitToView]);
-
   return (
     <>
       <div className="panel-header">
@@ -689,13 +571,6 @@ export function NodeLinkView() {
         ) : (
           <div className="placeholder">
             Select a concept in the tree to see its neighborhood
-          </div>
-        )}
-        {selectedNodeId && layoutNodes.length > 0 && (
-          <div className="node-link-controls">
-            <button className="zoom-btn" onClick={handleZoomIn} title="Zoom in">+</button>
-            <button className="zoom-btn" onClick={handleZoomOut} title="Zoom out">−</button>
-            <button className="zoom-btn" onClick={handleFitToView} title="Fit to view">⊡</button>
           </div>
         )}
       </div>
