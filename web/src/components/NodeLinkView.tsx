@@ -456,11 +456,16 @@ export function NodeLinkView() {
         .on('mouseenter', () => {
           setHoveredNodeId(node.id);
           const svgEl = svgRef.current;
-          if (!svgEl) return;
+          const container = containerRef.current;
+          if (!svgEl || !container) return;
           const transform = d3.zoomTransform(svgEl);
           const screenX = transform.applyX(node.x + node.width / 2);
           const screenY = transform.applyY(node.y);
-          setTooltip({ text: node.data.title, x: screenX, y: screenY - 8 });
+          const cw = container.clientWidth;
+          // Clamp: keep tooltip within container with 8px padding
+          const clampedX = Math.max(8, Math.min(screenX, cw - 8));
+          const clampedY = Math.max(24, screenY - 8);
+          setTooltip({ text: node.data.title, x: clampedX, y: clampedY });
         })
         .on('mouseleave', () => {
           setHoveredNodeId(null);

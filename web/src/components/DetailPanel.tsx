@@ -23,7 +23,7 @@ interface RelationListProps {
 }
 
 function RelationList({ title, nodes, onSelect }: RelationListProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);
