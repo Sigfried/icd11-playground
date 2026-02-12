@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { type ConceptNode, type EntityDetail, useGraph } from '../providers/GraphProvider';
-import { Badge } from './Badge';
+import { Badge, type BadgeType } from './Badge';
 import './DetailPanel.css';
 
 /**
@@ -21,6 +21,93 @@ interface RelationListProps {
   title: string;
   nodes: ConceptNode[];
   onSelect: (id: string) => void;
+}
+
+/** Single item in a relation list with inline expandable sub-lists */
+function RelationListItem({ node, onSelect }: { node: ConceptNode; onSelect: (id: string) => void }) {
+  const { getParents, getChildren, highlightedNodeIds, setHighlightedNodeIds } = useGraph();
+  const [expanded, setExpanded] = useState<Set<BadgeType>>(new Set());
+  const isHighlighted = highlightedNodeIds.has(node.id);
+
+  const toggleInline = useCallback((type: BadgeType, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }, []);
+
+  const handleBadgeHover = useCallback((type: BadgeType) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ids = type === 'parents'
+      ? getParents(node.id).map(p => p.id)
+      : getChildren(node.id).map(c => c.id);
+    setHighlightedNodeIds(new Set(ids));
+  }, [node.id, getParents, getChildren, setHighlightedNodeIds]);
+
+  const handleBadgeLeave = useCallback(() => {
+    setHighlightedNodeIds(new Set());
+  }, [setHighlightedNodeIds]);
+
+  const parentNodes = expanded.has('parents') ? getParents(node.id) : [];
+  const childNodes = expanded.has('children') || expanded.has('descendants') ? getChildren(node.id) : [];
+
+  return (
+    <li className={isHighlighted ? 'highlighted' : ''}>
+      {/* Inline parents above */}
+      {parentNodes.length > 0 && (
+        <ul className="relation-sublist relation-sublist-parents">
+          {parentNodes.map(p => (
+            <li key={p.id} className="sublist-item" onClick={(e) => { e.stopPropagation(); onSelect(p.id); }}>
+              ↑ {p.title}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="relation-item-row" onClick={() => onSelect(node.id)}>
+        <span className="relation-item-title">{node.title}</span>
+        {node.parentCount > 1 && (
+          <Badge
+            type="parents"
+            count={node.parentCount}
+            onClick={(e) => toggleInline('parents', e)}
+            onMouseEnter={handleBadgeHover('parents')}
+            onMouseLeave={handleBadgeLeave}
+          />
+        )}
+        {node.childCount > 0 && (
+          <Badge
+            type="children"
+            count={node.childCount}
+            onClick={(e) => toggleInline('children', e)}
+            onMouseEnter={handleBadgeHover('children')}
+            onMouseLeave={handleBadgeLeave}
+          />
+        )}
+        {node.descendantCount > node.childCount && (
+          <Badge
+            type="descendants"
+            count={node.descendantCount}
+            onClick={(e) => toggleInline('children', e)}
+            onMouseEnter={handleBadgeHover('children')}
+            onMouseLeave={handleBadgeLeave}
+          />
+        )}
+      </div>
+      {/* Inline children below */}
+      {childNodes.length > 0 && (
+        <ul className="relation-sublist relation-sublist-children">
+          {childNodes.map(c => (
+            <li key={c.id} className="sublist-item" onClick={(e) => { e.stopPropagation(); onSelect(c.id); }}>
+              ↓ {c.title}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
 }
 
 function RelationList({ title, nodes, onSelect }: RelationListProps) {
@@ -44,18 +131,7 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
           ) : (
             <ul className="relation-list">
               {nodes.map(node => (
-                <li key={node.id} onClick={() => onSelect(node.id)}>
-                  {node.title}
-                  {node.parentCount > 1 && (
-                    <Badge type="parents" count={node.parentCount} />
-                  )}
-                  {node.childCount > 0 && (
-                    <Badge type="children" count={node.childCount} />
-                  )}
-                  {node.descendantCount > node.childCount && (
-                    <Badge type="descendants" count={node.descendantCount} />
-                  )}
-                </li>
+                <RelationListItem key={node.id} node={node} onSelect={onSelect} />
               ))}
             </ul>
           )}

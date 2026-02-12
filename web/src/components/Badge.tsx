@@ -41,17 +41,22 @@ interface BadgeProps {
   type: BadgeType;
   count: number;
   onClick?: (e: React.MouseEvent) => void;
+  onMouseEnter?: (e: React.MouseEvent) => void;
+  onMouseLeave?: (e: React.MouseEvent) => void;
 }
 
-export function Badge({ type, count, onClick }: BadgeProps) {
+export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: BadgeProps) {
   const weight = badgeWeight(type, count);
+  const interactive = !!(onClick || onMouseEnter);
 
   return (
     <span
-      className={`count-badge count-badge-${type}`}
+      className={`count-badge count-badge-${type}${interactive ? ' count-badge-interactive' : ''}`}
       style={{ fontWeight: weight }}
       title={`${count} ${type}`}
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {count}{SYMBOLS[type]}
     </span>

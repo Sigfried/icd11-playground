@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { type TreePath, type ConceptNode, useGraph } from '../providers/GraphProvider';
+import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
 import { Badge } from './Badge';
 import './TreeView.css';
 
@@ -30,13 +30,19 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     expandedPaths,
     selectNode,
     toggleExpand,
+    setExpandedPaths,
+    expandParentPaths,
+    highlightedNodeIds,
+    setHighlightedNodeIds,
     getNode,
     getChildren,
+    getParents,
   } = useGraph();
 
-  const pathKey = path.join('/');
-  const isExpanded = expandedPaths.has(pathKey);
+  const pk = pathKey(path);
+  const isExpanded = expandedPaths.has(pk);
   const isSelected = selectedNodeId === nodeId;
+  const isHighlighted = highlightedNodeIds.has(nodeId);
 
   const nodeData: ConceptNode | null = getNode(nodeId);
   const hasChildren = (nodeData?.childCount ?? 0) > 0;
@@ -50,6 +56,50 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     selectNode(nodeId);
   }, [nodeId, selectNode]);
 
+  // Badge click handlers
+  const handleParentBadgeClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    expandParentPaths(nodeId);
+  }, [nodeId, expandParentPaths]);
+
+  const handleChildBadgeClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleExpand(path);
+  }, [path, toggleExpand]);
+
+  const handleDescendantBadgeClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Recursive expand to depth 3
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      const expand = (id: string, currentPath: string[], remainingDepth: number) => {
+        next.add(pathKey(currentPath));
+        if (remainingDepth <= 0) return;
+        for (const child of getChildren(id)) {
+          const childPath = [...currentPath, child.id];
+          expand(child.id, childPath, remainingDepth - 1);
+        }
+      };
+      expand(nodeId, path, 3);
+      return next;
+    });
+  }, [nodeId, path, setExpandedPaths, getChildren]);
+
+  // Badge hover handlers for cross-panel highlighting
+  const handleParentHover = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHighlightedNodeIds(new Set(getParents(nodeId).map(p => p.id)));
+  }, [nodeId, getParents, setHighlightedNodeIds]);
+
+  const handleChildHover = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHighlightedNodeIds(new Set(getChildren(nodeId).map(c => c.id)));
+  }, [nodeId, getChildren, setHighlightedNodeIds]);
+
+  const handleBadgeLeave = useCallback(() => {
+    setHighlightedNodeIds(new Set());
+  }, [setHighlightedNodeIds]);
+
   if (!nodeData) {
     return (
       <div className="tree-node loading" style={{ paddingLeft: depth * 20 }}>
@@ -62,10 +112,16 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   // Get children in API order (all in memory)
   const childNodes = isExpanded ? getChildren(nodeId) : [];
 
+  const nodeClasses = [
+    'tree-node',
+    isSelected && 'selected',
+    isHighlighted && 'highlighted',
+  ].filter(Boolean).join(' ');
+
   return (
     <div className="tree-node-container">
       <div
-        className={`tree-node ${isSelected ? 'selected' : ''}`}
+        className={nodeClasses}
         data-node-id={nodeId}
         style={{ paddingLeft: depth * 20 }}
         onClick={handleSelectClick}
@@ -82,17 +138,35 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
         <span className="tree-node-badges">
           <span className="badge-slot">
             {nodeData.parentCount > 1 && (
-              <Badge type="parents" count={nodeData.parentCount} />
+              <Badge
+                type="parents"
+                count={nodeData.parentCount}
+                onClick={handleParentBadgeClick}
+                onMouseEnter={handleParentHover}
+                onMouseLeave={handleBadgeLeave}
+              />
             )}
           </span>
           <span className="badge-slot">
             {nodeData.childCount > 0 && (
-              <Badge type="children" count={nodeData.childCount} />
+              <Badge
+                type="children"
+                count={nodeData.childCount}
+                onClick={handleChildBadgeClick}
+                onMouseEnter={handleChildHover}
+                onMouseLeave={handleBadgeLeave}
+              />
             )}
           </span>
           <span className="badge-slot badge-slot-wide">
             {nodeData.descendantCount > nodeData.childCount && (
-              <Badge type="descendants" count={nodeData.descendantCount} />
+              <Badge
+                type="descendants"
+                count={nodeData.descendantCount}
+                onClick={handleDescendantBadgeClick}
+                onMouseEnter={handleChildHover}
+                onMouseLeave={handleBadgeLeave}
+              />
             )}
           </span>
         </span>
@@ -102,7 +176,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
         <div className="tree-children">
           {childNodes.map(child => (
             <TreeNode
-              key={`${pathKey}/${child.id}`}
+              key={`${pk}/${child.id}`}
               nodeId={child.id}
               path={[...path, child.id]}
               depth={depth + 1}

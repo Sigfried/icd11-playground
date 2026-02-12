@@ -127,15 +127,60 @@
 }
 
 .relation-list li {
+  padding: 2px 0;
+  font-size: 0.85rem;
+}
+
+.relation-list li.highlighted {
+  background: rgba(86, 156, 214, 0.1);
+  border-radius: 3px;
+}
+
+.relation-item-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 0;
-  font-size: 0.85rem;
+  padding: 2px 0;
   cursor: pointer;
 }
 
-.relation-list li:hover {
+.relation-item-row:hover {
+  color: var(--accent-cyan);
+}
+
+.relation-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline sub-lists for badge expansion */
+.relation-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--border-color);
+  margin-left: 4px;
+}
+
+.relation-sublist-parents {
+  border-left-color: var(--accent-cyan);
+}
+
+.relation-sublist-children {
+  border-left-color: var(--accent-green);
+}
+
+.sublist-item {
+  padding: 2px 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sublist-item:hover {
   color: var(--accent-cyan);
 }
 

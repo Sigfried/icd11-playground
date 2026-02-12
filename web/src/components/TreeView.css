@@ -30,6 +30,14 @@
   opacity: 0.6;
 }
 
+.tree-node.highlighted {
+  background: rgba(86, 156, 214, 0.15);
+}
+
+.tree-node.highlighted .tree-node-title {
+  color: var(--accent-cyan);
+}
+
 .tree-node-expand {
   width: 20px;
   height: 20px;

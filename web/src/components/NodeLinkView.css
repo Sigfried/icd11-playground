@@ -117,6 +117,18 @@
   font-size: 9px;
 }
 
+/* Manually added nodes (via badge click) */
+.node-link-node.manual rect {
+  stroke-dasharray: 4 2;
+}
+
+/* Cross-panel highlighted nodes */
+.node-link-node.highlighted rect {
+  stroke: var(--accent-cyan);
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 4px var(--accent-cyan));
+}
+
 /* Zoom controls */
 .node-link-controls {
   position: absolute;
@@ -146,4 +158,13 @@
   opacity: 1;
   background: var(--bg-secondary);
   color: var(--text-primary);
+}
+
+.reset-btn {
+  color: var(--accent-orange);
+}
+
+.reset-btn:hover {
+  color: var(--text-primary);
+  background: rgba(206, 145, 120, 0.15);
 }

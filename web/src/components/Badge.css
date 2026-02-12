@@ -22,3 +22,12 @@
 .count-badge-descendants {
   color: var(--accent-orange);
 }
+
+.count-badge-interactive {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.count-badge-interactive:hover {
+  background: var(--bg-secondary);
+}
