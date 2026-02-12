@@ -383,6 +383,7 @@ Clicking a badge on any node (in any panel) expands or navigates to show the rel
 - igraph supports forced vertical layering (nodes assigned to specific layers)
 
 **Rendering refinements (backlog):**
+- NL hover positioning refactor — hover expansion is rightward-biased (scales from top-left); SVG overflow:visible + margins is a workaround not a proper fix; consider anchoring expansion from center, or using a portal/overlay outside SVG for hover content
 - Selected node vertical positioning — place focus node near top or aligned with tree selection
 
 **Defer:**

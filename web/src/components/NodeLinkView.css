@@ -56,12 +56,6 @@
   opacity: 0.7;
 }
 
-/* Remove ancestor transparency on hover */
-.node-link-node.ancestor:hover rect,
-.node-link-node.ancestor:hover text.node-title {
-  opacity: 1;
-}
-
 .node-link-node text.node-title {
   fill: var(--text-primary);
   font-size: 11px;

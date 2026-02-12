@@ -570,6 +570,12 @@ export function NodeLinkView() {
           const gEl = d3.select(this);
           gEl.raise();
 
+          // Remove ancestor transparency on hover (inline style overrides CSS)
+          if (isAncestorNode) {
+            gEl.select('rect').style('opacity', '1');
+            gEl.select('.node-title').style('opacity', '1');
+          }
+
           // Hide badges during hover expansion (rect grows over them)
           gEl.select('foreignObject').attr('visibility', 'hidden');
 
@@ -607,6 +613,10 @@ export function NodeLinkView() {
             .attr('width', node.width)
             .attr('height', node.height);
           gEl.select('foreignObject').attr('visibility', 'visible');
+          if (isAncestorNode) {
+            gEl.select('rect').style('opacity', null);
+            gEl.select('.node-title').style('opacity', null);
+          }
           gEl.attr('transform', baseTransform);
           setHoveredNodeId(null);
         });
