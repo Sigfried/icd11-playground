@@ -317,69 +317,83 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 
 #### Badge Interactions
 
-Badges are interactive — hovering previews related nodes, clicking expands or navigates to them. This replaces the current "click the node, then look at the detail panel" flow with direct "show me the parents/children/descendants" actions.
+Badges are interactive controls. Hovering a badge previews the related nodes; clicking makes that preview persistent and allows further interaction. Badge interactions only add/expand nodes in the current view — they never change the selected (focus) node. Node clicking is for navigation; badge clicking is for expansion.
 
-##### Badge hover
+##### Badge hover → preview nodes
 
-Hovering a badge previews the nodes it refers to without committing to a navigation. The preview is transient — it disappears on mouse-out.
+Hovering a badge shows **preview nodes** — a transient preview of what clicking would produce. Preview nodes are visually distinct (low opacity, transitioning in) and disappear on mouse-out.
+
+**Hover animation model:** After a brief delay (~150ms), compute the expanded layout (with new nodes added) and animate toward it. Nodes appear one at a time or fade in, pushing existing nodes to their new positions. By the end of the animation, the display matches what clicking would produce. Clicking during or after the animation makes the layout persistent. Mouse-out at any point stops and reverses the transition.
 
 | Badge | Hover behavior |
 |-------|---------------|
-| **N↑ parents** | Highlight parent nodes wherever they appear: in NL graph (glow/outline on existing parent nodes), in tree (highlight all instances). If parents aren't visible in NL, show them as ghost nodes (low opacity, positioned but not part of the permanent layout). |
-| **N↓ children** | In NL: if children are in a cluster, show a floating list overlay (like #11 scrollable clusters). If children are already visible, highlight them. In tree: no-op (children are visible when expanded, hidden when collapsed). |
-| **N▽ descendants** | Show descendant count breakdown as a tooltip or mini-tree: immediate children count, grandchildren count, max depth. Gives a sense of subtree shape without expanding. |
+| **N↑ parents** | Highlight parent nodes already visible in NL graph (glow/outline). Show parents not yet in NL as preview nodes — positioned by layout but at low opacity. In tree: highlight all instances of parent nodes. |
+| **N↓ children** | In NL: if children are in a cluster, show a floating list overlay (connects to #11 scrollable clusters). If children aren't visible, show as preview nodes. In tree: no-op (expand arrow already handles this). |
+| **N▽ descendants** | Show descendant stats as a tooltip: immediate children count, grandchildren count, max depth. Gives a sense of subtree shape without expanding. Heuristics for depth/detail TBD — may require experimentation. |
 
-**Cross-panel coordination:** Badge hover in any panel highlights related nodes in all panels. For example, hovering `2↑` in the tree highlights the parent nodes in NL and scrolls to them in the detail panel's parents list.
+**Cross-panel coordination:** Badge hover in any panel highlights related nodes in all panels. For example, hovering `2↑` in the tree highlights the parent nodes in NL and scrolls to them in the detail panel's parents list. Needs shared "highlighted nodes" state in GraphProvider.
 
-##### Badge click
+##### Badge click → expand
 
-Clicking a badge expands or navigates to show the related nodes. The effect depends on the panel and badge type.
+Clicking a badge makes the preview persistent: preview nodes become permanent graph nodes (their distinct style clears), and further badge interactions on the new nodes become available. Badge clicks only add/expand — they never change the focus node or navigate away.
 
-| Badge | Click behavior | Notes |
-|-------|---------------|-------|
-| **N↑ parents** | Show all parents of this node | In tree: expand all parent paths. In NL: add parent nodes to graph. In detail: already shown in parents list. |
-| **N↓ children** | Show children of this node | In tree: expand this node. In NL: add children to graph (or expand cluster). In detail: already shown in children list. |
-| **N▽ descendants** | Open subtree rooted at this node | In tree: expand recursively (with depth limit?). In NL: navigate to this node as focus. In detail: navigate to this node. |
+| Badge | Click behavior |
+|-------|---------------|
+| **N↑ parents** | Add all parents to the graph permanently. |
+| **N↓ children** | Add children to the graph (expand cluster if clustered). |
+| **N▽ descendants** | Add next level of descendants (children + grandchildren?). Depth/scope TBD. |
 
 **Tree View:**
-- `↑` click: Find and expand all paths through this node's parents (expensive for deeply nested polyhierarchy — may need progressive expansion)
-- `↓` click: Equivalent to clicking the expand arrow — toggles expand for this tree path
-- `▽` click: Navigate to this node (select it), which enables exploring its subtree
+- `↑` click: Find and expand all paths through this node's parents (expensive for deeply nested polyhierarchy — may need progressive expansion: one level up per click)
+- `↓` click: Toggle expand for this tree path (equivalent to clicking the expand arrow)
+- `▽` click: Expand recursively (with depth limit — TBD)
 
 **Node-Link View:**
-- `↑` click: Add all parents to the NL graph (even those filtered by ANCESTOR_MIN_DEPTH). Re-run layout.
-- `↓` click: Expand the cluster if children are clustered; otherwise add children to graph. Re-run layout.
-- `▽` click: Re-focus the NL view on this node (equivalent to clicking it — select it as the new focus)
+- `↑` click: Add all parents to the NL graph (even those filtered by ANCESTOR_MIN_DEPTH). Animate layout transition.
+- `↓` click: Expand cluster if children are clustered; otherwise add children to graph. Animate layout transition.
+- `▽` click: Add descendants to graph (depth TBD). Animate layout transition.
 
 **Detail Panel:**
-- `↑` click on a list item: Navigate to that item and show its parents
-- `↓` click on a list item: Navigate to that item and expand its children
-- `▽` click on a list item: Navigate to that item
+- `↑` click on a list item: Expand that item's parents in the graph (don't navigate)
+- `↓` click on a list item: Expand that item's children in the graph (don't navigate)
+- `▽` click on a list item: Expand that item's descendants in the graph (don't navigate)
 
 ##### Visual feedback
 
-- **Hover cursor:** pointer on badge hover (already supported via `onClick` prop)
+- **Hover cursor:** pointer on badge hover
 - **Hover highlight:** badge background lightens or glows to indicate interactivity
 - **Active state:** brief press feedback on click
-- **Ghost nodes** (NL hover preview): 30% opacity, dashed border, no click interaction. Removed on mouse-out.
+- **Preview nodes** (hover): low opacity, transitioning in, visually distinct from permanent nodes. Clicking clears the distinct style.
+- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions.
+
+##### Layout animation
+
+All NL graph changes (from badge hover, click, or node selection) should animate to avoid disorienting the user. Existing nodes slide to new positions; new nodes fade in at their target positions. This means:
+- ELK layout is computed for the new node set
+- D3 transitions interpolate from old positions to new positions
+- Preview nodes start at 0 opacity and animate to ~0.3 (hover) or 1.0 (click)
+- May need to hold two layouts in memory during transitions (current + target)
+- Layout computation hasn't shown noticeable lag so far, but should profile with larger neighborhoods
 
 ##### Open questions
 
-1. **NL graph growth** — Adding parents/children to the NL graph can make it very large. Should there be a "reset to default neighborhood" button? Should added nodes have a visual distinction (e.g., dashed border) like the transient neighbors concept in hover (#3)?
-2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths could be overwhelming. Progressive expansion (expand one level up, click again for more) might be better.
-3. **Undo** — Should badge-expand be undoable? Or just rely on re-selecting the focus node to reset?
-4. **Interaction with existing expand/collapse** — Tree `↓` badge click = expand toggle. But what if the node is already expanded? Toggle closed? Or no-op?
-5. **Hover latency** — Ghost nodes in NL require layout computation. Should badge hover trigger layout immediately, or only after a short delay (150ms)?
-6. **Descendant hover depth** — How deep should the descendant tooltip go? Just immediate stats, or a mini-tree of the first 2–3 levels?
+1. **Reset button** — Yes, include a "reset to default neighborhood" button. May also want to visually distinguish manually-added nodes (dashed border?) — will need to evaluate visually.
+2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Progressive expansion (one level up per click) is probably better.
+3. **Undo** — Undo (Ctrl+Z or button) should step back one expansion in history. Expansion state should be saved to URL for shareability. Open question: what happens to expansion state when selecting a new node? First pass: reset to default neighborhood on new selection. User testing needed to evaluate whether this feels right or if people want expansion state preserved.
+4. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
+5. **Hover animation timing** — After ~150ms delay, begin animating preview nodes in. Compute target layout, then animate nodes toward it one at a time (or fade in gradually), pushing existing nodes to final positions. On mouse-out, stop and reverse. On click, commit the layout and clear preview styling.
+6. **Descendant hover depth** — What's the right level of detail for the descendant tooltip? Options: (a) just counts per level (children: 8, grandchildren: 42, max depth: 5), (b) mini-tree showing first 2–3 levels with names, (c) just the aggregate stats already on ConceptNode. Needs experimentation.
 
 ##### Implementation considerations
 
 - Badge component needs `onClick` and `onMouseEnter`/`onMouseLeave` wiring
-- NL view needs ability to add/remove nodes from the neighborhood without changing focus — significant change from the current "rebuild neighborhood from scratch on selection change" model
-- Ghost node rendering: add nodes to layout with a `ghost` flag, render with distinct style, remove on mouse-out without re-running full layout
+- NL view needs ability to **incrementally add/remove nodes** from the neighborhood without changing focus — significant architectural change from the current "rebuild neighborhood from scratch on selection change" model
+- Need to track which nodes were manually added vs. part of default neighborhood (for reset and visual distinction)
+- Preview node rendering: add nodes to layout with a `preview` flag, render with distinct style, promote to permanent on click or remove on mouse-out
+- May hold two ELK layouts in memory simultaneously during animated transitions (current + target)
 - Tree `↑` expand requires walking up all parent chains and expanding each path prefix — similar to `navigateToNode` but for all parents, not just the first
-- Cross-panel coordination needs a shared "highlighted nodes" state in GraphProvider
-- May want to debounce or animate layout changes when adding nodes to NL graph
+- Cross-panel coordination needs shared "highlighted nodes" state in GraphProvider
+- URL state needs to encode expansion history (which nodes were manually added)
 
 #### Implementation Priority
 
