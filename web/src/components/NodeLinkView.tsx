@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { type ConceptNode, useGraph } from '../providers/GraphProvider';
@@ -189,7 +188,6 @@ export function NodeLinkView() {
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
-  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   // Reset expanded clusters when selection changes
   useEffect(() => {
@@ -336,8 +334,7 @@ export function NodeLinkView() {
     if (!svgRef.current || !containerRef.current) return;
     if (layoutNodes.length === 0) return;
 
-    // Clear tooltip and hover state when layout changes (old nodes destroyed)
-    setTooltip(null);
+    // Clear hover state when layout changes (old nodes destroyed)
     setHoveredNodeId(null);
 
     const svg = d3.select(svgRef.current);
@@ -449,24 +446,33 @@ export function NodeLinkView() {
       const isFocus = node.id === selectedNodeId;
       const isAncestorNode = ancestorNodeIds.has(node.id);
 
+      const fullTitle = node.data.title;
+      const truncatedTitle = fullTitle.length > 22
+        ? fullTitle.substring(0, 20) + '...'
+        : fullTitle;
+
       const nodeG = nodesG.append('g')
         .attr('class', `node-link-node${isFocus ? ' focus' : ''}${isAncestorNode ? ' ancestor' : ''}`)
         .attr('transform', `translate(${node.x}, ${node.y})`)
         .style('cursor', 'pointer')
         .on('click', () => selectNode(node.id))
-        .on('mouseenter', () => {
+        .on('mouseenter', function () {
           setHoveredNodeId(node.id);
-          const svgEl = svgRef.current;
-          if (!svgEl) return;
-          const transform = d3.zoomTransform(svgEl);
-          const svgRect = svgEl.getBoundingClientRect();
-          const pageX = svgRect.left + transform.applyX(node.x + node.width / 2);
-          const pageY = svgRect.top + transform.applyY(node.y) - 8;
-          setTooltip({ text: node.data.title, x: pageX, y: pageY });
+          const g = d3.select(this);
+          // Raise to top so expanded node draws over siblings
+          g.raise();
+          // Measure full title width
+          const titleEl = g.select<SVGTextElement>('.node-title');
+          titleEl.text(fullTitle);
+          const textWidth = titleEl.node()?.getComputedTextLength() ?? 0;
+          const expandedWidth = Math.max(node.width, textWidth + 16);
+          g.select('rect').attr('width', expandedWidth);
         })
-        .on('mouseleave', () => {
+        .on('mouseleave', function () {
           setHoveredNodeId(null);
-          setTooltip(null);
+          const g = d3.select(this);
+          g.select('.node-title').text(truncatedTitle);
+          g.select('rect').attr('width', node.width);
         });
 
       nodeG.append('rect')
@@ -474,16 +480,11 @@ export function NodeLinkView() {
         .attr('height', node.height)
         .attr('rx', 4);
 
-      // Title (truncated)
-      const titleText = node.data.title.length > 22
-        ? node.data.title.substring(0, 20) + '...'
-        : node.data.title;
-
       nodeG.append('text')
         .attr('x', 8)
         .attr('y', 16)
         .attr('class', 'node-title')
-        .text(titleText);
+        .text(truncatedTitle);
 
       // Badges
       let badgeX = 8;
@@ -568,12 +569,6 @@ export function NodeLinkView() {
           <div className="placeholder">
             Select a concept in the tree to see its neighborhood
           </div>
-        )}
-        {tooltip && createPortal(
-          <div className="node-link-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
-            {tooltip.text}
-          </div>,
-          document.body,
         )}
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">

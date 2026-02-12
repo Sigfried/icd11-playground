@@ -122,21 +122,6 @@
   font-size: 9px;
 }
 
-/* Tooltip overlay (portaled to body, floats above all panels) */
-.node-link-tooltip {
-  position: fixed;
-  transform: translate(-50%, -100%);
-  padding: 4px 8px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  pointer-events: none;
-  z-index: 1000;
-  white-space: nowrap;
-}
-
 /* Controls container */
 .node-link-controls {
   position: absolute;
