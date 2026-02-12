@@ -122,9 +122,9 @@
   font-size: 9px;
 }
 
-/* Tooltip overlay */
+/* Tooltip overlay (portaled to body, floats above all panels) */
 .node-link-tooltip {
-  position: absolute;
+  position: fixed;
   transform: translate(-50%, -100%);
   padding: 4px 8px;
   background: var(--bg-tertiary);
@@ -133,11 +133,8 @@
   font-size: 0.8rem;
   color: var(--text-primary);
   pointer-events: none;
-  z-index: 10;
+  z-index: 1000;
   white-space: nowrap;
-  max-width: 90%;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Controls container */

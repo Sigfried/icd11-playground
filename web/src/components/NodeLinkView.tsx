@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { type ConceptNode, useGraph } from '../providers/GraphProvider';
@@ -456,16 +457,12 @@ export function NodeLinkView() {
         .on('mouseenter', () => {
           setHoveredNodeId(node.id);
           const svgEl = svgRef.current;
-          const container = containerRef.current;
-          if (!svgEl || !container) return;
+          if (!svgEl) return;
           const transform = d3.zoomTransform(svgEl);
-          const screenX = transform.applyX(node.x + node.width / 2);
-          const screenY = transform.applyY(node.y);
-          const cw = container.clientWidth;
-          // Clamp: keep tooltip within container with 8px padding
-          const clampedX = Math.max(8, Math.min(screenX, cw - 8));
-          const clampedY = Math.max(24, screenY - 8);
-          setTooltip({ text: node.data.title, x: clampedX, y: clampedY });
+          const svgRect = svgEl.getBoundingClientRect();
+          const pageX = svgRect.left + transform.applyX(node.x + node.width / 2);
+          const pageY = svgRect.top + transform.applyY(node.y) - 8;
+          setTooltip({ text: node.data.title, x: pageX, y: pageY });
         })
         .on('mouseleave', () => {
           setHoveredNodeId(null);
@@ -572,10 +569,11 @@ export function NodeLinkView() {
             Select a concept in the tree to see its neighborhood
           </div>
         )}
-        {tooltip && (
+        {tooltip && createPortal(
           <div className="node-link-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
             {tooltip.text}
-          </div>
+          </div>,
+          document.body,
         )}
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
