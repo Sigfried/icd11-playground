@@ -63,31 +63,34 @@ const MAX_VISIBLE_CHILDREN = 2;
 const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
 
 /**
- * Walk ancestors from focusId toward root, following the first parent at each level.
+ * BFS upward through ALL parents from focusId, building a full ancestor DAG.
  * Stops at ANCESTOR_MIN_DEPTH (excludes root and top-level chapters).
- * Returns array of ancestor IDs in order from highest → ... → focusId's immediate parent.
+ * Returns Set of ancestor node IDs (does not include focusId itself).
  */
-function getAncestorChain(
+function getAncestorDAG(
   focusId: string,
   getParents: (id: string) => ConceptNode[],
-): string[] {
-  const chain: string[] = [];
-  let currentId = focusId;
-  const maxIter = 30;
+): Set<string> {
+  const ancestors = new Set<string>();
+  const queue = [focusId];
   const visited = new Set<string>([focusId]);
 
-  for (let i = 0; i < maxIter; i++) {
-    const parents = getParents(currentId);
-    if (parents.length === 0) break;
-    const firstParent = parents[0];
-    if (visited.has(firstParent.id)) break;
-    if (firstParent.depth < ANCESTOR_MIN_DEPTH) break;
-    visited.add(firstParent.id);
-    chain.unshift(firstParent.id);
-    currentId = firstParent.id;
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    for (const parent of getParents(currentId)) {
+      if (parent.depth < ANCESTOR_MIN_DEPTH) continue;
+      if (visited.has(parent.id)) continue;
+      visited.add(parent.id);
+      ancestors.add(parent.id);
+      queue.push(parent.id);
+    }
   }
 
-  return chain;
+  if (ancestors.size > 100) {
+    console.warn(`Large ancestor DAG: ${ancestors.size} nodes for ${focusId}`);
+  }
+
+  return ancestors;
 }
 
 /**
@@ -108,12 +111,15 @@ interface Neighborhood {
   /** All real node IDs (for edge filtering) */
   nodeIds: Set<string>;
   clusterNodes: ClusterInfo[];
+  /** IDs of ancestor nodes (not including focus or direct children) */
+  ancestorIds: Set<string>;
 }
 
 function buildNeighborhood(
   focusId: string,
   getParents: (id: string) => ConceptNode[],
   getChildren: (id: string) => ConceptNode[],
+  getNode: (id: string) => ConceptNode | null,
   expandedClusters: Set<string>,
 ): Neighborhood {
   const orderedIds: string[] = [];
@@ -127,16 +133,28 @@ function buildNeighborhood(
     }
   }
 
-  // 1. Ancestor chain (first-parent path, stops at ANCESTOR_MIN_DEPTH)
-  for (const id of getAncestorChain(focusId, getParents)) add(id);
+  // 1. Full ancestor DAG (BFS through all parents, stops at ANCESTOR_MIN_DEPTH)
+  const ancestorIds = getAncestorDAG(focusId, getParents);
 
-  // 2. All parents of focus (adds any not already in ancestor chain)
-  for (const p of getParents(focusId)) add(p.id);
+  // 2. Add ancestors sorted by depth ascending (shallowest first), then id for stability
+  const sortedAncestors = [...ancestorIds].sort((a, b) => {
+    const nodeA = getNode(a);
+    const nodeB = getNode(b);
+    const depthDiff = (nodeA?.depth ?? 0) - (nodeB?.depth ?? 0);
+    if (depthDiff !== 0) return depthDiff;
+    return a.localeCompare(b);
+  });
+  for (const id of sortedAncestors) add(id);
 
-  // 3. Focus node
+  // 3. Direct parents of focus (defensive — should already be in DAG)
+  for (const p of getParents(focusId)) {
+    if (p.depth >= ANCESTOR_MIN_DEPTH) add(p.id);
+  }
+
+  // 4. Focus node
   add(focusId);
 
-  // 4. Children of focus — cluster if too many
+  // 5. Children of focus — cluster if too many
   const focusChildren = getChildren(focusId);
   const clusterId = `cluster:${focusId}`;
   const clusterExpanded = expandedClusters.has(clusterId);
@@ -158,7 +176,7 @@ function buildNeighborhood(
     for (const c of focusChildren) add(c.id);
   }
 
-  return { orderedIds, nodeIds, clusterNodes };
+  return { orderedIds, nodeIds, clusterNodes, ancestorIds };
 }
 
 export function NodeLinkView() {
@@ -168,6 +186,7 @@ export function NodeLinkView() {
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
+  const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
 
   // Reset expanded clusters when selection changes
@@ -204,8 +223,8 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-      const { orderedIds, nodeIds, clusterNodes } = buildNeighborhood(
-        selectedNodeId!, getParents, getChildren, expandedClusters,
+      const { orderedIds, nodeIds, clusterNodes, ancestorIds } = buildNeighborhood(
+        selectedNodeId!, getParents, getChildren, getNode, expandedClusters,
       );
 
       // Build ELK graph — order matters for NODES_AND_EDGES model order
@@ -301,6 +320,7 @@ export function NodeLinkView() {
 
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
+        setAncestorNodeIds(ancestorIds);
       } catch (error) {
         console.error('ELK layout error:', error);
       }
@@ -388,14 +408,6 @@ export function NodeLinkView() {
     // Draw nodes
     const nodesG = g.append('g').attr('class', 'nodes');
 
-    // Pre-compute focus neighbor sets for ancestor detection
-    const focusParentIds = selectedNodeId
-      ? new Set(getParents(selectedNodeId).map(p => p.id))
-      : new Set<string>();
-    const focusChildIds = selectedNodeId
-      ? new Set(getChildren(selectedNodeId).map(c => c.id))
-      : new Set<string>();
-
     layoutNodes.forEach(node => {
       if (node.kind === 'cluster') {
         // Cluster pseudo-node
@@ -429,7 +441,7 @@ export function NodeLinkView() {
 
       // Real node
       const isFocus = node.id === selectedNodeId;
-      const isAncestorNode = !isFocus && !focusParentIds.has(node.id) && !focusChildIds.has(node.id);
+      const isAncestorNode = ancestorNodeIds.has(node.id);
 
       const nodeG = nodesG.append('g')
         .attr('class', `node-link-node${isFocus ? ' focus' : ''}${isAncestorNode ? ' ancestor' : ''}`)
@@ -475,7 +487,7 @@ export function NodeLinkView() {
       }
     });
 
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, getParents, getChildren]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds]);
 
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {
