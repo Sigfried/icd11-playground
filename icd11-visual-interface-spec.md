@@ -323,21 +323,22 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 **Phase 2 — Stress test + medium effort features:**
 - #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
 - #6 Area-proportional badges — descendant data already on every node, orthogonal to layout
-- #3 Hover preview — :green_circle: done (tooltip + detail panel preview); tree highlight and transient neighbors still open
+- #3 Hover preview — :yellow_circle: partial: in-place node expansion with text wrapping, detail panel preview; tree highlight and transient neighbors still open
+- #12 Full-width bottom panel — :green_circle: done: two switchable layouts, RIGHT direction, viewBox zoom, scroll-to-focus, zoom controls
 
-**Phase 3 — Depends on Phase 2:**
-- #4+5 Toggle/Close (unified as visibility state) — most useful once clusters and hover exist
+**Phase 3 — Next up:**
+- #6 Area-proportional badges — badges on right side of concept name, area ∝ count
+- #11 Scrollable clusters — HTML overlay on cluster hover, replace current click-to-expand
+- #3 Tree highlight — highlight hovered node in tree view
+- #4+5 Toggle/Close (unified as visibility state)
 - #7 Staggered levels — evaluate after clusters; may require replacing elkjs
 
-**Layout exploration (after Phase 2):**
-- #12 Full-width bottom panel + RIGHT layout
-- #11 Scrollable clusters
-- Evaluate elkjs vs igraph vs manual layout once we see real polyhierarchy neighborhoods from #10
+**Layout engine:**
+- Evaluate elkjs vs igraph vs manual layout — edge crossing minimization is poor for complex DAGs
+- igraph supports forced vertical layering (nodes assigned to specific layers)
 
 **Rendering refinements (backlog):**
 - Selected node vertical positioning — place focus node near top or aligned with tree selection
-- Fit-to-view scale up for small graphs (currently capped at 1, looks tiny when only a few nodes)
-- Hover text wrapping now adapts to available screen space (caps width and scale to avoid clipping), but edge cases may remain for nodes at extreme panel edges
 
 **Defer:**
 - Fisheye — only if the above doesn't suffice
