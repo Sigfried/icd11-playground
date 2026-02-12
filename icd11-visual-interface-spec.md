@@ -28,7 +28,7 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 | | First-occurring path expansion via URL | :red_circle: Uses arbitrary parent |
 | | Collapse heuristics for large trees | :white_circle: |
 | **Node-Link View** | Hierarchical layout (elkjs), click to navigate | :green_circle: |
-| | Ancestor chain to second level | :green_circle: |
+| | Full ancestor DAG to second level | :green_circle: |
 | | Collapsible clusters (threshold: 2) | :green_circle: |
 | | Resizable panels | :green_circle: |
 | | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
@@ -207,7 +207,7 @@ The core design challenge. High-degree nodes (up to 331 children) make the view 
 | 7 | **Staggered levels** | :white_circle: | Labella.js-style overlap avoidance |
 | 8 | **Resizable panels** | :green_circle: | Drag dividers between three panels |
 | 9 | **Pop-out window** | :white_circle: | Full-screen node-link in separate window |
-| 10 | **Full ancestor DAG** | :white_circle: | Show all paths to root (not just first-parent chain); allow child expansion on ancestor nodes |
+| 10 | **Full ancestor DAG** | :green_circle: | BFS through all parents to depth 2; [stress test results](#stress-test-high-parent-count-nodes) |
 | 11 | **Scrollable clusters** | :white_circle: | Cluster summary in SVG; hover/click shows HTML child list overlay; pop children out into real nodes |
 | 12 | **Full-width bottom panel** | :white_circle: | Node-link takes full viewport width at bottom; RIGHT layout direction; native scroll for overflow |
 
@@ -254,7 +254,30 @@ Hover temporarily overrides `closed` → visible. Changing focus resets all to `
 > - Hybrid layout (old #10): L-shaped split (manual vertical ancestors + ELK horizontal children) won't work because ancestor polyhierarchy means ancestors aren't linear, and child expansion on ancestors creates nodes in both sections.
 > - Scrollable clusters (#11): scrollable boxes don't work directly in SVG. Cluster node shows summary; hover/click expands to an HTML list overlay (could replace detail panel or float on top). Clicking a child in the list promotes it to a real graph node. Single edge from parent to cluster.
 > - Scroll vs zoom: zoom/pan is powerful but awkward. At a given zoom level, if content overflows, enable native scrolling. For RIGHT layout in full-width bottom panel, horizontal scroll is natural.
-> - Full ancestor DAG (#10): must come before layout experiments — need to see messy polyhierarchy neighborhoods to know what layout problems actually look like. This is the stress test.
+> - Full ancestor DAG (#10): :green_circle: done. Stress test confirms: orthogonal routing + truncated titles + wide fanout = unreadable for 6+ parent nodes. Layout engine is now the bottleneck.
+
+#### Stress Test: High Parent-Count Nodes
+
+Nodes with the most parents in the Foundation. These are the worst cases for ancestor DAG layout — 9 parents at depth 4–5 produces ~22 nodes with heavily overlapping orthogonal edges, essentially unreadable at default zoom.
+
+| Parents | Depth | Node | ID |
+|---------|-------|------|----|
+| 9 | 4 | [Injury or harm arising from surgical or medical care, NEC](https://sigfried.github.io/icd11-playground/?node=383104340) | 383104340 |
+| 9 | 5 | [Dyskeratosis congenita](https://sigfried.github.io/icd11-playground/?node=1531033936) | 1531033936 |
+| 7 | 9 | [DPT-HepB-MenAC vaccines](https://sigfried.github.io/icd11-playground/?node=10241378) | 10241378 |
+| 7 | 6 | [Kearns-Sayre syndrome](https://sigfried.github.io/icd11-playground/?node=399100745) | 399100745 |
+| 7 | 9 | [DPT-IPV-Hib-HepB vaccines](https://sigfried.github.io/icd11-playground/?node=1234470901) | 1234470901 |
+| 7 | 5 | [Ataxia-telangiectasia](https://sigfried.github.io/icd11-playground/?node=2129036552) | 2129036552 |
+| 6 | 6 | [Zellweger syndrome](https://sigfried.github.io/icd11-playground/?node=226023718) | 226023718 |
+| 6 | 5 | [Bannayan-Riley-Ruvalcaba syndrome](https://sigfried.github.io/icd11-playground/?node=357383447) | 357383447 |
+| 6 | 9 | [DPT-IPV-Hib vaccines](https://sigfried.github.io/icd11-playground/?node=675122679) | 675122679 |
+| 6 | 6 | [Hereditary haemorrhagic telangiectasia](https://sigfried.github.io/icd11-playground/?node=714406192) | 714406192 |
+
+**Observations:**
+- Even single-hop (just direct parents) would be wide and messy for 9-parent nodes — this isn't just a DAG depth problem
+- Truncated titles (all "Postprocedural disor...") make the middle layer indistinguishable — hover/tooltip needed
+- Orthogonal edge routing creates a dense tangle when many edges converge on one node
+- The multi-system syndromes (Dyskeratosis congenita, Kearns-Sayre, Ataxia-telangiectasia) and combination vaccines are natural stress cases
 
 #### Implementation Priority
 
@@ -262,9 +285,9 @@ Hover temporarily overrides `closed` → visible. Changing focus resets all to `
 - #8 Resizable panels, #2 Collapsible clusters, #1 Ancestors beyond 1-hop
 
 **Phase 2 — Stress test + medium effort features:**
-- #10 Full ancestor DAG — prerequisite stress test; need to see real polyhierarchy neighborhoods before tackling layout changes
+- #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
 - #6 Area-proportional badges — descendant data already on every node, orthogonal to layout
-- #3 Hover preview — valuable for exploration, moderate complexity
+- #3 Hover preview — valuable for exploration, moderate complexity; also addresses truncated titles
 
 **Phase 3 — Depends on Phase 2:**
 - #4+5 Toggle/Close (unified as visibility state) — most useful once clusters and hover exist
