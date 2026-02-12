@@ -1,7 +1,14 @@
 /* NodeLinkView styles */
 
-.node-link-content {
+.node-link-wrapper {
   position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.node-link-content {
+  position: absolute;
+  inset: 0;
   overflow: auto;
 }
 
@@ -119,4 +126,35 @@
 .cluster-sublabel {
   fill: var(--text-secondary);
   font-size: 9px;
+}
+
+/* Zoom controls */
+.node-link-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.zoom-btn:hover {
+  opacity: 1;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }

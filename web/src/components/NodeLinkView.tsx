@@ -230,11 +230,95 @@ export function NodeLinkView() {
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const zoomRef = useRef(1);
+  zoomRef.current = zoomLevel;
+  // SVG-space position of focus node center (set during D3 rendering)
+  const focusPosRef = useRef<{ x: number; y: number } | null>(null);
+  // SVG natural dimensions (before zoom)
+  const svgDimsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
-  // Reset expanded clusters when selection changes
+  // Scroll container so the focus node is visible (not force-centered)
+  const scrollToFocus = useCallback((zoom: number) => {
+    const pos = focusPosRef.current;
+    const container = containerRef.current;
+    if (!pos || !container) return;
+    // Focus node position in zoomed pixel space
+    const fx = pos.x * zoom;
+    const fy = pos.y * zoom;
+    const margin = 40; // px margin from edge
+    const { scrollLeft, scrollTop, clientWidth, clientHeight } = container;
+    // Only scroll if focus is outside visible area (with margin)
+    let newLeft = scrollLeft;
+    let newTop = scrollTop;
+    if (fx < scrollLeft + margin) newLeft = fx - margin;
+    else if (fx > scrollLeft + clientWidth - margin) newLeft = fx - clientWidth + margin;
+    if (fy < scrollTop + margin) newTop = fy - margin;
+    else if (fy > scrollTop + clientHeight - margin) newTop = fy - clientHeight + margin;
+    if (newLeft !== scrollLeft || newTop !== scrollTop) {
+      container.scrollLeft = newLeft;
+      container.scrollTop = newTop;
+    }
+  }, []);
+
+  // Center the focus node (used on initial layout)
+  const centerOnFocus = useCallback((zoom: number) => {
+    const pos = focusPosRef.current;
+    const container = containerRef.current;
+    if (!pos || !container) return;
+    container.scrollLeft = pos.x * zoom - container.clientWidth / 2;
+    container.scrollTop = pos.y * zoom - container.clientHeight / 2;
+  }, []);
+
+  const zoomToFit = useCallback(() => {
+    const container = containerRef.current;
+    const dims = svgDimsRef.current;
+    if (!container || !dims.width) return;
+    const fitZoom = Math.min(
+      container.clientWidth / dims.width,
+      container.clientHeight / dims.height,
+      1,
+    );
+    setZoomLevel(fitZoom);
+    // Scroll to top-left since entire graph fits
+    requestAnimationFrame(() => {
+      container.scrollLeft = 0;
+      container.scrollTop = 0;
+    });
+  }, []);
+
+  // Reset expanded clusters and zoom when selection changes
   useEffect(() => {
     setExpandedClusters(new Set());
+    setZoomLevel(1);
   }, [selectedNodeId]);
+
+  // After zoom changes, resize SVG and keep focus node visible
+  useEffect(() => {
+    const svg = svgRef.current;
+    const dims = svgDimsRef.current;
+    if (svg && dims.width) {
+      svg.setAttribute('width', String(dims.width * zoomLevel));
+      svg.setAttribute('height', String(dims.height * zoomLevel));
+    }
+    scrollToFocus(zoomLevel);
+  }, [zoomLevel, scrollToFocus]);
+
+  // Ctrl+wheel zoom (no pan — native scroll handles that)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setZoomLevel(prev => {
+        const next = prev * (1 - e.deltaY * 0.005);
+        return Math.min(2, Math.max(0.2, next));
+      });
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, []);
 
   const toggleCluster = useCallback((clusterId: string) => {
     setExpandedClusters(prev => {
@@ -393,9 +477,11 @@ export function NodeLinkView() {
     const svgWidth = bounds.maxX - bounds.minX + SVG_PADDING * 2;
     const svgHeight = bounds.maxY - bounds.minY + SVG_PADDING * 2;
 
+    // Use viewBox for natural content; width/height will be set by zoomLevel
     svg
-      .attr('width', svgWidth)
-      .attr('height', svgHeight);
+      .attr('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
+      .attr('width', svgWidth * zoomRef.current)
+      .attr('height', svgHeight * zoomRef.current);
 
     // Offset all content so it starts at SVG_PADDING
     const g = svg.append('g')
@@ -499,8 +585,13 @@ export function NodeLinkView() {
             .attr('width', expandedWidth)
             .attr('height', expandedHeight);
 
-          // Scale up slightly so text is comfortable to read at 1:1
-          const hoverScale = 1.3;
+          // Scale so the hovered node's text is readable regardless of zoom level.
+          // At zoom 1, a mild 1.3x bump. When zoomed out, compensate so the
+          // rendered font size stays close to the app's base font.
+          const currentZoom = zoomRef.current;
+          const renderedFontPx = 11 * currentZoom;
+          const targetFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+          const hoverScale = Math.max(1.3, targetFontPx / renderedFontPx);
           gEl.attr('transform',
             `translate(${cx}, ${cy}) scale(${hoverScale}) translate(${-cx}, ${-cy}) translate(${node.x}, ${node.y})`
           );
@@ -551,6 +642,18 @@ export function NodeLinkView() {
       }
     });
 
+    // Store SVG dims and focus node position for zoom/scroll helpers
+    svgDimsRef.current = { width: svgWidth, height: svgHeight };
+    const focusNode = layoutNodes.find(n => n.id === selectedNodeId);
+    if (focusNode) {
+      focusPosRef.current = {
+        x: focusNode.x + focusNode.width / 2 - bounds.minX + SVG_PADDING,
+        y: focusNode.y + focusNode.height / 2 - bounds.minY + SVG_PADDING,
+      };
+    }
+    // Center focus node on initial layout
+    centerOnFocus(zoomRef.current);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId is a stable useState setter
   }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds]);
 
@@ -561,16 +664,26 @@ export function NodeLinkView() {
           {selectedNodeId ? `${layoutNodes.length} nodes` : 'Select a node'}
         </span>
       </div>
-      <div className="panel-content node-link-content" ref={containerRef}>
-        {selectedNodeId ? (
-          layoutNodes.length > 0 ? (
-            <svg ref={svgRef} className="node-link-svg" />
+      <div className="node-link-wrapper">
+        <div className="panel-content node-link-content" ref={containerRef}>
+          {selectedNodeId ? (
+            layoutNodes.length > 0 ? (
+              <svg ref={svgRef} className="node-link-svg" />
+            ) : (
+              <div className="placeholder">Computing layout...</div>
+            )
           ) : (
-            <div className="placeholder">Computing layout...</div>
-          )
-        ) : (
-          <div className="placeholder">
-            Select a concept in the tree to see its neighborhood
+            <div className="placeholder">
+              Select a concept in the tree to see its neighborhood
+            </div>
+          )}
+        </div>
+        {selectedNodeId && layoutNodes.length > 0 && (
+          <div className="node-link-controls">
+            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.min(2, z * 1.3))} title="Zoom in">+</button>
+            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.2, z / 1.3))} title="Zoom out">−</button>
+            <button className="zoom-btn" onClick={() => setZoomLevel(1)} title="Reset zoom">↺</button>
+            <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">⊡</button>
           </div>
         )}
       </div>

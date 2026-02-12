@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { type TreePath, type ConceptNode, useGraph } from '../providers/GraphProvider';
 import './TreeView.css';
 
@@ -65,6 +65,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     <div className="tree-node-container">
       <div
         className={`tree-node ${isSelected ? 'selected' : ''}`}
+        data-node-id={nodeId}
         style={{ paddingLeft: depth * 20 }}
         onClick={handleSelectClick}
       >
@@ -108,14 +109,25 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 }
 
 export function TreeView() {
-  const { rootId, graphLoading } = useGraph();
+  const { rootId, selectedNodeId, graphLoading } = useGraph();
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the selected node into view when selection changes
+  useEffect(() => {
+    if (!selectedNodeId || !contentRef.current) return;
+    // Wait a tick for the DOM to update after expansion
+    requestAnimationFrame(() => {
+      const el = contentRef.current?.querySelector(`[data-node-id="${selectedNodeId}"]`);
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }, [selectedNodeId]);
 
   return (
     <>
       <div className="panel-header">
         Tree View -- <span className="header-hint">Foundation hierarchy</span>
       </div>
-      <div className="panel-content tree-content">
+      <div className="panel-content tree-content" ref={contentRef}>
         {graphLoading ? (
           <div className="placeholder">Loading Foundation...</div>
         ) : rootId ? (
