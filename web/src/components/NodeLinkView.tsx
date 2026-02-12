@@ -212,47 +212,6 @@ function buildNeighborhood(
   return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds, previewIds };
 }
 
-const HOVER_MAX_WIDTH = 220;
-
-/**
- * Word-wrap text into SVG <tspan> elements that fit within maxWidth.
- * Returns the number of lines created for rect height calculation.
- */
-function wrapText(
-  textEl: SVGTextElement,
-  text: string,
-  maxWidth: number,
-): number {
-  const x = textEl.getAttribute('x') ?? '0';
-  const sel = d3.select(textEl);
-  sel.text(null); // clear existing content
-
-  const words = text.split(/\s+/);
-  let line: string[] = [];
-  let lineCount = 0;
-
-  let tspan = sel.append('tspan')
-    .attr('x', x)
-    .attr('dy', lineCount === 0 ? '0' : '1.2em');
-
-  for (const word of words) {
-    line.push(word);
-    tspan.text(line.join(' '));
-    if (tspan.node()!.getComputedTextLength() > maxWidth && line.length > 1) {
-      line.pop();
-      tspan.text(line.join(' '));
-      line = [word];
-      lineCount++;
-      tspan = sel.append('tspan')
-        .attr('x', x)
-        .attr('dy', '1.2em')
-        .text(word);
-    }
-  }
-
-  return lineCount + 1;
-}
-
 /** Build an SVG path string from ELK edge sections */
 function edgePath(edge: LayoutEdge): string {
   if (!edge.sections?.length) return '';
@@ -750,9 +709,6 @@ export function NodeLinkView() {
       ? fullTitle.substring(0, 20) + '...'
       : fullTitle;
 
-    const cx = node.x + node.width / 2;
-    const cy = node.y + node.height / 2;
-
     const classes = [
       'nl-item',
       'node-link-node',
@@ -767,60 +723,18 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
-        const g = d3.select(this);
-        g.raise();
-
-        // Remove ancestor transparency on hover
+        d3.select(this).raise();
         if (isAncestorNode) {
-          g.select('rect').style('opacity', '1');
-          g.select('.node-title').style('opacity', '1');
+          d3.select(this).select('rect').style('opacity', '1');
+          d3.select(this).select('.node-title').style('opacity', '1');
         }
-
-        // Wrap full title
-        const textEl = g.select<SVGTextElement>('.node-title').node()!;
-        const lineCount = wrapText(textEl, fullTitle, HOVER_MAX_WIDTH);
-        const lineHeight = 13;
-        const expandedWidth = Math.min(
-          Math.max(node.width, textEl.getBBox().width + 16),
-          HOVER_MAX_WIDTH + 16,
-        );
-        const titleBottom = 20 + (lineCount - 1) * lineHeight;
-        const expandedHeight = Math.max(node.height, titleBottom + 20);
-
-        g.select('rect')
-          .attr('width', expandedWidth)
-          .attr('height', expandedHeight);
-
-        // Move badges below the expanded title
-        g.select('foreignObject')
-          .attr('y', titleBottom)
-          .attr('width', expandedWidth - 8);
-
-        const currentZoom = zoomRef.current;
-        const renderedFontPx = 11 * currentZoom;
-        const targetFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-        const hoverScale = Math.max(1.3, targetFontPx / renderedFontPx);
-        g.attr('transform',
-          `translate(${cx}, ${cy}) scale(${hoverScale}) translate(${-cx}, ${-cy}) translate(${node.x}, ${node.y})`
-        );
         setHoveredNodeId(node.id);
       })
       .on('mouseleave', function () {
-        const g = d3.select(this);
-        g.select('.node-title').text(null);
-        g.select('.node-title').text(truncatedTitle);
-        g.select('rect')
-          .attr('width', node.width)
-          .attr('height', node.height);
-        // Restore badge position
-        g.select('foreignObject')
-          .attr('y', 20)
-          .attr('width', NODE_WIDTH - 8);
         if (isAncestorNode) {
-          g.select('rect').style('opacity', null);
-          g.select('.node-title').style('opacity', null);
+          d3.select(this).select('rect').style('opacity', null);
+          d3.select(this).select('.node-title').style('opacity', null);
         }
-        g.attr('transform', `translate(${node.x}, ${node.y})`);
         setHoveredNodeId(null);
       });
 
@@ -828,6 +742,9 @@ export function NodeLinkView() {
       .attr('width', node.width)
       .attr('height', node.height)
       .attr('rx', 4);
+
+    // SVG title element for native tooltip on hover
+    gEl.append('title').text(fullTitle);
 
     gEl.append('text')
       .attr('x', 8)
