@@ -323,12 +323,14 @@ Badges are interactive controls. Hovering a badge previews the related nodes; cl
 
 Hovering a badge shows **preview nodes** — a transient preview of what clicking would produce. Preview nodes are visually distinct (low opacity, transitioning in) and disappear on mouse-out.
 
-**Hover animation model:** After a brief delay (~150ms), compute the expanded layout (with new nodes added) and animate toward it. Nodes appear one at a time or fade in, pushing existing nodes to their new positions. By the end of the animation, the display matches what clicking would produce. Clicking during or after the animation makes the layout persistent. Mouse-out at any point stops and reverses the transition.
+→ **Preferred hover model — animated layout preview:** After a brief delay (~150ms), compute the target layout (with new nodes included) and animate toward it. New nodes fade in at low opacity while existing nodes slide to their new positions. By the end of the animation, the display matches what clicking would produce. Clicking during or after the animation commits the layout (clears preview styling). Mouse-out at any point stops and reverses the transition. This approach is strongly preferred because the user sees exactly what will happen before committing — but feasibility depends on animation performance with ELK re-layout.
+→
+→ **Fallback hover model — overlay/highlight only:** If animated layout preview proves infeasible, fall back to simpler feedback: highlight already-visible related nodes, show a floating count/list overlay near the badge for nodes not yet in the graph. Less informative but much simpler to implement.
 
 | Badge | Hover behavior |
 |-------|---------------|
 | **N↑ parents** | Highlight parent nodes already visible in NL graph (glow/outline). Show parents not yet in NL as preview nodes — positioned by layout but at low opacity. In tree: highlight all instances of parent nodes. |
-| **N↓ children** | In NL: if children are in a cluster, show a floating list overlay (connects to #11 scrollable clusters). If children aren't visible, show as preview nodes. In tree: no-op (expand arrow already handles this). |
+| **N↓ children** | In NL: if children are in a cluster, show a floating list overlay (connects to #11 scrollable clusters). If children aren't visible, show as preview nodes. In tree: hover previews children expansion. |
 | **N▽ descendants** | Show descendant stats as a tooltip: immediate children count, grandchildren count, max depth. Gives a sense of subtree shape without expanding. Heuristics for depth/detail TBD — may require experimentation. |
 
 **Cross-panel coordination:** Badge hover in any panel highlights related nodes in all panels. For example, hovering `2↑` in the tree highlights the parent nodes in NL and scrolls to them in the detail panel's parents list. Needs shared "highlighted nodes" state in GraphProvider.
@@ -353,10 +355,11 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 - `↓` click: Expand cluster if children are clustered; otherwise add children to graph. Animate layout transition.
 - `▽` click: Add descendants to graph (depth TBD). Animate layout transition.
 
-**Detail Panel:**
-- `↑` click on a list item: Expand that item's parents in the graph (don't navigate)
-- `↓` click on a list item: Expand that item's children in the graph (don't navigate)
-- `▽` click on a list item: Expand that item's descendants in the graph (don't navigate)
+→ **Detail Panel:**
+→ - `↑` click on a list item: Expand upward within the detail panel — show the item's parents indented above it (inline expansion, not navigation). How upward indentation works visually is an open question — reverse indentation? separate "ancestors" sub-list?
+→ - `↓` click on a list item: Expand downward within the detail panel — show the item's children indented below it (inline expansion). This is more natural than upward expansion.
+→ - `▽` click on a list item: Expand descendants inline (with depth limit).
+→ - Expanding in the NL graph and/or tree simultaneously may also be useful, but could create visual clutter — needs evaluation.
 
 ##### Visual feedback
 
@@ -383,6 +386,8 @@ All NL graph changes (from badge hover, click, or node selection) should animate
 4. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
 5. **Hover animation timing** — After ~150ms delay, begin animating preview nodes in. Compute target layout, then animate nodes toward it one at a time (or fade in gradually), pushing existing nodes to final positions. On mouse-out, stop and reverse. On click, commit the layout and clear preview styling.
 6. **Descendant hover depth** — What's the right level of detail for the descendant tooltip? Options: (a) just counts per level (children: 8, grandchildren: 42, max depth: 5), (b) mini-tree showing first 2–3 levels with names, (c) just the aggregate stats already on ConceptNode. Needs experimentation.
+→ 7. **Detail panel upward expansion** — How should expanding parents inline look? Reverse indentation is weird. Options: (a) show parents as a sub-list above the item, (b) replace the item with a mini-tree rooted at the parent, (c) just expand the parents section for the whole selected node rather than per-item.
+→ 8. **Animated preview feasibility** — Need to prototype the animated layout preview to evaluate: can ELK re-layout + D3 transition run smoothly during a hover delay? If not, fall back to overlay model.
 
 ##### Implementation considerations
 
@@ -394,6 +399,7 @@ All NL graph changes (from badge hover, click, or node selection) should animate
 - Tree `↑` expand requires walking up all parent chains and expanding each path prefix — similar to `navigateToNode` but for all parents, not just the first
 - Cross-panel coordination needs shared "highlighted nodes" state in GraphProvider
 - URL state needs to encode expansion history (which nodes were manually added)
+→ - Detail panel inline expansion needs a recursive sub-list component that can nest parents/children under any list item
 
 #### Implementation Priority
 
