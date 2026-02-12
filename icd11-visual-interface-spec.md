@@ -283,8 +283,8 @@ Nodes with the most parents in the Foundation. These are the worst cases for anc
 
 Hovering a node in the node-link view should do all of the following:
 
-1. **Tooltip with full title** — shows the untruncated concept name (addresses the "Postprocedural disor..." problem)
-2. **Detail panel preview** — show the hovered node's details (title, definition, metadata) in the detail panel without changing selection
+1. **Tooltip with full title** — shows the untruncated concept name (addresses the "Postprocedural disor..." problem) :green_circle:
+2. **Detail panel preview** — show the hovered node's details (title, definition, metadata) in the detail panel without changing selection; shows "Preview" badge :green_circle:
 3. **Tree highlight** — highlight/scroll-to the hovered node in the tree view (all instances if polyhierarchy)
 4. **Transient neighbors** — temporarily show parents and children not already in the view, with a visual distinction (e.g., dashed border, lower opacity) so they're clearly transient. These disappear on mouse-out.
 
@@ -299,6 +299,22 @@ Click remains "select" — it changes the focus node permanently. Hover is purel
 
 > **[sg]** Prior art for persistent/transitory display in crowded spaces: `../dynamic-model-var-docs/src/components/` (FloatingBoxManager, LayoutManager, TransitoryBox)
 
+#### Cluster Node Behavior
+
+Cluster pseudo-nodes ("7 more children, 194 descendants") represent hidden children. They need their own interaction model:
+
+| Action | Behavior | Status |
+|--------|----------|--------|
+| **Click** | Expand cluster into real nodes in the graph | :green_circle: |
+| **Hover** | Show scrollable list of hidden children (HTML overlay) | :white_circle: |
+| **Hover → click child** | Promote child to real graph node (or select it) | :white_circle: |
+
+The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML list positioned near the cluster node, showing title + badges for each hidden child. Clicking a child in the list could either:
+- **Select it** — changes focus, re-centers the view
+- **Promote it** — adds it as a real node in the current view without changing focus
+
+> **[sg]** This connects to the broader question of how to explore without losing context. Promoting a child keeps the current focus but enriches the view. Selecting navigates away. Both are useful.
+
 #### Implementation Priority
 
 **Phase 1 — High impact, low/medium effort:** :green_circle: Done
@@ -307,7 +323,7 @@ Click remains "select" — it changes the focus node permanently. Hover is purel
 **Phase 2 — Stress test + medium effort features:**
 - #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
 - #6 Area-proportional badges — descendant data already on every node, orthogonal to layout
-- #3 Hover preview — valuable for exploration, moderate complexity; also addresses truncated titles
+- #3 Hover preview — :green_circle: done (tooltip + detail panel preview); tree highlight and transient neighbors still open
 
 **Phase 3 — Depends on Phase 2:**
 - #4+5 Toggle/Close (unified as visibility state) — most useful once clusters and hover exist
