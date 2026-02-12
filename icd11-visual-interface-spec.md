@@ -334,6 +334,11 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 - #11 Scrollable clusters
 - Evaluate elkjs vs igraph vs manual layout once we see real polyhierarchy neighborhoods from #10
 
+**Rendering refinements (backlog):**
+- Selected node vertical positioning — place focus node near top or aligned with tree selection
+- Fit-to-view scale up for small graphs (currently capped at 1, looks tiny when only a few nodes)
+- Hover text wrapping now adapts to available screen space (caps width and scale to avoid clipping), but edge cases may remain for nodes at extreme panel edges
+
 **Defer:**
 - Fisheye — only if the above doesn't suffice
 

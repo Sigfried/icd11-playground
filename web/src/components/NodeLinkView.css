@@ -91,7 +91,7 @@
 }
 
 .node-badge.children {
-  fill: var(--accent-yellow);
+  fill: var(--accent-green);
 }
 
 /* Cluster pseudo-node */

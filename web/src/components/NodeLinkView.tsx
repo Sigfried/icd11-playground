@@ -179,6 +179,47 @@ function buildNeighborhood(
   return { orderedIds, nodeIds, clusterNodes, ancestorIds };
 }
 
+const HOVER_MAX_WIDTH = 220;
+
+/**
+ * Word-wrap text into SVG <tspan> elements that fit within maxWidth.
+ * Returns the number of lines created for rect height calculation.
+ */
+function wrapText(
+  textEl: SVGTextElement,
+  text: string,
+  maxWidth: number,
+): number {
+  const x = textEl.getAttribute('x') ?? '0';
+  const sel = d3.select(textEl);
+  sel.text(null); // clear existing content
+
+  const words = text.split(/\s+/);
+  let line: string[] = [];
+  let lineCount = 0;
+
+  let tspan = sel.append('tspan')
+    .attr('x', x)
+    .attr('dy', lineCount === 0 ? '0' : '1.2em');
+
+  for (const word of words) {
+    line.push(word);
+    tspan.text(line.join(' '));
+    if (tspan.node()!.getComputedTextLength() > maxWidth && line.length > 1) {
+      line.pop();
+      tspan.text(line.join(' '));
+      line = [word];
+      lineCount++;
+      tspan = sel.append('tspan')
+        .attr('x', x)
+        .attr('dy', '1.2em')
+        .text(word);
+    }
+  }
+
+  return lineCount + 1;
+}
+
 export function NodeLinkView() {
   const { selectedNodeId, selectNode, setHoveredNodeId, getNode, getParents, getChildren, getGraph } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -451,28 +492,98 @@ export function NodeLinkView() {
         ? fullTitle.substring(0, 20) + '...'
         : fullTitle;
 
+      // Scale on hover so node title matches the app's base font size
+      const cx = node.x + node.width / 2;
+      const cy = node.y + node.height / 2;
+      const baseTransform = `translate(${node.x}, ${node.y})`;
+
       const nodeG = nodesG.append('g')
         .attr('class', `node-link-node${isFocus ? ' focus' : ''}${isAncestorNode ? ' ancestor' : ''}`)
-        .attr('transform', `translate(${node.x}, ${node.y})`)
+        .attr('transform', baseTransform)
         .style('cursor', 'pointer')
         .on('click', () => selectNode(node.id))
         .on('mouseenter', function () {
-          setHoveredNodeId(node.id);
           const g = d3.select(this);
-          // Raise to top so expanded node draws over siblings
           g.raise();
-          // Measure full title width
-          const titleEl = g.select<SVGTextElement>('.node-title');
-          titleEl.text(fullTitle);
-          const textWidth = titleEl.node()?.getComputedTextLength() ?? 0;
-          const expandedWidth = Math.max(node.width, textWidth + 16);
-          g.select('rect').attr('width', expandedWidth);
+
+          // Hide badges (they'll be repositioned later in the #6 badge rework)
+          g.selectAll('.node-badge').attr('visibility', 'hidden');
+
+          const svgEl = svgRef.current;
+          const container = containerRef.current;
+          if (!svgEl || !container) return;
+
+          const svgZoom = d3.zoomTransform(svgEl).k;
+          const renderedFontPx = 11 * svgZoom;
+          const targetFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+          let hoverScale = Math.max(1, targetFontPx / renderedFontPx);
+
+          // Compute available screen-space around the node, then derive
+          // the max SVG-space width we can use for text wrapping.
+          const containerW = container.clientWidth;
+          const containerH = container.clientHeight;
+          const t = d3.zoomTransform(svgEl);
+          const screenNodeX = t.apply([node.x, node.y])[0];
+          const screenNodeY = t.apply([node.x, node.y])[1];
+
+          // How much screen space is available from the node's left edge
+          // to the container's right edge, divided by the effective scale
+          const availScreenW = containerW - screenNodeX;
+          const availScreenH = containerH - screenNodeY;
+          // Convert to SVG-space width at hover scale
+          const maxSvgW = availScreenW / (svgZoom * hoverScale);
+          const maxSvgH = availScreenH / (svgZoom * hoverScale);
+
+          // Cap hover scale if even the base node size would overflow
+          if (node.width > maxSvgW || node.height > maxSvgH) {
+            const fitScale = Math.min(
+              availScreenW / (node.width * svgZoom),
+              availScreenH / (node.height * svgZoom),
+            );
+            hoverScale = Math.max(1, Math.min(hoverScale, fitScale));
+          }
+
+          // Wrap text to fit in the available space (with padding)
+          const wrapWidth = Math.max(
+            node.width - 16,
+            Math.min(HOVER_MAX_WIDTH, maxSvgW - 16),
+          );
+
+          const textEl = g.select<SVGTextElement>('.node-title').node()!;
+          const lineCount = wrapText(textEl, fullTitle, wrapWidth);
+          const lineHeight = 13;
+          const expandedWidth = Math.min(
+            Math.max(node.width, textEl.getBBox().width + 16),
+            wrapWidth + 16,
+          );
+          const expandedHeight = Math.max(node.height, 20 + lineCount * lineHeight);
+
+          // Re-cap scale if expanded dimensions overflow
+          const finalMaxScale = Math.min(
+            availScreenW / (expandedWidth * svgZoom),
+            availScreenH / (expandedHeight * svgZoom),
+          );
+          hoverScale = Math.min(hoverScale, Math.max(1, finalMaxScale));
+
+          g.select('rect')
+            .attr('width', expandedWidth)
+            .attr('height', expandedHeight);
+
+          g.attr('transform',
+            `translate(${cx}, ${cy}) scale(${hoverScale}) translate(${-cx}, ${-cy}) translate(${node.x}, ${node.y})`
+          );
+          setHoveredNodeId(node.id);
         })
         .on('mouseleave', function () {
-          setHoveredNodeId(null);
           const g = d3.select(this);
+          g.select('.node-title').text(null);
           g.select('.node-title').text(truncatedTitle);
-          g.select('rect').attr('width', node.width);
+          g.select('rect')
+            .attr('width', node.width)
+            .attr('height', node.height);
+          g.selectAll('.node-badge').attr('visibility', 'visible');
+          g.attr('transform', baseTransform);
+          setHoveredNodeId(null);
         });
 
       nodeG.append('rect')
@@ -508,7 +619,8 @@ export function NodeLinkView() {
       }
     });
 
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, setHoveredNodeId, toggleCluster, ancestorNodeIds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId is a stable useState setter
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds]);
 
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {
@@ -550,6 +662,15 @@ export function NodeLinkView() {
     const transform = d3.zoomIdentity.translate(x, y).scale(scale);
     d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.transform, transform);
   }, [layoutNodes]);
+
+  // Re-fit content when the panel is resized (e.g. divider drag, window resize)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => handleFitToView());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [handleFitToView]);
 
   return (
     <>
