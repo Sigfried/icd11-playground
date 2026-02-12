@@ -61,6 +61,7 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
 export function DetailPanel() {
   const {
     selectedNodeId,
+    hoveredNodeId,
     selectNode,
     getNode,
     getParents,
@@ -68,12 +69,15 @@ export function DetailPanel() {
     getDetail,
   } = useGraph();
 
+  const displayNodeId = hoveredNodeId ?? selectedNodeId;
+  const isPreviewing = hoveredNodeId !== null && hoveredNodeId !== selectedNodeId;
+
   const [detail, setDetail] = useState<EntityDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Fetch detail when selection changes
+  // Fetch detail when display node changes
   useEffect(() => {
-    if (!selectedNodeId) {
+    if (!displayNodeId) {
       setDetail(null);
       return;
     }
@@ -81,7 +85,7 @@ export function DetailPanel() {
     let cancelled = false;
     setDetailLoading(true);
 
-    getDetail(selectedNodeId).then(d => {
+    getDetail(displayNodeId).then(d => {
       if (!cancelled) {
         setDetail(d);
         setDetailLoading(false);
@@ -92,9 +96,9 @@ export function DetailPanel() {
     });
 
     return () => { cancelled = true; };
-  }, [selectedNodeId, getDetail]);
+  }, [displayNodeId, getDetail]);
 
-  if (!selectedNodeId) {
+  if (!displayNodeId) {
     return (
       <>
         <div className="panel-header">Details</div>
@@ -107,18 +111,21 @@ export function DetailPanel() {
     );
   }
 
-  const nodeData: ConceptNode | null = getNode(selectedNodeId);
-  const parentNodes = getParents(selectedNodeId);
-  const childNodes = getChildren(selectedNodeId);
+  const nodeData: ConceptNode | null = getNode(displayNodeId);
+  const parentNodes = getParents(displayNodeId);
+  const childNodes = getChildren(displayNodeId);
   const definition = detail?.definition || detail?.longDefinition;
 
   return (
     <>
-      <div className="panel-header">Details</div>
+      <div className="panel-header">
+        Details
+        {isPreviewing && <span className="preview-badge">Preview</span>}
+      </div>
       <div className="panel-content">
         <div className="detail-section">
           <h2 className="detail-title">
-            {nodeData?.title ?? `Entity ${selectedNodeId}`}
+            {nodeData?.title ?? `Entity ${displayNodeId}`}
           </h2>
 
           {detailLoading ? (
@@ -130,7 +137,7 @@ export function DetailPanel() {
           <div className="detail-meta">
             <div className="detail-meta-item">
               <span className="meta-label">ID:</span>
-              <code className="meta-value">{selectedNodeId}</code>
+              <code className="meta-value">{displayNodeId}</code>
             </div>
             {nodeData && (
               <div className="detail-meta-item">
@@ -142,7 +149,7 @@ export function DetailPanel() {
 
           <div className="detail-actions">
             <a
-              href={`https://icd.who.int/browse/2025-01/foundation/en#${selectedNodeId}`}
+              href={`https://icd.who.int/browse/2025-01/foundation/en#${displayNodeId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="detail-link"

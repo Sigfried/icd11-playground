@@ -23,10 +23,12 @@ export function pathKey(path: TreePath): string {
 
 interface GraphContextValue {
   selectedNodeId: string | null;
+  hoveredNodeId: string | null;
   expandedPaths: Set<string>;
   rootId: string | null;
   graphLoading: boolean;
   selectNode: (id: string | null) => void;
+  setHoveredNodeId: (id: string | null) => void;
   toggleExpand: (path: TreePath) => void;
   // Re-export foundationData functions so components use context
   getNode: typeof getNode;
@@ -45,6 +47,7 @@ interface GraphProviderProps {
 
 export function GraphProvider({ children }: GraphProviderProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [rootId, setRootId] = useState<string | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
@@ -166,10 +169,12 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   const value: GraphContextValue = {
     selectedNodeId,
+    hoveredNodeId,
     expandedPaths,
     rootId,
     graphLoading,
     selectNode,
+    setHoveredNodeId,
     toggleExpand,
     getNode,
     getChildren,

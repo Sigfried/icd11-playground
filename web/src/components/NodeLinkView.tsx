@@ -180,7 +180,7 @@ function buildNeighborhood(
 }
 
 export function NodeLinkView() {
-  const { selectedNodeId, selectNode, getNode, getParents, getChildren, getGraph } = useGraph();
+  const { selectedNodeId, selectNode, setHoveredNodeId, getNode, getParents, getChildren, getGraph } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -188,6 +188,7 @@ export function NodeLinkView() {
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   // Reset expanded clusters when selection changes
   useEffect(() => {
@@ -334,6 +335,10 @@ export function NodeLinkView() {
     if (!svgRef.current || !containerRef.current) return;
     if (layoutNodes.length === 0) return;
 
+    // Clear tooltip and hover state when layout changes (old nodes destroyed)
+    setTooltip(null);
+    setHoveredNodeId(null);
+
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
@@ -447,7 +452,20 @@ export function NodeLinkView() {
         .attr('class', `node-link-node${isFocus ? ' focus' : ''}${isAncestorNode ? ' ancestor' : ''}`)
         .attr('transform', `translate(${node.x}, ${node.y})`)
         .style('cursor', 'pointer')
-        .on('click', () => selectNode(node.id));
+        .on('click', () => selectNode(node.id))
+        .on('mouseenter', () => {
+          setHoveredNodeId(node.id);
+          const svgEl = svgRef.current;
+          if (!svgEl) return;
+          const transform = d3.zoomTransform(svgEl);
+          const screenX = transform.applyX(node.x + node.width / 2);
+          const screenY = transform.applyY(node.y);
+          setTooltip({ text: node.data.title, x: screenX, y: screenY - 8 });
+        })
+        .on('mouseleave', () => {
+          setHoveredNodeId(null);
+          setTooltip(null);
+        });
 
       nodeG.append('rect')
         .attr('width', node.width)
@@ -487,7 +505,7 @@ export function NodeLinkView() {
       }
     });
 
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, setHoveredNodeId, toggleCluster, ancestorNodeIds]);
 
   const handleZoomIn = useCallback(() => {
     if (svgRef.current && zoomRef.current) {
@@ -547,6 +565,11 @@ export function NodeLinkView() {
         ) : (
           <div className="placeholder">
             Select a concept in the tree to see its neighborhood
+          </div>
+        )}
+        {tooltip && (
+          <div className="node-link-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+            {tooltip.text}
           </div>
         )}
         {selectedNodeId && layoutNodes.length > 0 && (
