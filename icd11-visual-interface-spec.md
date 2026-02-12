@@ -200,7 +200,7 @@ The core design challenge. High-degree nodes (up to 331 children) make the view 
 |---|----------|--------|-------|
 | 1 | **Ancestors beyond 1-hop** | :green_circle: | Chain to depth 2 (skip root + top-level) |
 | 2 | **Collapsible clusters** | :green_circle: | First 2 children shown, rest grouped as "N more..." |
-| 3 | **Hover shows hidden neighbors** | :white_circle: | Transiently show parents/children not in view |
+| 3 | **Hover behavior** | :white_circle: | [Full spec below](#hover-behavior) — tooltip, detail panel, tree highlight, transient neighbors |
 | 4 | **Right-click/long-click toggle** | :white_circle: | Pin/unpin specific neighbors |
 | 5 | **Close individual nodes** | :white_circle: | X button; closed nodes rejoin cluster count |
 | 6 | **Area-proportional badges** | :white_circle: | Badge area ∝ count; median = default size; separate medians per type |
@@ -278,6 +278,26 @@ Nodes with the most parents in the Foundation. These are the worst cases for anc
 - Truncated titles (all "Postprocedural disor...") make the middle layer indistinguishable — hover/tooltip needed
 - Orthogonal edge routing creates a dense tangle when many edges converge on one node
 - The multi-system syndromes (Dyskeratosis congenita, Kearns-Sayre, Ataxia-telangiectasia) and combination vaccines are natural stress cases
+
+#### Hover Behavior
+
+Hovering a node in the node-link view should do all of the following:
+
+1. **Tooltip with full title** — shows the untruncated concept name (addresses the "Postprocedural disor..." problem)
+2. **Detail panel preview** — show the hovered node's details (title, definition, metadata) in the detail panel without changing selection
+3. **Tree highlight** — highlight/scroll-to the hovered node in the tree view (all instances if polyhierarchy)
+4. **Transient neighbors** — temporarily show parents and children not already in the view, with a visual distinction (e.g., dashed border, lower opacity) so they're clearly transient. These disappear on mouse-out.
+
+On mouse-out: revert detail panel to selected node, remove tree highlight, remove transient neighbors.
+
+Click remains "select" — it changes the focus node permanently. Hover is purely preview/exploration.
+
+**Interaction with other features:**
+- **+Toggle (#4)**: Hover previews → right-click pins a transient neighbor permanently
+- **+Clusters (#2)**: Hover over cluster shows its contents (list overlay or transient expansion)
+- **+Close (#5)**: Hover temporarily reveals closed nodes
+
+> **[sg]** Prior art for persistent/transitory display in crowded spaces: `../dynamic-model-var-docs/src/components/` (FloatingBoxManager, LayoutManager, TransitoryBox)
 
 #### Implementation Priority
 
