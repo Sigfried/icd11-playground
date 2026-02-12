@@ -117,6 +117,15 @@
   font-size: 9px;
 }
 
+/* Preview nodes (badge hover, not yet committed) */
+.node-link-node.preview {
+  opacity: 0.4;
+}
+
+.node-link-node.preview rect {
+  stroke-dasharray: 2 2;
+}
+
 /* Manually added nodes (via badge click) */
 .node-link-node.manual rect {
   stroke-dasharray: 4 2;

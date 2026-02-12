@@ -29,6 +29,7 @@ interface RealLayoutNode {
   height: number;
   data: ConceptNode;
   manual?: boolean;
+  preview?: boolean;
 }
 
 /** Cluster pseudo-node representing grouped children */
@@ -123,6 +124,8 @@ interface Neighborhood {
   ancestorIds: Set<string>;
   /** IDs of manually added nodes */
   manualIds: Set<string>;
+  /** IDs of preview nodes (hover, not yet committed) */
+  previewIds: Set<string>;
 }
 
 function buildNeighborhood(
@@ -132,6 +135,7 @@ function buildNeighborhood(
   getNode: (id: string) => ConceptNode | null,
   expandedClusters: Set<string>,
   manualNodeIds: Set<string>,
+  previewNodeIds: Set<string>,
 ): Neighborhood {
   const orderedIds: string[] = [];
   const nodeIds = new Set<string>();
@@ -196,7 +200,16 @@ function buildNeighborhood(
     }
   }
 
-  return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds };
+  // 7. Preview nodes (hover, not yet committed)
+  const previewIds = new Set<string>();
+  for (const previewId of previewNodeIds) {
+    if (!nodeIds.has(previewId) && getNode(previewId)) {
+      add(previewId);
+      previewIds.add(previewId);
+    }
+  }
+
+  return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds, previewIds };
 }
 
 const HOVER_MAX_WIDTH = 220;
@@ -266,6 +279,10 @@ export function NodeLinkView() {
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [manualLayoutIds, setManualLayoutIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
+  // Preview nodes: shown on badge hover before click commits them
+  const [previewNodeIds, setPreviewNodeIds] = useState<Set<string>>(new Set());
+  const [previewLayoutIds, setPreviewLayoutIds] = useState<Set<string>>(new Set());
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
@@ -326,9 +343,10 @@ export function NodeLinkView() {
     });
   }, []);
 
-  // Reset expanded clusters and zoom when selection changes
+  // Reset expanded clusters, previews, and zoom when selection changes
   useEffect(() => {
     setExpandedClusters(new Set());
+    setPreviewNodeIds(new Set());
     setZoomLevel(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
@@ -404,8 +422,8 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-      const { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds } = buildNeighborhood(
-        selectedNodeId!, getParents, getChildren, getNode, expandedClusters, manualNodeIds,
+      const { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds, previewIds } = buildNeighborhood(
+        selectedNodeId!, getParents, getChildren, getNode, expandedClusters, manualNodeIds, previewNodeIds,
       );
 
       // Build ELK graph — order matters for NODES_AND_EDGES model order
@@ -488,6 +506,7 @@ export function NodeLinkView() {
             height: elkNode.height ?? NODE_HEIGHT,
             data: getNode(elkNode.id)!,
             manual: manualIds.has(elkNode.id),
+            preview: previewIds.has(elkNode.id),
           };
         });
 
@@ -505,13 +524,14 @@ export function NodeLinkView() {
         setLayoutEdges(edges);
         setAncestorNodeIds(ancestorIds);
         setManualLayoutIds(manualIds);
+        setPreviewLayoutIds(previewIds);
       } catch (error) {
         console.error('ELK layout error:', error);
       }
     }
 
     computeLayout();
-  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters, manualNodeIds]);
+  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters, manualNodeIds, previewNodeIds]);
 
   // D3 rendering with data-join (enter/update/exit animation)
   useEffect(() => {
@@ -674,7 +694,7 @@ export function NodeLinkView() {
     isInitialRenderRef.current = false;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId, setHighlightedNodeIds are stable useState setters
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds, manualLayoutIds]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds, manualLayoutIds, previewLayoutIds]);
 
   // Lightweight highlight effect — toggles CSS class without re-rendering
   useEffect(() => {
@@ -723,6 +743,7 @@ export function NodeLinkView() {
     const isFocus = node.id === selectedNodeId;
     const isAncestorNode = ancestorNodeIds.has(node.id);
     const isManual = node.manual;
+    const isPreview = node.preview;
 
     const fullTitle = node.data.title;
     const truncatedTitle = fullTitle.length > 22
@@ -738,6 +759,7 @@ export function NodeLinkView() {
       isFocus && 'focus',
       isAncestorNode && 'ancestor',
       isManual && 'manual',
+      isPreview && 'preview',
     ].filter(Boolean).join(' ');
 
     gEl
@@ -850,6 +872,11 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('click', (e) => {
           e.stopPropagation();
+          // Clear debounce timer — click commits immediately
+          if (previewTimerRef.current) {
+            clearTimeout(previewTimerRef.current);
+            previewTimerRef.current = null;
+          }
           if (isParentBadge) {
             const parentIds = getParents(node.id).map(p => p.id);
             addManualNodes(parentIds);
@@ -867,23 +894,44 @@ export function NodeLinkView() {
             const grandchildIds = childIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
             addManualNodes([...childIds, ...grandchildIds]);
           }
+          // Clear preview since click committed the nodes
+          setPreviewNodeIds(new Set());
         });
 
         badgeEl.addEventListener('mouseenter', () => {
+          // Compute preview IDs for this badge type
+          let ids: string[] = [];
           if (isParentBadge) {
-            setHighlightedNodeIds(new Set(getParents(node.id).map(p => p.id)));
+            ids = getParents(node.id).map(p => p.id);
           } else if (isChildBadge) {
-            setHighlightedNodeIds(new Set(getChildren(node.id).map(c => c.id)));
+            ids = getChildren(node.id).map(c => c.id);
           } else if (isDescBadge) {
-            // Show descendant stats as title tooltip
+            // Show descendant stats tooltip; preview children + grandchildren
             const children = getChildren(node.id);
             const grandchildren = children.flatMap(c => getChildren(c.id));
             badgeEl.title = `${children.length} children, ${grandchildren.length} grandchildren, ${node.data.descendantCount} total descendants`;
+            ids = [...children.map(c => c.id), ...grandchildren.map(gc => gc.id)];
           }
+
+          // Cross-panel highlighting (immediate)
+          setHighlightedNodeIds(new Set(ids));
+
+          // Debounced preview in NL view
+          if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+          previewTimerRef.current = setTimeout(() => {
+            setPreviewNodeIds(new Set(ids));
+            previewTimerRef.current = null;
+          }, 150);
         });
 
         badgeEl.addEventListener('mouseleave', () => {
+          // Cancel pending preview
+          if (previewTimerRef.current) {
+            clearTimeout(previewTimerRef.current);
+            previewTimerRef.current = null;
+          }
           setHighlightedNodeIds(new Set());
+          setPreviewNodeIds(new Set());
         });
       });
     }
