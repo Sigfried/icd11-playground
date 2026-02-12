@@ -754,9 +754,6 @@ export function NodeLinkView() {
           g.select('.node-title').style('opacity', '1');
         }
 
-        // Hide badges during hover expansion
-        g.select('foreignObject').attr('visibility', 'hidden');
-
         // Wrap full title
         const textEl = g.select<SVGTextElement>('.node-title').node()!;
         const lineCount = wrapText(textEl, fullTitle, HOVER_MAX_WIDTH);
@@ -765,11 +762,17 @@ export function NodeLinkView() {
           Math.max(node.width, textEl.getBBox().width + 16),
           HOVER_MAX_WIDTH + 16,
         );
-        const expandedHeight = Math.max(node.height, 20 + lineCount * lineHeight);
+        const titleBottom = 20 + (lineCount - 1) * lineHeight;
+        const expandedHeight = Math.max(node.height, titleBottom + 20);
 
         g.select('rect')
           .attr('width', expandedWidth)
           .attr('height', expandedHeight);
+
+        // Move badges below the expanded title
+        g.select('foreignObject')
+          .attr('y', titleBottom)
+          .attr('width', expandedWidth - 8);
 
         const currentZoom = zoomRef.current;
         const renderedFontPx = 11 * currentZoom;
@@ -787,7 +790,10 @@ export function NodeLinkView() {
         g.select('rect')
           .attr('width', node.width)
           .attr('height', node.height);
-        g.select('foreignObject').attr('visibility', 'visible');
+        // Restore badge position
+        g.select('foreignObject')
+          .attr('y', 20)
+          .attr('width', NODE_WIDTH - 8);
         if (isAncestorNode) {
           g.select('rect').style('opacity', null);
           g.select('.node-title').style('opacity', null);
