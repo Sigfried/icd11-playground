@@ -24,7 +24,7 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 |------|---------|--------|
 | **Tree View** | Expand/collapse, parent/child badges | :green_circle: |
 | | Multi-path highlighting | :green_circle: |
-| | Descendant count + depth badges in tree | :yellow_circle: Data available, display TBD |
+| | Descendant count + depth badges in tree | :green_circle: Font-weight badges |
 | | First-occurring path expansion via URL | :red_circle: Uses arbitrary parent |
 | | Collapse heuristics for large trees | :white_circle: |
 | **Node-Link View** | Hierarchical layout (elkjs), click to navigate | :green_circle: |
@@ -35,7 +35,7 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 | | [Scalability features #3–12](#potential-solutions) | :white_circle: See design section |
 | **Detail Panel** | Title, definition (async), browser link | :green_circle: |
 | | Collapsible parents/children lists | :green_circle: |
-| | Children missing badges | :red_circle: |
+| | Parent/child/descendant badges | :green_circle: |
 | | Paths to root | :yellow_circle: |
 | **Data Layer** | Full graph preload + IndexedDB cache | :green_circle: |
 | | On-demand entity detail fetch | :green_circle: |
@@ -315,6 +315,52 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 
 > **[sg]** This connects to the broader question of how to explore without losing context. Promoting a child keeps the current focus but enriches the view. Selecting navigates away. Both are useful.
 
+#### Badge Interaction: Expand from Any Node
+
+Clicking a badge on any node (in any panel) expands or navigates to show the related nodes. This replaces the current "you have to click the node, then look at the detail panel" flow with a direct "show me the parents/children/descendants" action.
+
+**Core idea:** Badges are buttons. Clicking `3↓` on a node means "show me these 3 children." Where they appear depends on which panel you're in and what direction the badge points.
+
+##### Behavior per badge type
+
+| Badge | Click behavior | Notes |
+|-------|---------------|-------|
+| **N↑ parents** | Show all parents of this node | In tree: expand all parent paths. In NL: add parent nodes to graph. In detail: already shown in parents list. |
+| **N↓ children** | Show children of this node | In tree: expand this node. In NL: add children to graph (or expand cluster). In detail: already shown in children list. |
+| **N▽ descendants** | Open subtree rooted at this node | In tree: expand recursively (with depth limit?). In NL: navigate to this node as focus. In detail: navigate to this node. |
+
+##### Panel-specific behavior
+
+**Tree View:**
+- `↑` badge: Find and expand all paths through this node's parents (expensive for deeply nested polyhierarchy — may need progressive expansion)
+- `↓` badge: Equivalent to clicking the expand arrow — toggles expand for this tree path
+- `▽` badge: Navigate to this node (select it), which enables exploring its subtree
+
+**Node-Link View:**
+- `↑` badge: Add all parents to the NL graph (even those filtered by ANCESTOR_MIN_DEPTH). Re-run layout.
+- `↓` badge: Expand the cluster if children are clustered; otherwise add children to graph. Re-run layout.
+- `▽` badge: Re-focus the NL view on this node (equivalent to clicking it — select it as the new focus)
+
+**Detail Panel:**
+- `↑` badge on a list item: Navigate to that item and show its parents
+- `↓` badge on a list item: Navigate to that item and expand its children
+- `▽` badge on a list item: Navigate to that item
+
+##### Open questions
+
+1. **NL graph growth** — Adding parents/children to the NL graph can make it very large. Should there be a "reset to default neighborhood" button? Should added nodes have a visual distinction (e.g., dashed border) like the transient neighbors concept in hover (#3)?
+2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths could be overwhelming. Progressive expansion (expand one level up, click again for more) might be better.
+3. **Undo** — Should badge-expand be undoable? Or just rely on re-selecting the focus node to reset?
+4. **Badge highlight on hover** — Should hovering a badge preview what will happen (e.g., highlight the nodes that would be added)?
+5. **Interaction with existing expand/collapse** — Tree `↓` badge click = expand toggle. But what if the node is already expanded? Toggle closed? Or no-op?
+
+##### Implementation considerations
+
+- Badge component needs `onClick` wiring (prop already exists but unused)
+- NL view needs ability to add/remove nodes from the neighborhood without changing focus — this is a significant change from the current "rebuild neighborhood from scratch on selection change" model
+- Tree `↑` expand requires walking up all parent chains and expanding each path prefix — similar to `navigateToNode` but for all parents, not just the first
+- May want to debounce or animate layout changes when adding nodes to NL graph
+
 #### Implementation Priority
 
 **Phase 1 — High impact, low/medium effort:** :green_circle: Done
@@ -352,12 +398,12 @@ Shows concept metadata, parents list, children list. Title appears instantly fro
 **Implemented:**
 - Concept title, definition (async), long definition
 - Link to Foundation browser
-- Collapsible parents list with `[N↑]` badges (click to navigate)
-- Collapsible children list (click to navigate)
+- Collapsible parents list with badges (click to navigate)
+- Collapsible children list with badges (click to navigate)
 - Descendant count in metadata
+- Parent/child/descendant badges on all relation list items
 
 **Known issues:**
-- :red_circle: Children list missing `[N↓]` badges (parents have them)
 - Parents/children lists largely duplicate the tree. Should show information not visible in tree.
 
 </details>

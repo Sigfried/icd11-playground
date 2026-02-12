@@ -62,7 +62,7 @@ const NODE_HEIGHT = 40;
 const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
 const MAX_VISIBLE_CHILDREN = 2;
-const SVG_PADDING = 80; // Extra room for hover expansion (scale + wider rect)
+const SVG_PADDING = 30;
 
 const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
 

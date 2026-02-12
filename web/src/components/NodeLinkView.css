@@ -14,6 +14,10 @@
 
 .node-link-svg {
   display: block;
+  overflow: visible;
+  /* Extra scroll room for hover expansion beyond layout bounds */
+  margin-right: 200px;
+  margin-bottom: 100px;
 }
 
 .node-link-node {
@@ -50,6 +54,12 @@
 
 .node-link-node.ancestor text.node-title {
   opacity: 0.7;
+}
+
+/* Remove ancestor transparency on hover */
+.node-link-node.ancestor:hover rect,
+.node-link-node.ancestor:hover text.node-title {
+  opacity: 1;
 }
 
 .node-link-node text.node-title {
