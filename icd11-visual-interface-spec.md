@@ -658,12 +658,13 @@ interface HelpEntry {
   shortcut?: string;       // keyboard shortcut if applicable
 }
 ```
+Source of truth for help content is a **structured markdown file** — easier to read, edit, and include formatting than a TypeScript object. The app parses it at build time (or loads it at runtime) into the `HelpEntry` structure.
 
 ### Open design questions
 
-- **First-visit tour**: Should the app auto-enter help mode (or show a brief tour) on first visit? Or just highlight the `?` button?
-- **Progressive disclosure**: Should help popovers link to more detailed documentation?
-- **Keyboard shortcut cheat sheet**: Separate from help mode — a modal showing all keyboard shortcuts (triggered by `?` key when not in help mode)?
+- **First-visit tour**: On first visit, prompt the user to take a guided tour that walks through key UI elements in sequence. Subsequent visits show the `?` button without prompting.
+- **Progressive disclosure**: Help popovers link to more detailed documentation where appropriate (e.g. "Learn more about polyhierarchy" → a doc page or section).
+- **Keyboard shortcut cheat sheet**: Currently only Ctrl+Z / Ctrl+Shift+Z (undo/redo) and Escape (reset neighborhood). If more shortcuts are added, consider a dedicated shortcut reference modal.
 
 ---
 
