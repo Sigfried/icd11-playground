@@ -557,9 +557,9 @@ interface AppHistory {
 
 ### URL and browser history
 
-- **No URL parameters** during normal use — state lives entirely in localStorage
-- Browser back/forward are not used until the history stack is exhausted (pointer reaches 0 and user hits back → falls through to actual browser navigation, leaving the app)
-- **Share button** generates a URL encoding the current snapshot's `displayedNodeIds` + `focusNodeId` for small sets. On load, this writes to the recipient's localStorage and renders. For large sets: alternative sharing mechanism TBD (deal with later).
+- **No URL parameters** — state lives entirely in IndexedDB
+- **No browser history integration** — the ECT widget (icd11ect) manages its own browser history entries, making pushState/popstate-based undo unreliable. Undo/redo is via Ctrl+Z / Ctrl+Shift+Z keyboard shortcuts and toolbar buttons only.
+- **Share button** (future) generates a URL encoding the current snapshot's `displayedNodeIds` + `focusNodeId` for small sets. On load, this writes to the recipient's IndexedDB and renders. For large sets: alternative sharing mechanism TBD.
 
 ### Session continuity
 
@@ -624,6 +624,46 @@ The current state model uses several separate mechanisms that this unifies:
 Color coding for diffs: green = added, red = removed, yellow = modified, gray = unchanged.
 
 </details>
+
+---
+
+## Help System
+
+This is a complex UI with non-obvious interactions (badge clicks, cluster expansion, keyboard shortcuts, polyhierarchy indicators, etc.). A help system makes these discoverable without cluttering the interface.
+
+### Help mode
+
+A toggle button (e.g. `?` icon in a corner) activates **help mode**. While active:
+
+- **Visual indicator**: the button stays highlighted and the cursor changes (e.g. `help` cursor) so the user knows they're in help mode
+- **Hover/click override**: normal hover/click handlers on interactive elements are replaced with help handlers that show contextual help popovers
+- **Element coverage**: every interactive element gets a help handler — tree nodes, NL nodes, badges, cluster nodes, toolbar buttons, panel headers, detail panel sections, etc.
+- **Help popovers**: positioned near the element, containing:
+  - What the element is
+  - What clicking/hovering/dragging does
+  - Keyboard shortcuts if applicable (e.g. "Ctrl+Z to undo" on the undo button)
+  - Brief context about why (e.g. "Nodes with multiple parents appear at each location in the tree — the count badge shows how many parents exist")
+- **Dismissal**: click anywhere outside a popover, or click the `?` button again to exit help mode
+- **No side effects**: nothing changes in the app state while help mode is active — no selections, no expansions, no history pushes
+
+### Help content strategy
+
+Help text lives in a single data structure (object or map) keyed by element identifier, making it easy to maintain and update. Each entry contains:
+
+```typescript
+interface HelpEntry {
+  title: string;           // e.g. "Parent count badge"
+  description: string;     // what it is
+  interactions: string[];  // what you can do with it
+  shortcut?: string;       // keyboard shortcut if applicable
+}
+```
+
+### Open design questions
+
+- **First-visit tour**: Should the app auto-enter help mode (or show a brief tour) on first visit? Or just highlight the `?` button?
+- **Progressive disclosure**: Should help popovers link to more detailed documentation?
+- **Keyboard shortcut cheat sheet**: Separate from help mode — a modal showing all keyboard shortcuts (triggered by `?` key when not in help mode)?
 
 ---
 

@@ -15,6 +15,8 @@ import './NodeLinkView.css';
  * computing neighborhood per render. Undo/redo via history.
  */
 
+const isMac = navigator.platform.toUpperCase().includes('MAC');
+
 /** Real concept node in the layout */
 interface RealLayoutNode {
   kind: 'node';
@@ -97,7 +99,7 @@ export function NodeLinkView() {
     selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
     displayedNodeIds, expandNodes, resetNeighborhood,
-    historyBack, historyForward, canUndo,
+    historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1009,6 +1011,8 @@ export function NodeLinkView() {
             <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.2, z / 1.3))} title="Zoom out">-</button>
             <button className="zoom-btn" onClick={() => setZoomLevel(1)} title="Reset zoom">&#8634;</button>
             <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">&#8865;</button>
+            <button className="zoom-btn" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>&#8630;</button>
+            <button className="zoom-btn" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>&#8631;</button>
             {canUndo && (
               <button className="zoom-btn reset-btn" onClick={resetNeighborhood} title="Reset neighborhood">&#10005;</button>
             )}
