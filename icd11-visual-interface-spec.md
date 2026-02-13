@@ -319,21 +319,19 @@ The hover overlay is related to #11 (Scrollable Clusters) — a lightweight HTML
 
 Badges are interactive controls. Hovering a badge previews the related nodes; clicking makes that preview persistent and allows further interaction. Badge interactions only add/expand nodes in the current view — they never change the selected (focus) node. Node clicking is for navigation; badge clicking is for expansion.
 
-##### Badge hover → preview nodes
+##### Badge hover → overlay + cross-panel highlighting
 
-Hovering a badge shows **preview nodes** — a transient preview of what clicking would produce. Preview nodes are visually distinct (low opacity, transitioning in) and disappear on mouse-out.
+Hovering a badge highlights already-visible related nodes across all panels (cyan glow/outline) and shows a **floating interactive overlay** near the badge listing nodes not yet in the graph. The overlay allows selective expansion — click individual items to add just that node, or "Add all" to add everything. The overlay stays open when the mouse moves into it (hover-intent pattern with ~150ms delay).
 
-**Preferred hover model — animated layout preview:** After a brief delay (~150ms), compute the target layout (with new nodes included) and animate toward it. New nodes fade in at low opacity while existing nodes slide to their new positions. By the end of the animation, the display matches what clicking would produce. Clicking during or after the animation commits the layout (clears preview styling). Mouse-out at any point stops and reverses the transition. This approach is strongly preferred because the user sees exactly what will happen before committing — but feasibility depends on animation performance with ELK re-layout.
-
-**Fallback hover model — overlay/highlight only:** If animated layout preview proves infeasible, fall back to simpler feedback: highlight already-visible related nodes, show a floating count/list overlay near the badge for nodes not yet in the graph. Less informative but much simpler to implement.
+> **Design note:** Animated layout preview (computing ELK layout on hover and animating nodes in/out) was prototyped but proved infeasible — ELK re-layout repositions existing nodes, moving the hovered badge out from under the cursor and causing flicker loops. Anchoring the hovered node at its pre-layout position prevented flicker but created disjointed layouts. The overlay model is simpler and avoids layout disruption entirely.
 
 | Badge | Hover behavior |
 |-------|---------------|
-| **N↑ parents** | Highlight parent nodes already visible in NL graph (glow/outline). Show parents not yet in NL as preview nodes — positioned by layout but at low opacity. In tree: highlight all instances of parent nodes. |
-| **N↓ children** | In NL: if children are in a cluster, show a floating list overlay (connects to #11 scrollable clusters). If children aren't visible, show as preview nodes. In tree: hover previews children expansion. |
-| **N▽ descendants** | Show descendant stats as a tooltip: immediate children count, grandchildren count, max depth. Gives a sense of subtree shape without expanding. Heuristics for depth/detail TBD — may require experimentation. |
+| **N↑ parents** | Highlight parent nodes already visible in NL graph (glow/outline). Show interactive overlay listing parents not yet visible — click to add individually. In tree: highlight all instances of parent nodes. |
+| **N↓ children** | Highlight visible children. Show interactive overlay listing children not yet visible. Cluster nodes use the same overlay — hover shows hidden children, click to add individually or expand all. In tree: hover highlights children. |
+| **N▽ descendants** | Show descendant stats (children count, grandchildren count, total descendants). Overlay lists children + grandchildren for selective expansion. |
 
-**Cross-panel coordination:** Badge hover in any panel highlights related nodes in all panels. For example, hovering `2↑` in the tree highlights the parent nodes in NL and scrolls to them in the detail panel's parents list. Needs shared "highlighted nodes" state in GraphProvider.
+**Cross-panel coordination:** Badge hover in any panel highlights related nodes in all panels. For example, hovering `2↑` in the tree highlights the parent nodes in NL and scrolls to them in the detail panel's parents list. Uses shared `highlightedNodeIds` state in GraphProvider.
 
 ##### Badge click → expand
 
@@ -366,40 +364,44 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 - **Hover cursor:** pointer on badge hover
 - **Hover highlight:** badge background lightens or glows to indicate interactivity
 - **Active state:** brief press feedback on click
-- **Preview nodes** (hover): low opacity, transitioning in, visually distinct from permanent nodes. Clicking clears the distinct style.
-- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions.
+- **Overlay** (hover): floating list near the badge showing nodes not yet visible, with per-item click to add selectively
+- **Manually added nodes:** dashed border to distinguish from default neighborhood nodes
+- **Highlighted nodes** (cross-panel): cyan glow/outline on nodes related to the hovered badge
+- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions. Ctrl+Z undoes the last expansion; Escape resets entirely.
 
 ##### Layout animation
 
-All NL graph changes (from badge hover, click, or node selection) should animate to avoid disorienting the user. Existing nodes slide to new positions; new nodes fade in at their target positions. This means:
+All NL graph changes (from badge click or node selection) animate via D3 data-join (enter/update/exit):
 - ELK layout is computed for the new node set
-- D3 transitions interpolate from old positions to new positions
-- Preview nodes start at 0 opacity and animate to ~0.3 (hover) or 1.0 (click)
-- May need to hold two layouts in memory during transitions (current + target)
-- Layout computation hasn't shown noticeable lag so far, but should profile with larger neighborhoods
+- D3 transitions interpolate from old positions to new positions (position cache tracks last known coordinates)
+- Entering nodes scale in from a dot at their target position
+- Exiting nodes scale down and fade out
+- Edges animate alongside their source/target nodes
+- Layout computation is fast enough for typical 10-50 node neighborhoods
+- Hover does **not** trigger layout changes — only highlighting and overlay (see design note above)
 
 ##### Open questions
 
-1. **Reset button** — Yes, include a "reset to default neighborhood" button. May also want to visually distinguish manually-added nodes (dashed border?) — will need to evaluate visually.
-2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Progressive expansion (one level up per click) is probably better.
-3. **Undo** — Undo (Ctrl+Z or button) should step back one expansion in history. Expansion state should be saved to URL for shareability. Open question: what happens to expansion state when selecting a new node? First pass: reset to default neighborhood on new selection. User testing needed to evaluate whether this feels right or if people want expansion state preserved.
+1. ~~**Reset button**~~ :green_circle: Resolved: reset button included, manually-added nodes have dashed border, Ctrl+Z undoes, Escape resets.
+2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Current implementation expands all at once — may need progressive expansion (one level up per click) after user testing.
+3. ~~**Undo**~~ :green_circle: Resolved: Ctrl+Z steps back one expansion, Escape resets. Expansion state saved to URL (`?expanded=id1,id2`). Resets on new node selection.
 4. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
-5. **Hover animation timing** — After ~150ms delay, begin animating preview nodes in. Compute target layout, then animate nodes toward it one at a time (or fade in gradually), pushing existing nodes to final positions. On mouse-out, stop and reverse. On click, commit the layout and clear preview styling.
-6. **Descendant hover depth** — What's the right level of detail for the descendant tooltip? Options: (a) just counts per level (children: 8, grandchildren: 42, max depth: 5), (b) mini-tree showing first 2–3 levels with names, (c) just the aggregate stats already on ConceptNode. Needs experimentation.
-7. **Detail panel upward expansion** — How should expanding parents inline look? Reverse indentation is weird. Options: (a) show parents as a sub-list above the item, (b) replace the item with a mini-tree rooted at the parent, (c) just expand the parents section for the whole selected node rather than per-item.
-8. **Animated preview feasibility** — Need to prototype the animated layout preview to evaluate: can ELK re-layout + D3 transition run smoothly during a hover delay? If not, fall back to overlay model.
+5. ~~**Hover animation timing**~~ :green_circle: Resolved: animated layout preview proved infeasible (see design note above). Using overlay/highlight model instead.
+6. **Descendant hover depth** — Currently showing children + grandchildren in overlay with total count. May need experimentation for deeper trees.
+7. ~~**Detail panel upward expansion**~~ :green_circle: Resolved: parents shown as indented sub-list above the item with cyan left border.
+8. ~~**Animated preview feasibility**~~ :green_circle: Resolved: infeasible due to layout repositioning causing flicker. Using overlay model.
 
-##### Implementation considerations
+##### Implementation status
 
-- Badge component needs `onClick` and `onMouseEnter`/`onMouseLeave` wiring
-- NL view needs ability to **incrementally add/remove nodes** from the neighborhood without changing focus — significant architectural change from the current "rebuild neighborhood from scratch on selection change" model
-- Need to track which nodes were manually added vs. part of default neighborhood (for reset and visual distinction)
-- Preview node rendering: add nodes to layout with a `preview` flag, render with distinct style, promote to permanent on click or remove on mouse-out
-- May hold two ELK layouts in memory simultaneously during animated transitions (current + target)
-- Tree `↑` expand requires walking up all parent chains and expanding each path prefix — similar to `navigateToNode` but for all parents, not just the first
-- Cross-panel coordination needs shared "highlighted nodes" state in GraphProvider
-- URL state needs to encode expansion history (which nodes were manually added)
-- Detail panel inline expansion needs a recursive sub-list component that can nest parents/children under any list item
+- :green_circle: Badge component has `onClick`, `onMouseEnter`/`onMouseLeave` wiring
+- :green_circle: NL view incrementally adds/removes nodes via `manualNodeIds` in GraphProvider — D3 data-join handles enter/update/exit animation
+- :green_circle: Manually added nodes tracked separately from default neighborhood (dashed border, reset button, undo history)
+- :green_circle: Tree `↑` expand walks up all parent chains and expands each path prefix via `expandParentPaths`
+- :green_circle: Cross-panel coordination via shared `highlightedNodeIds` state in GraphProvider
+- :green_circle: URL state encodes expansion history (`?node=ID&expanded=id1,id2,id3`)
+- :green_circle: Detail panel inline expansion via `RelationListItem` component with expandable sub-lists
+- :yellow_circle: NL badge hover overlay needs to be made interactive (per-item click to add selectively)
+- :yellow_circle: Cluster nodes should reuse the same interactive overlay
 
 #### Implementation Priority
 
@@ -409,11 +411,11 @@ All NL graph changes (from badge hover, click, or node selection) should animate
 **Phase 2 — Stress test + medium effort features:**
 - #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
 - #6 Area-proportional badges — :green_circle: done: shared Badge component with per-type count→font-weight bins, consistent colors (parents=cyan, children=green, descendants=orange) across all three panels, aligned columns in tree view, foreignObject in NL SVG
-- #3 Hover preview — :yellow_circle: partial: in-place node expansion with text wrapping, detail panel preview; tree highlight and transient neighbors still open
+- #3 Badge interactions — :green_circle: done: overlay/highlight hover model (animated preview infeasible), badge click expands in all panels, cross-panel highlighting, undo/reset, URL state. Interactive overlay for selective expansion in progress.
 - #12 Full-width bottom panel — :green_circle: done: two switchable layouts, RIGHT direction, viewBox zoom, scroll-to-focus, zoom controls
 
 **Phase 3 — Next up:**
-- #11 Scrollable clusters — HTML overlay on cluster hover, replace current click-to-expand
+- #11 Scrollable clusters — unify with badge interactive overlay: cluster hover shows same overlay listing hidden children for selective expansion
 - #3 Tree highlight — highlight hovered node in tree view
 - #4+5 Toggle/Close (unified as visibility state)
 - #7 Staggered levels — evaluate after clusters; may require replacing elkjs
@@ -423,7 +425,7 @@ All NL graph changes (from badge hover, click, or node selection) should animate
 - igraph supports forced vertical layering (nodes assigned to specific layers)
 
 **Rendering refinements (backlog):**
-- NL hover positioning refactor — hover expansion is rightward-biased (scales from top-left); SVG overflow:visible + margins is a workaround not a proper fix; consider anchoring expansion from center, or using a portal/overlay outside SVG for hover content
+- ~~NL hover positioning refactor~~ — resolved: removed in-place NL hover expansion entirely; full title shown via native SVG `<title>` tooltip
 - Selected node vertical positioning — place focus node near top or aligned with tree selection
 
 **Defer:**
