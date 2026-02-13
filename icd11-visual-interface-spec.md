@@ -374,7 +374,7 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 - **Expanded nodes:** dashed border to distinguish from initial neighborhood nodes
 - **Highlighted nodes** (cross-panel): cyan glow/outline on nodes related to the hovered badge
 - **Node removal:** `×` button on hover for every node. Clicking removes the node and connectivity-prunes disconnected subgraphs.
-- **"Reset neighborhood" button:** returns NL graph to the initial neighborhood for the selected node. Undo (Ctrl+Z / back) steps through history; Escape dismisses tooltip.
+- **Reset neighborhood:** click focus node to return NL graph to initial neighborhood (pushed as new snapshot). Undo (Ctrl+Z / back) steps through history.
 
 ##### Layout animation
 
@@ -429,9 +429,10 @@ Example: focus is "Acute and transient psychotic disorders", displayed ancestors
 **Implementation notes:**
 - The displayed node set is the sole source of truth — see [History & State Model](#history--state-model)
 - No distinction between "default" and "manually added" nodes for removal purposes
-- No `excludedNodeIds` or refcounting needed — connectivity check on removal is sufficient
+- No `excludedNodeIds` or refcounting needed — connectivity pruning via NL subgraph (see [implementation notes](#implementation-notes))
 - `buildNeighborhood` becomes `buildInitialNeighborhood` — runs once when a focus node is selected to produce the first snapshot, not recomputed on every render
 - Each removal pushes a new snapshot to the history stack
+- The full 69k-node graphology instance is never mutated — removal operates on the NL subgraph
 
 **Edge cases:**
 - Node reachable via two paths: survives removal of one path's intermediary because it stays connected to focus through the other
@@ -585,12 +586,15 @@ The current state model uses several separate mechanisms that this unifies:
 | `buildNeighborhood` (per-render) | `buildInitialNeighborhood` (once per focus selection) |
 | `useUrlState` / `?node=ID&expanded=...` | No URL params; state in localStorage |
 | Ctrl+Z undo (per-type) | Unified back through history array |
-| Escape = reset | Back to initial snapshot for current focus node (or just undo repeatedly) |
+| Click focus node to reset | Click focus node → `buildInitialNeighborhood` pushed as new snapshot |
 
 ### Implementation notes
 
 - Snapshot `displayedNodeIds` is typically 10–50 IDs. Even with hundreds of snapshots, localStorage usage is modest.
-- Connectivity pruning on removal: build adjacency from `displayedNodeIds` + edges from the full graphology instance, BFS/DFS from focus node, keep only visited nodes. Treat graph as undirected for this check.
+- **NL subgraph:** Maintain a graphology subgraph derived from `displayedNodeIds` on each change (cheap for 10–50 nodes). The full 69k-node graph is read-only after `initGraph()` — never mutated. The subgraph is a disposable view for NL rendering.
+  - Replaces the manual nested-loop edge extraction in `computeLayout` — use `subgraph.forEachEdge()` instead
+  - Connectivity pruning on removal: `subgraph.dropNode(id)`, then `connectedComponents(subgraph)` (from `graphology-components`; treats directed edges as undirected), drop any component not containing focus node
+  - Available for future graph algorithms (shortest path, centrality, etc.) on the visible neighborhood
 - `buildInitialNeighborhood` is the current `buildNeighborhood` logic (ancestor DAG + children + clusters) but only runs once to produce the first snapshot when a focus node is selected.
 - Tree view state (expand/collapse) could also be tracked in snapshots if we want unified undo across panels. For now, tree state is separate.
 
