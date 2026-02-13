@@ -430,6 +430,8 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 
 **Defer:**
 - Fisheye — only if the above doesn't suffice
+- Fit-to-view cycling: total fit → width fit → height fit (button in NL controls)
+- Global undo button in app title bar — undo across node selections, tree expand/collapse, and NL manual expansions. Needs a unified action history stack in GraphProvider rather than the current per-type history.
 
 ### 3. Detail Panel
 
