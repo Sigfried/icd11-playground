@@ -35,6 +35,7 @@ interface GraphContextValue {
   // NL view: manually added nodes beyond default neighborhood
   manualNodeIds: Set<string>;
   addManualNodes: (ids: string[]) => void;
+  removeManualNode: (id: string) => void;
   undoManualNodes: () => void;
   resetManualNodes: () => void;
   // Cross-panel badge hover highlighting
@@ -84,6 +85,16 @@ export function GraphProvider({ children }: GraphProviderProps) {
       manualHistoryRef.current.push(new Set(prev));
       const next = new Set(prev);
       for (const id of ids) next.add(id);
+      return next;
+    });
+  }, []);
+
+  const removeManualNode = useCallback((id: string) => {
+    setManualNodeIds(prev => {
+      if (!prev.has(id)) return prev;
+      manualHistoryRef.current.push(new Set(prev));
+      const next = new Set(prev);
+      next.delete(id);
       return next;
     });
   }, []);
@@ -269,6 +280,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     expandParentPaths,
     manualNodeIds,
     addManualNodes,
+    removeManualNode,
     undoManualNodes,
     resetManualNodes,
     highlightedNodeIds,
@@ -281,7 +293,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     getGraph,
   }), [
     selectedNodeId, hoveredNodeId, expandedPaths, rootId, graphLoading,
-    selectNode, toggleExpand, expandParentPaths, manualNodeIds, addManualNodes, undoManualNodes, resetManualNodes,
+    selectNode, toggleExpand, expandParentPaths, manualNodeIds, addManualNodes, removeManualNode, undoManualNodes, resetManualNodes,
     highlightedNodeIds,
   ]);
 

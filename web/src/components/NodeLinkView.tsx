@@ -707,6 +707,159 @@ export function NodeLinkView() {
       .text(`${node.totalDescendants.toLocaleString()} descendants`);
   }
 
+  /** Compute descendant levels (BFS) up to a depth limit */
+  function computeDescendantLevels(
+    rootId: string,
+    getChildrenFn: (id: string) => ConceptNode[],
+    maxDepth = 5,
+  ): Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }> {
+    const labels = ['Children', 'Grandchildren', 'Great-grandchildren'];
+    const levels: Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }> = [];
+    let currentIds = [rootId];
+    let cumulativeCount = 0;
+    const seen = new Set<string>([rootId]);
+
+    for (let depth = 0; depth < maxDepth; depth++) {
+      const nextNodes: ConceptNode[] = [];
+      for (const id of currentIds) {
+        for (const child of getChildrenFn(id)) {
+          if (!seen.has(child.id)) {
+            seen.add(child.id);
+            nextNodes.push(child);
+          }
+        }
+      }
+      if (nextNodes.length === 0) break;
+      cumulativeCount += nextNodes.length;
+      const label = depth < labels.length ? labels[depth] : `Depth ${depth + 1}`;
+      levels.push({
+        label,
+        nodes: nextNodes,
+        ids: nextNodes.map(n => n.id),
+        cumulative: cumulativeCount,
+      });
+      currentIds = nextNodes.map(n => n.id);
+    }
+    return levels;
+  }
+
+  /**
+   * Position a tooltip relative to an anchor element within the scroll container.
+   * Horizontal: prefer right of anchor, flip left if overflow.
+   * Vertical: above 35% → align top, below 65% → align bottom, else center.
+   * Clamp to container bounds.
+   * TODO: consider a tooltip/overlay positioning package if this gets more complex.
+   */
+  function positionTooltip(
+    tip: HTMLElement,
+    anchorEl: HTMLElement | SVGElement,
+    container: HTMLElement,
+  ) {
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+
+    // Horizontal: prefer right of anchor, flip left if overflow
+    let left = anchorRect.right - containerRect.left + container.scrollLeft + 8;
+    if (anchorRect.right + tipRect.width + 12 > containerRect.right) {
+      left = anchorRect.left - containerRect.left + container.scrollLeft - tipRect.width - 8;
+    }
+
+    // Vertical: zone-based — where is the anchor within the visible panel?
+    const anchorCenterY = (anchorRect.top + anchorRect.bottom) / 2;
+    const panelRelative = (anchorCenterY - containerRect.top) / containerRect.height;
+
+    let top: number;
+    if (panelRelative < 0.35) {
+      // Anchor near top: align tooltip top with anchor top
+      top = anchorRect.top - containerRect.top + container.scrollTop;
+    } else if (panelRelative > 0.65) {
+      // Anchor near bottom: align tooltip bottom with anchor bottom
+      top = anchorRect.bottom - containerRect.top + container.scrollTop - tipRect.height;
+    } else {
+      // Middle zone: center tooltip vertically on anchor
+      top = anchorCenterY - containerRect.top + container.scrollTop - tipRect.height / 2;
+    }
+
+    // Clamp: don't overflow container top or bottom (in scroll-space)
+    const minTop = container.scrollTop;
+    const maxTop = container.scrollTop + containerRect.height - tipRect.height;
+    top = Math.max(minTop, Math.min(maxTop, top));
+
+    tip.style.left = `${Math.max(0, left)}px`;
+    tip.style.top = `${Math.max(0, top)}px`;
+  }
+
+  /** Show descendant overlay with level-by-level breakdown */
+  function showDescendantTooltip(
+    anchorEl: HTMLElement,
+    totalDescendants: number,
+    levels: Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }>,
+    visibleIds: Set<string>,
+  ) {
+    hideTooltip(true);
+    const container = containerRef.current;
+    if (!container) return;
+
+    const tip = document.createElement('div');
+    tip.className = 'badge-tooltip';
+    tip.addEventListener('mouseenter', () => cancelHideTimer());
+    tip.addEventListener('mouseleave', () => scheduleHide());
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'badge-tooltip-header';
+    header.textContent = `Descendants (${totalDescendants.toLocaleString()} total)`;
+    tip.appendChild(header);
+
+    // Level-by-level sections
+    for (const level of levels) {
+      const section = document.createElement('div');
+      section.className = 'badge-tooltip-level';
+
+      const levelHeader = document.createElement('div');
+      levelHeader.className = 'badge-tooltip-level-header';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = `${level.label} (${level.nodes.length.toLocaleString()})`;
+      levelHeader.appendChild(labelSpan);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'badge-tooltip-level-btn';
+      const notVisibleIds = level.ids.filter(id => !visibleIds.has(id));
+      addBtn.textContent = `+${notVisibleIds.length.toLocaleString()}`;
+      addBtn.title = `Add ${notVisibleIds.length.toLocaleString()} ${level.label.toLowerCase()} (${level.cumulative.toLocaleString()} cumulative)`;
+      addBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addManualNodes(notVisibleIds);
+        hideTooltip(true);
+      });
+      levelHeader.appendChild(addBtn);
+
+      section.appendChild(levelHeader);
+      tip.appendChild(section);
+    }
+
+    if (levels.length > 0) {
+      const allIds = levels.flatMap(l => l.ids).filter(id => !visibleIds.has(id));
+      if (allIds.length > 0) {
+        const addAllBtn = document.createElement('button');
+        addAllBtn.className = 'badge-tooltip-add-all';
+        addAllBtn.textContent = `Add all ${allIds.length.toLocaleString()} through depth ${levels.length}`;
+        addAllBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addManualNodes(allIds);
+          hideTooltip(true);
+        });
+        tip.appendChild(addAllBtn);
+      }
+    }
+
+    container.appendChild(tip);
+    positionTooltip(tip, anchorEl, container);
+    tooltipRef.current = tip;
+  }
+
   /** Show interactive overlay near an element listing related nodes */
   function showTooltip(
     anchorEl: HTMLElement | SVGElement,
@@ -774,13 +927,8 @@ export function NodeLinkView() {
     }
     tip.appendChild(list);
 
-    // Position near the anchor element
-    const anchorRect = anchorEl.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    tip.style.left = `${anchorRect.right - containerRect.left + container.scrollLeft + 8}px`;
-    tip.style.top = `${anchorRect.top - containerRect.top + container.scrollTop - 4}px`;
-
     container.appendChild(tip);
+    positionTooltip(tip, anchorEl, container);
     tooltipRef.current = tip;
   }
 
@@ -927,7 +1075,20 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('mouseenter', () => {
           cancelHideTimer();
-          // Compute related nodes for highlighting and tooltip
+
+          if (isDescBadge) {
+            // Descendant badge: level-by-level breakdown
+            const levels = computeDescendantLevels(node.id, getChildren);
+            const allIds = levels.flatMap(l => l.ids);
+            setHighlightedNodeIds(new Set(allIds));
+            showDescendantTooltip(
+              badgeEl, node.data.descendantCount, levels,
+              new Set(layoutNodes.map(n => n.id)),
+            );
+            return;
+          }
+
+          // Parents or children: flat list
           let relatedNodes: ConceptNode[] = [];
           let tooltipLabel = '';
           if (isParentBadge) {
@@ -936,17 +1097,10 @@ export function NodeLinkView() {
           } else if (isChildBadge) {
             relatedNodes = getChildren(node.id);
             tooltipLabel = 'Children';
-          } else if (isDescBadge) {
-            const children = getChildren(node.id);
-            const grandchildren = children.flatMap(c => getChildren(c.id));
-            relatedNodes = [...children, ...grandchildren];
-            tooltipLabel = `Descendants (${node.data.descendantCount} total)`;
           }
 
-          // Cross-panel highlighting
           setHighlightedNodeIds(new Set(relatedNodes.map(n => n.id)));
 
-          // Show interactive overlay for nodes not yet visible
           const visibleIds = new Set(layoutNodes.map(n => n.id));
           const notVisible = relatedNodes.filter(n => !visibleIds.has(n.id));
           if (notVisible.length > 0) {

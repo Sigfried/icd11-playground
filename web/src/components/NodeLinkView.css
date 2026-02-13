@@ -238,3 +238,38 @@
   background: var(--bg-tertiary);
   color: var(--accent-cyan);
 }
+
+/* Descendant tooltip: level-by-level sections */
+.badge-tooltip-level {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.badge-tooltip-level:last-of-type {
+  border-bottom: none;
+}
+
+.badge-tooltip-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  padding: 2px 0;
+}
+
+.badge-tooltip-level-btn {
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  background: rgba(86, 156, 214, 0.15);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.badge-tooltip-level-btn:hover {
+  background: rgba(86, 156, 214, 0.3);
+  color: var(--text-primary);
+}
