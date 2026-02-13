@@ -228,6 +228,8 @@ export function NodeLinkView() {
   // Tooltip for badge hover overlay (fallback model: no layout on hover)
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Suppress tooltip re-creation after ESC (cleared on next mouseleave)
+  const tooltipSuppressedRef = useRef(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
@@ -336,6 +338,9 @@ export function NodeLinkView() {
         e.preventDefault();
         undoManualNodes();
       } else if (e.key === 'Escape') {
+        hideTooltip(true);
+        tooltipSuppressedRef.current = true;
+        setHighlightedNodeIds(new Set());
         resetManualNodes();
       }
     };
@@ -662,6 +667,7 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => toggleCluster(node.id))
       .on('mouseenter', function () {
+        if (tooltipSuppressedRef.current) return;
         cancelHideTimer();
         // Cross-panel highlighting for cluster children
         setHighlightedNodeIds(new Set(node.childIds));
@@ -681,6 +687,7 @@ export function NodeLinkView() {
         }
       })
       .on('mouseleave', () => {
+        tooltipSuppressedRef.current = false;
         scheduleHide();
         if (!tooltipRef.current) {
           setHighlightedNodeIds(new Set());
@@ -1074,6 +1081,7 @@ export function NodeLinkView() {
         });
 
         badgeEl.addEventListener('mouseenter', () => {
+          if (tooltipSuppressedRef.current) return;
           cancelHideTimer();
 
           if (isDescBadge) {
@@ -1114,6 +1122,7 @@ export function NodeLinkView() {
         });
 
         badgeEl.addEventListener('mouseleave', () => {
+          tooltipSuppressedRef.current = false;
           scheduleHide();
           // Delay highlight clear too — tooltip might keep them alive
           if (!tooltipRef.current) {
