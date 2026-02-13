@@ -380,6 +380,54 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 - Layout computation is fast enough for typical 10-50 node neighborhoods
 - Hover does **not** trigger layout changes — only highlighting and overlay (see design note above)
 
+##### Zoom and fit-to-view
+
+:white_circle: Not started
+
+Current zoom controls: `+` / `−` (step zoom), `↺` (reset to 1×), `⊡` (fit all content), Ctrl+wheel (smooth zoom). Native scroll handles panning.
+
+**Fit-to-view cycling:** The `⊡` button currently does a single fit (scale to show all content). It should cycle through three modes on repeated clicks:
+
+1. **Fit all** — scale so entire graph fits in the viewport (current behavior). Good for orientation but may make nodes too small on wide/tall graphs.
+2. **Fit width** — scale so the graph's horizontal extent fills the viewport width. Vertical overflow scrolls. Good for RIGHT-direction layouts where horizontal layers are the primary structure.
+3. **Fit height** — scale so the graph's vertical extent fills the viewport height. Horizontal overflow scrolls. Good for tall ancestor chains.
+
+Visual indicator: the button icon or tooltip should reflect the current/next mode. Could cycle the icon: `⊡` → `↔` → `↕` → `⊡`, or show a small label on hover.
+
+Reset (`↺`) always returns to 1× zoom regardless of fit mode.
+
+##### Node removal
+
+:white_circle: Not started — needs design discussion
+
+Nodes in the NL view should be removable. An `×` button appears on hover for every node (including the focus node). The removal model is **reachability-based pruning**, not an exclude list.
+
+**Removing a non-focus node X:**
+1. Remove X from the graph
+2. Walk edges away from the focus node starting from X (i.e., downstream in whatever direction X sits relative to focus)
+3. Remove every node reached in that walk **unless** it is still reachable from the focus node through some other path that doesn't go through X
+4. The result: X and its "dependent subtree" disappear, but nodes connected through multiple paths survive
+
+**Removing the focus node:**
+- Equivalent to resetting the NL neighborhood (same as clicking the panel title or the reset button)
+- May be extended later if there's useful state worth preserving (e.g., keeping manual expansions and just deselecting)
+
+**Badge-triggered removal:**
+- Red badge or indicator on groups of nodes added by a badge expansion
+- Clicking removes the entry-point node + prunes downstream — same algorithm as single-node removal, just triggered from the badge context
+- For parent/child/descendant groups, this removes the subset that was added by that specific expansion
+
+**Implementation notes:**
+- `manualNodeIds` is the source of truth for what was explicitly expanded
+- `buildNeighborhood` determines reachability: only include a manual node if it connects to an already-included node via an edge in the graph
+- No separate `excludedNodeIds` needed — removal just deletes from `manualNodeIds` and lets reachability handle the rest
+- `removeManualNode` already exists in GraphProvider (with undo history)
+
+**Edge cases:**
+- Node A added by both expansion-1 and expansion-2: removing expansion-1's entry point doesn't remove A because it's still reachable through expansion-2's path
+- Ancestor nodes (part of default neighborhood): removing them requires either the exclude-list approach or changing `buildNeighborhood` to support "pinned" exclusions. Needs design — may be simplest to only allow removal of manual nodes initially.
+- Deep pruning could be expensive for large expansions — may need to debounce or batch
+
 ##### Open questions
 
 1. ~~**Reset button**~~ :green_circle: Resolved: reset button included, manually-added nodes have dashed border, Ctrl+Z undoes, Escape resets.
@@ -433,8 +481,10 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 
 **Defer:**
 - Fisheye — only if the above doesn't suffice
-- Fit-to-view cycling: total fit → width fit → height fit (button in NL controls)
+- Fit-to-view cycling — see [Zoom and fit-to-view](#zoom-and-fit-to-view) section above
+- Node removal — see [Node removal](#node-removal) section above
 - Global undo button in app title bar — undo across node selections, tree expand/collapse, and NL manual expansions. Needs a unified action history stack in GraphProvider rather than the current per-type history.
+- Tooltip/overlay positioning package — current `positionTooltip()` helper is adequate but has a TODO to consider a package if positioning gets more complex
 
 ### 3. Detail Panel
 
