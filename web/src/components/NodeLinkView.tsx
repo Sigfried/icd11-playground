@@ -242,6 +242,8 @@ export function NodeLinkView() {
   const [previewNodeIds, setPreviewNodeIds] = useState<Set<string>>(new Set());
   const [previewLayoutIds, setPreviewLayoutIds] = useState<Set<string>>(new Set());
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Node whose badge triggered the current preview — anchored at its pre-layout position
+  const previewAnchorRef = useRef<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
@@ -306,6 +308,7 @@ export function NodeLinkView() {
   useEffect(() => {
     setExpandedClusters(new Set());
     setPreviewNodeIds(new Set());
+    previewAnchorRef.current = null;
     setZoomLevel(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
@@ -479,6 +482,20 @@ export function NodeLinkView() {
           };
         });
 
+        // Anchor the node whose badge triggered the preview at its old position
+        // so the cursor stays over the badge during layout animation
+        const anchorId = previewAnchorRef.current;
+        if (anchorId && previewIds.size > 0) {
+          const cachedPos = positionCacheRef.current.get(anchorId);
+          if (cachedPos) {
+            const anchorNode = nodes.find(n => n.id === anchorId);
+            if (anchorNode) {
+              anchorNode.x = cachedPos.x;
+              anchorNode.y = cachedPos.y;
+            }
+          }
+        }
+
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
         setAncestorNodeIds(ancestorIds);
@@ -501,8 +518,10 @@ export function NodeLinkView() {
       return;
     }
 
-    // Clear hover state when layout changes
-    setHoveredNodeId(null);
+    // Clear hover state when layout changes (but not during preview — anchor is stable)
+    if (!previewAnchorRef.current) {
+      setHoveredNodeId(null);
+    }
 
     const svg = d3.select(svgRef.current);
     const isInitial = isInitialRenderRef.current;
@@ -611,7 +630,11 @@ export function NodeLinkView() {
     const allNodes = nodeEnter.merge(nodeSelection);
 
     // Re-render inner contents for all nodes (pragmatic: recreate cheap inner elements)
+    // Skip the anchored node during preview — its DOM must stay intact so the
+    // cursor remains over the badge and doesn't trigger mouseleave.
+    const anchorId = previewAnchorRef.current;
     allNodes.each(function (node) {
+      if (anchorId && node.id === anchorId) return;
       const gEl = d3.select<SVGGElement, LayoutNode>(this);
       gEl.selectAll('*').remove();
 
@@ -812,6 +835,7 @@ export function NodeLinkView() {
             addManualNodes([...childIds, ...grandchildIds]);
           }
           // Clear preview since click committed the nodes
+          previewAnchorRef.current = null;
           setPreviewNodeIds(new Set());
         });
 
@@ -836,6 +860,7 @@ export function NodeLinkView() {
           // Debounced preview in NL view
           if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
           previewTimerRef.current = setTimeout(() => {
+            previewAnchorRef.current = node.id;
             setPreviewNodeIds(new Set(ids));
             previewTimerRef.current = null;
           }, 150);
@@ -848,6 +873,7 @@ export function NodeLinkView() {
             previewTimerRef.current = null;
           }
           setHighlightedNodeIds(new Set());
+          previewAnchorRef.current = null;
           setPreviewNodeIds(new Set());
         });
       });
