@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { type ConceptNode, useGraph } from '../providers/GraphProvider';
+import { buildNlSubgraph } from '../state/nlSubgraph';
 import { renderBadgeHTML } from './Badge';
 import './Badge.css';
 import './NodeLinkView.css';
@@ -10,13 +11,8 @@ import './NodeLinkView.css';
  * Node-Link Diagram (Secondary View)
  *
  * D3-based DAG visualization of local neighborhood around the selected node.
- * Features:
- * - Ancestor chain to root (not just 1-hop parents)
- * - Collapsible clusters for high-degree nodes
- * - Hierarchical elkjs layout (RIGHT direction)
- * - D3 data-join with enter/update/exit animation
- * - Native scroll for overflow
- * - Click to navigate
+ * Reads `displayedNodeIds` from context (snapshot-based) instead of
+ * computing neighborhood per render. Undo/redo via history.
  */
 
 /** Real concept node in the layout */
@@ -28,7 +24,6 @@ interface RealLayoutNode {
   width: number;
   height: number;
   data: ConceptNode;
-  manual?: boolean;
 }
 
 /** Cluster pseudo-node representing grouped children */
@@ -64,140 +59,8 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
 const CLUSTER_WIDTH = 140;
 const CLUSTER_HEIGHT = 36;
-const MAX_VISIBLE_CHILDREN = 2;
 const SVG_PADDING = 30;
 const TRANSITION_DURATION = 400;
-
-const ANCESTOR_MIN_DEPTH = 2; // don't show root (0) or its direct children (1)
-
-/**
- * BFS upward through ALL parents from focusId, building a full ancestor DAG.
- * Stops at ANCESTOR_MIN_DEPTH (excludes root and top-level chapters).
- * Returns Set of ancestor node IDs (does not include focusId itself).
- */
-function getAncestorDAG(
-  focusId: string,
-  getParents: (id: string) => ConceptNode[],
-): Set<string> {
-  const ancestors = new Set<string>();
-  const queue = [focusId];
-  const visited = new Set<string>([focusId]);
-
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
-    for (const parent of getParents(currentId)) {
-      if (parent.depth < ANCESTOR_MIN_DEPTH) continue;
-      if (visited.has(parent.id)) continue;
-      visited.add(parent.id);
-      ancestors.add(parent.id);
-      queue.push(parent.id);
-    }
-  }
-
-  if (ancestors.size > 100) {
-    console.warn(`Large ancestor DAG: ${ancestors.size} nodes for ${focusId}`);
-  }
-
-  return ancestors;
-}
-
-/**
- * Build the neighborhood: ancestor chain + focus + children (with clustering)
- * + manually added nodes.
- */
-interface ClusterInfo {
-  id: string;
-  parentId: string;
-  count: number;
-  childIds: string[];
-  totalDescendants: number;
-}
-
-interface Neighborhood {
-  /** Ordered: ancestors (root→down), parents, focus, visible children */
-  orderedIds: string[];
-  /** All real node IDs (for edge filtering) */
-  nodeIds: Set<string>;
-  clusterNodes: ClusterInfo[];
-  /** IDs of ancestor nodes (not including focus or direct children) */
-  ancestorIds: Set<string>;
-  /** IDs of manually added nodes */
-  manualIds: Set<string>;
-}
-
-function buildNeighborhood(
-  focusId: string,
-  getParents: (id: string) => ConceptNode[],
-  getChildren: (id: string) => ConceptNode[],
-  getNode: (id: string) => ConceptNode | null,
-  expandedClusters: Set<string>,
-  manualNodeIds: Set<string>,
-): Neighborhood {
-  const orderedIds: string[] = [];
-  const nodeIds = new Set<string>();
-  const clusterNodes: ClusterInfo[] = [];
-  const manualIds = new Set<string>();
-
-  function add(id: string) {
-    if (!nodeIds.has(id)) {
-      nodeIds.add(id);
-      orderedIds.push(id);
-    }
-  }
-
-  // 1. Full ancestor DAG (BFS through all parents, stops at ANCESTOR_MIN_DEPTH)
-  const ancestorIds = getAncestorDAG(focusId, getParents);
-
-  // 2. Add ancestors sorted by depth ascending (shallowest first), then id for stability
-  const sortedAncestors = [...ancestorIds].sort((a, b) => {
-    const nodeA = getNode(a);
-    const nodeB = getNode(b);
-    const depthDiff = (nodeA?.depth ?? 0) - (nodeB?.depth ?? 0);
-    if (depthDiff !== 0) return depthDiff;
-    return a.localeCompare(b);
-  });
-  for (const id of sortedAncestors) add(id);
-
-  // 3. Direct parents of focus (defensive — should already be in DAG)
-  for (const p of getParents(focusId)) {
-    if (p.depth >= ANCESTOR_MIN_DEPTH) add(p.id);
-  }
-
-  // 4. Focus node
-  add(focusId);
-
-  // 5. Children of focus — cluster if too many
-  const focusChildren = getChildren(focusId);
-  const clusterId = `cluster:${focusId}`;
-  const clusterExpanded = expandedClusters.has(clusterId);
-
-  if (focusChildren.length > MAX_VISIBLE_CHILDREN && !clusterExpanded) {
-    const visible = focusChildren.slice(0, MAX_VISIBLE_CHILDREN);
-    const hidden = focusChildren.slice(MAX_VISIBLE_CHILDREN);
-
-    for (const c of visible) add(c.id);
-
-    clusterNodes.push({
-      id: clusterId,
-      parentId: focusId,
-      count: hidden.length,
-      childIds: hidden.map(c => c.id),
-      totalDescendants: hidden.reduce((sum, c) => sum + c.descendantCount, 0),
-    });
-  } else {
-    for (const c of focusChildren) add(c.id);
-  }
-
-  // 6. Manually added nodes — add them plus edges to/from existing nodes
-  for (const manualId of manualNodeIds) {
-    if (!nodeIds.has(manualId) && getNode(manualId)) {
-      add(manualId);
-      manualIds.add(manualId);
-    }
-  }
-
-  return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds };
-}
 
 /** Build an SVG path string from ELK edge sections */
 function edgePath(edge: LayoutEdge): string {
@@ -211,21 +74,37 @@ function edgePath(edge: LayoutEdge): string {
     .y(d => d.y)(points) ?? '';
 }
 
+/**
+ * Compute the hidden children for a cluster pseudo-node.
+ * Hidden = all children of parentId that are NOT individually in displayedNodeIds.
+ */
+function computeClusterInfo(
+  parentId: string,
+  getChildrenFn: (id: string) => ConceptNode[],
+  displayedNodeIds: Set<string>,
+): { count: number; childIds: string[]; totalDescendants: number } {
+  const allChildren = getChildrenFn(parentId);
+  const hiddenChildren = allChildren.filter(c => !displayedNodeIds.has(c.id));
+  return {
+    count: hiddenChildren.length,
+    childIds: hiddenChildren.map(c => c.id),
+    totalDescendants: hiddenChildren.reduce((sum, c) => sum + c.descendantCount, 0),
+  };
+}
+
 export function NodeLinkView() {
   const {
     selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
-    manualNodeIds, addManualNodes, undoManualNodes, resetManualNodes,
+    displayedNodeIds, expandNodes, resetNeighborhood,
+    historyBack, historyForward, canUndo,
     highlightedNodeIds, setHighlightedNodeIds,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
-  const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
-  const [manualLayoutIds, setManualLayoutIds] = useState<Set<string>>(new Set());
-  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
-  // Tooltip for badge hover overlay (fallback model: no layout on hover)
+  // Tooltip for badge hover overlay
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Suppress tooltip re-creation after ESC (cleared on next mouseleave)
@@ -233,7 +112,7 @@ export function NodeLinkView() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
-  // Position cache for animation: node ID → last known {x, y}
+  // Position cache for animation: node ID -> last known {x, y}
   const positionCacheRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   // SVG-space position of focus node center (set during D3 rendering)
   const focusPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -241,7 +120,7 @@ export function NodeLinkView() {
   const svgDimsRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   // Track whether this is the initial render (no animation)
   const isInitialRenderRef = useRef(true);
-  // Track offset for viewBox → SVG coordinate mapping
+  // Track offset for viewBox -> SVG coordinate mapping
   const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Scroll container so the focus node is visible (not force-centered)
@@ -290,9 +169,8 @@ export function NodeLinkView() {
     });
   }, []);
 
-  // Reset expanded clusters, tooltip, and zoom when selection changes
+  // Reset tooltip and zoom when selection changes
   useEffect(() => {
-    setExpandedClusters(new Set());
     setZoomLevel(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
@@ -331,38 +209,53 @@ export function NodeLinkView() {
     return () => container.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Keyboard shortcuts: Ctrl+Z = undo expansion, Escape = reset
+  // Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Shift+Z = redo, Escape = reset
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
-        undoManualNodes();
+        historyBack();
+      } else if (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+        e.preventDefault();
+        historyForward();
       } else if (e.key === 'Escape') {
         hideTooltip(true);
         tooltipSuppressedRef.current = true;
         setHighlightedNodeIds(new Set());
-        resetManualNodes();
+        resetNeighborhood();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undoManualNodes, resetManualNodes]);
+  }, [historyBack, historyForward, resetNeighborhood, setHighlightedNodeIds]);
 
-  const toggleCluster = useCallback((clusterId: string) => {
-    setExpandedClusters(prev => {
-      const next = new Set(prev);
-      if (next.has(clusterId)) {
-        next.delete(clusterId);
-      } else {
-        next.add(clusterId);
-      }
-      return next;
-    });
-  }, []);
+  /** Expand a cluster: replace cluster ID with its hidden child IDs */
+  const expandCluster = useCallback((clusterId: string) => {
+    const parentId = clusterId.slice('cluster:'.length);
+    const { childIds } = computeClusterInfo(parentId, getChildren, displayedNodeIds);
+    // Remove cluster ID and add all hidden children
+    const idsToAdd = childIds.filter(id => !displayedNodeIds.has(id));
+    // We also need to remove the cluster — build the new set explicitly
+    const next = new Set(displayedNodeIds);
+    next.delete(clusterId);
+    for (const id of idsToAdd) next.add(id);
+    // Use expandNodes to push as new snapshot (pass the full replacement set)
+    // But expandNodes only adds — we need a different approach for cluster expansion
+    // since it removes the cluster ID. Push via expandNodes with a small wrapper.
+    expandNodes(
+      // We pass the child IDs; the cluster ID removal happens by building a new set.
+      // Actually, let's use the context's expandNodes which only adds IDs to the set.
+      // For cluster expansion we need to both add children and remove cluster.
+      // Solution: just add the children, keep the cluster. The cluster's hidden count
+      // will drop to 0 and it'll be filtered out of the layout.
+      childIds,
+      `Expanded ${childIds.length} children of ${getNode(parentId)?.title ?? parentId}`,
+    );
+  }, [displayedNodeIds, getChildren, getNode, expandNodes]);
 
-  // Build neighborhood and compute layout
+  // Compute layout from displayedNodeIds
   useEffect(() => {
-    if (!selectedNodeId) {
+    if (!selectedNodeId || displayedNodeIds.size === 0) {
       setLayoutNodes([]);
       setLayoutEdges([]);
       return;
@@ -377,18 +270,41 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-      const { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds } = buildNeighborhood(
-        selectedNodeId!, getParents, getChildren, getNode, expandedClusters, manualNodeIds,
-      );
+      const nlSubgraph = buildNlSubgraph(graph, displayedNodeIds);
 
-      // Build ELK graph — order matters for NODES_AND_EDGES model order
+      // Collect cluster info for cluster pseudo-nodes in displayedNodeIds
+      const clusterInfos: Array<{
+        id: string; parentId: string;
+        count: number; childIds: string[]; totalDescendants: number;
+      }> = [];
+
+      for (const id of displayedNodeIds) {
+        if (!id.startsWith('cluster:')) continue;
+        const parentId = id.slice('cluster:'.length);
+        const info = computeClusterInfo(parentId, getChildren, displayedNodeIds);
+        // Skip clusters with 0 hidden children (fully expanded)
+        if (info.count === 0) continue;
+        clusterInfos.push({ id, parentId, ...info });
+      }
+
+      // Build ordered list of real node IDs (sorted by depth for stable ELK ordering)
+      const realNodeIds = [...displayedNodeIds].filter(id => !id.startsWith('cluster:'));
+      realNodeIds.sort((a, b) => {
+        const nodeA = getNode(a);
+        const nodeB = getNode(b);
+        const depthDiff = (nodeA?.depth ?? 0) - (nodeB?.depth ?? 0);
+        if (depthDiff !== 0) return depthDiff;
+        return a.localeCompare(b);
+      });
+
+      // Build ELK graph
       const elkNodes = [
-        ...orderedIds.map(id => ({
+        ...realNodeIds.map(id => ({
           id,
           width: NODE_WIDTH,
           height: NODE_HEIGHT,
         })),
-        ...clusterNodes.map(c => ({
+        ...clusterInfos.map(c => ({
           id: c.id,
           width: CLUSTER_WIDTH,
           height: CLUSTER_HEIGHT,
@@ -397,21 +313,19 @@ export function NodeLinkView() {
 
       const elkEdges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
 
-      // Real edges between real nodes in the neighborhood
-      for (const id of nodeIds) {
-        for (const childId of graph.outNeighbors(id)) {
-          if (nodeIds.has(childId)) {
-            elkEdges.push({
-              id: `${id}->${childId}`,
-              sources: [id],
-              targets: [childId],
-            });
-          }
-        }
-      }
+      // Real edges from the NL subgraph (between real nodes only)
+      nlSubgraph.forEachEdge((_edge, _attrs, source, target) => {
+        // Skip edges involving cluster pseudo-nodes (we add those separately)
+        if (source.startsWith('cluster:') || target.startsWith('cluster:')) return;
+        elkEdges.push({
+          id: `${source}->${target}`,
+          sources: [source],
+          targets: [target],
+        });
+      });
 
       // Edges from parent to cluster pseudo-node
-      for (const c of clusterNodes) {
+      for (const c of clusterInfos) {
         elkEdges.push({
           id: `${c.parentId}->${c.id}`,
           sources: [c.parentId],
@@ -434,7 +348,7 @@ export function NodeLinkView() {
           edges: elkEdges,
         });
 
-        const clusterMap = new Map(clusterNodes.map(c => [c.id, c]));
+        const clusterMap = new Map(clusterInfos.map(c => [c.id, c]));
 
         const nodes: LayoutNode[] = (elkGraph.children ?? []).map(elkNode => {
           const cluster = clusterMap.get(elkNode.id);
@@ -460,7 +374,6 @@ export function NodeLinkView() {
             width: elkNode.width ?? NODE_WIDTH,
             height: elkNode.height ?? NODE_HEIGHT,
             data: getNode(elkNode.id)!,
-            manual: manualIds.has(elkNode.id),
           };
         });
 
@@ -476,21 +389,18 @@ export function NodeLinkView() {
 
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
-        setAncestorNodeIds(ancestorIds);
-        setManualLayoutIds(manualIds);
       } catch (error) {
         console.error('ELK layout error:', error);
       }
     }
 
     computeLayout();
-  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters, manualNodeIds]);
+  }, [selectedNodeId, displayedNodeIds, getNode, getChildren, getGraph]);
 
   // D3 rendering with data-join (enter/update/exit animation)
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
     if (layoutNodes.length === 0) {
-      // Clear SVG if no nodes
       d3.select(svgRef.current).selectAll('*').remove();
       return;
     }
@@ -539,20 +449,17 @@ export function NodeLinkView() {
       .selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge')
       .data(layoutEdges, d => d.id);
 
-    // Exit edges: fade out
     edgeSelection.exit<LayoutEdge>()
       .transition().duration(dur).ease(d3.easeCubicOut)
       .attr('opacity', 0)
       .remove();
 
-    // Enter edges: start invisible, animate in
     const edgeEnter = edgeSelection.enter()
       .append('path')
       .attr('class', d => `node-link-edge${d.target.startsWith('cluster:') ? ' cluster-edge' : ''}`)
       .attr('d', d => edgePath(d))
       .attr('opacity', isInitial ? 1 : 0);
 
-    // Update + Enter: animate to final path and opacity
     edgeEnter.merge(edgeSelection)
       .transition().duration(dur).ease(d3.easeCubicOut)
       .attr('d', d => edgePath(d))
@@ -563,10 +470,8 @@ export function NodeLinkView() {
       .selectAll<SVGGElement, LayoutNode>('g.nl-item')
       .data(layoutNodes, d => d.id);
 
-    // Exit nodes: scale down and remove
     nodeSelection.exit<LayoutNode>()
       .each(function (d) {
-        // Save last position before removal
         posCache.set(d.id, { x: d.x, y: d.y });
       })
       .transition().duration(dur).ease(d3.easeCubicOut)
@@ -578,19 +483,13 @@ export function NodeLinkView() {
       .attr('opacity', 0)
       .remove();
 
-    // Enter nodes
     const nodeEnter = nodeSelection.enter()
       .append('g')
       .attr('class', 'nl-item')
       .attr('transform', d => {
-        if (isInitial) {
-          return `translate(${d.x}, ${d.y})`;
-        }
-        // Start from cached position or target center (scale 0)
+        if (isInitial) return `translate(${d.x}, ${d.y})`;
         const cached = posCache.get(d.id);
-        if (cached) {
-          return `translate(${cached.x}, ${cached.y})`;
-        }
+        if (cached) return `translate(${cached.x}, ${cached.y})`;
         const cx = d.x + d.width / 2;
         const cy = d.y + d.height / 2;
         return `translate(${cx}, ${cy}) scale(0)`;
@@ -600,10 +499,8 @@ export function NodeLinkView() {
         return posCache.has(d.id) ? 1 : 0;
       });
 
-    // Merge enter + update, render contents, then animate
     const allNodes = nodeEnter.merge(nodeSelection);
 
-    // Re-render inner contents for all nodes (pragmatic: recreate cheap inner elements)
     allNodes.each(function (node) {
       const gEl = d3.select<SVGGElement, LayoutNode>(this);
       gEl.selectAll('*').remove();
@@ -615,18 +512,15 @@ export function NodeLinkView() {
       }
     });
 
-    // Animate to final positions
     allNodes
       .transition().duration(dur).ease(d3.easeCubicOut)
       .attr('transform', d => `translate(${d.x}, ${d.y})`)
       .attr('opacity', 1);
 
-    // Update position cache with new positions
     for (const node of layoutNodes) {
       posCache.set(node.id, { x: node.x, y: node.y });
     }
 
-    // Store SVG dims and focus node position for zoom/scroll helpers
     svgDimsRef.current = { width: svgWidth, height: svgHeight };
     const focusNode = layoutNodes.find(n => n.id === selectedNodeId);
     if (focusNode) {
@@ -639,14 +533,13 @@ export function NodeLinkView() {
     if (isInitial) {
       centerOnFocus(zoomRef.current);
     } else {
-      // After animation completes, ensure focus is visible
       setTimeout(() => scrollToFocus(zoomRef.current), TRANSITION_DURATION + 50);
     }
 
     isInitialRenderRef.current = false;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId, setHighlightedNodeIds are stable useState setters
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds, manualLayoutIds]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, expandCluster]);
 
   // Lightweight highlight effect — toggles CSS class without re-rendering
   useEffect(() => {
@@ -665,13 +558,11 @@ export function NodeLinkView() {
     gEl
       .attr('class', 'nl-item node-link-cluster')
       .style('cursor', 'pointer')
-      .on('click', () => toggleCluster(node.id))
+      .on('click', () => expandCluster(node.id))
       .on('mouseenter', function () {
         if (tooltipSuppressedRef.current) return;
         cancelHideTimer();
-        // Cross-panel highlighting for cluster children
         setHighlightedNodeIds(new Set(node.childIds));
-        // Show interactive overlay listing hidden children
         const childNodes = node.childIds
           .map(id => getNode(id))
           .filter((n): n is ConceptNode => n !== null);
@@ -681,8 +572,8 @@ export function NodeLinkView() {
             rectEl ?? this as SVGGElement,
             `${node.count} clustered children`,
             childNodes, 0,
-            (id) => addManualNodes([id]),
-            () => toggleCluster(node.id),
+            (id) => expandNodes([id], `Added ${getNode(id)?.title ?? id}`),
+            () => expandCluster(node.id),
           );
         }
       })
@@ -752,10 +643,6 @@ export function NodeLinkView() {
 
   /**
    * Position a tooltip relative to an anchor element within the scroll container.
-   * Horizontal: prefer right of anchor, flip left if overflow.
-   * Vertical: above 35% → align top, below 65% → align bottom, else center.
-   * Clamp to container bounds.
-   * TODO: consider a tooltip/overlay positioning package if this gets more complex.
    */
   function positionTooltip(
     tip: HTMLElement,
@@ -766,29 +653,23 @@ export function NodeLinkView() {
     const containerRect = container.getBoundingClientRect();
     const tipRect = tip.getBoundingClientRect();
 
-    // Horizontal: prefer right of anchor, flip left if overflow
     let left = anchorRect.right - containerRect.left + container.scrollLeft + 8;
     if (anchorRect.right + tipRect.width + 12 > containerRect.right) {
       left = anchorRect.left - containerRect.left + container.scrollLeft - tipRect.width - 8;
     }
 
-    // Vertical: zone-based — where is the anchor within the visible panel?
     const anchorCenterY = (anchorRect.top + anchorRect.bottom) / 2;
     const panelRelative = (anchorCenterY - containerRect.top) / containerRect.height;
 
     let top: number;
     if (panelRelative < 0.35) {
-      // Anchor near top: align tooltip top with anchor top
       top = anchorRect.top - containerRect.top + container.scrollTop;
     } else if (panelRelative > 0.65) {
-      // Anchor near bottom: align tooltip bottom with anchor bottom
       top = anchorRect.bottom - containerRect.top + container.scrollTop - tipRect.height;
     } else {
-      // Middle zone: center tooltip vertically on anchor
       top = anchorCenterY - containerRect.top + container.scrollTop - tipRect.height / 2;
     }
 
-    // Clamp: don't overflow container top or bottom (in scroll-space)
     const minTop = container.scrollTop;
     const maxTop = container.scrollTop + containerRect.height - tipRect.height;
     top = Math.max(minTop, Math.min(maxTop, top));
@@ -813,13 +694,11 @@ export function NodeLinkView() {
     tip.addEventListener('mouseenter', () => cancelHideTimer());
     tip.addEventListener('mouseleave', () => scheduleHide());
 
-    // Header
     const header = document.createElement('div');
     header.className = 'badge-tooltip-header';
     header.textContent = `Descendants (${totalDescendants.toLocaleString()} total)`;
     tip.appendChild(header);
 
-    // Level-by-level sections
     for (const level of levels) {
       const section = document.createElement('div');
       section.className = 'badge-tooltip-level';
@@ -838,7 +717,7 @@ export function NodeLinkView() {
       addBtn.title = `Add ${notVisibleIds.length.toLocaleString()} ${level.label.toLowerCase()} (${level.cumulative.toLocaleString()} cumulative)`;
       addBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        addManualNodes(notVisibleIds);
+        expandNodes(notVisibleIds, `Added ${notVisibleIds.length} ${level.label.toLowerCase()}`);
         hideTooltip(true);
       });
       levelHeader.appendChild(addBtn);
@@ -855,7 +734,7 @@ export function NodeLinkView() {
         addAllBtn.textContent = `Add all ${allIds.length.toLocaleString()} through depth ${levels.length}`;
         addAllBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          addManualNodes(allIds);
+          expandNodes(allIds, `Added all ${allIds.length} descendants through depth ${levels.length}`);
           hideTooltip(true);
         });
         tip.appendChild(addAllBtn);
@@ -883,11 +762,9 @@ export function NodeLinkView() {
     const tip = document.createElement('div');
     tip.className = 'badge-tooltip';
 
-    // Keep tooltip alive when mouse enters it
     tip.addEventListener('mouseenter', () => cancelHideTimer());
     tip.addEventListener('mouseleave', () => scheduleHide());
 
-    // Header
     const header = document.createElement('div');
     header.className = 'badge-tooltip-header';
     header.textContent = label;
@@ -900,7 +777,6 @@ export function NodeLinkView() {
       tip.appendChild(vis);
     }
 
-    // "Add all" button
     const allIds = nodes.map(n => n.id);
     const addAllBtn = document.createElement('button');
     addAllBtn.className = 'badge-tooltip-add-all';
@@ -912,7 +788,6 @@ export function NodeLinkView() {
     });
     tip.appendChild(addAllBtn);
 
-    // Scrollable list
     const list = document.createElement('ul');
     list.className = 'badge-tooltip-list';
     for (const node of nodes) {
@@ -922,7 +797,6 @@ export function NodeLinkView() {
         e.stopPropagation();
         onAddNode(node.id);
         li.remove();
-        // Update "Add all" count and close if empty
         const remaining = list.querySelectorAll('li');
         if (remaining.length === 0) {
           hideTooltip(true);
@@ -939,7 +813,6 @@ export function NodeLinkView() {
     tooltipRef.current = tip;
   }
 
-  /** Schedule tooltip hide after a delay (hover-intent) */
   function scheduleHide() {
     cancelHideTimer();
     tooltipTimerRef.current = setTimeout(() => {
@@ -948,7 +821,6 @@ export function NodeLinkView() {
     }, 150);
   }
 
-  /** Cancel a pending tooltip hide */
   function cancelHideTimer() {
     if (tooltipTimerRef.current) {
       clearTimeout(tooltipTimerRef.current);
@@ -956,7 +828,6 @@ export function NodeLinkView() {
     }
   }
 
-  /** Hide the badge tooltip */
   function hideTooltip(immediate?: boolean) {
     if (!immediate) {
       scheduleHide();
@@ -975,8 +846,6 @@ export function NodeLinkView() {
     node: RealLayoutNode,
   ) {
     const isFocus = node.id === selectedNodeId;
-    const isAncestorNode = ancestorNodeIds.has(node.id);
-    const isManual = node.manual;
 
     const fullTitle = node.data.title;
     const truncatedTitle = fullTitle.length > 22
@@ -987,8 +856,6 @@ export function NodeLinkView() {
       'nl-item',
       'node-link-node',
       isFocus && 'focus',
-      isAncestorNode && 'ancestor',
-      isManual && 'manual',
     ].filter(Boolean).join(' ');
 
     gEl
@@ -997,17 +864,9 @@ export function NodeLinkView() {
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
         d3.select(this).raise();
-        if (isAncestorNode) {
-          d3.select(this).select('rect').style('opacity', '1');
-          d3.select(this).select('.node-title').style('opacity', '1');
-        }
         setHoveredNodeId(node.id);
       })
       .on('mouseleave', function () {
-        if (isAncestorNode) {
-          d3.select(this).select('rect').style('opacity', null);
-          d3.select(this).select('.node-title').style('opacity', null);
-        }
         setHoveredNodeId(null);
       });
 
@@ -1016,7 +875,6 @@ export function NodeLinkView() {
       .attr('height', node.height)
       .attr('rx', 4);
 
-    // SVG title element for native tooltip on hover
     gEl.append('title').text(fullTitle);
 
     gEl.append('text')
@@ -1025,7 +883,7 @@ export function NodeLinkView() {
       .attr('class', 'node-title')
       .text(truncatedTitle);
 
-    // Badges — rendered as HTML inside foreignObject
+    // Badges
     const badgeParts: string[] = [];
     if (node.data.parentCount > 1) {
       badgeParts.push(renderBadgeHTML('parents', node.data.parentCount));
@@ -1051,7 +909,6 @@ export function NodeLinkView() {
         .style('font-size', '10px')
         .html(badgeParts.join(''));
 
-      // Attach click and hover handlers to badge spans
       badgeDiv.selectAll('.count-badge').each(function () {
         const badgeEl = this as HTMLElement;
         const isParentBadge = badgeEl.classList.contains('count-badge-parents');
@@ -1062,20 +919,16 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          // If tooltip is showing, let users interact with it; badge click adds all
           if (isParentBadge) {
-            addManualNodes(getParents(node.id).map(p => p.id));
+            const parentIds = getParents(node.id).map(p => p.id);
+            expandNodes(parentIds, `Added ${parentIds.length} parents of ${node.data.title}`);
           } else if (isChildBadge) {
-            const clusterId = `cluster:${node.id}`;
-            if (expandedClusters.has(clusterId) || node.data.childCount <= MAX_VISIBLE_CHILDREN) {
-              addManualNodes(getChildren(node.id).map(c => c.id));
-            } else {
-              toggleCluster(clusterId);
-            }
+            const childIds = getChildren(node.id).map(c => c.id);
+            expandNodes(childIds, `Added ${childIds.length} children of ${node.data.title}`);
           } else if (isDescBadge) {
             const childIds = getChildren(node.id).map(c => c.id);
             const grandchildIds = childIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
-            addManualNodes([...childIds, ...grandchildIds]);
+            expandNodes([...childIds, ...grandchildIds], `Added descendants of ${node.data.title}`);
           }
           hideTooltip(true);
         });
@@ -1085,18 +938,16 @@ export function NodeLinkView() {
           cancelHideTimer();
 
           if (isDescBadge) {
-            // Descendant badge: level-by-level breakdown
             const levels = computeDescendantLevels(node.id, getChildren);
             const allIds = levels.flatMap(l => l.ids);
             setHighlightedNodeIds(new Set(allIds));
             showDescendantTooltip(
               badgeEl, node.data.descendantCount, levels,
-              new Set(layoutNodes.map(n => n.id)),
+              displayedNodeIds,
             );
             return;
           }
 
-          // Parents or children: flat list
           let relatedNodes: ConceptNode[] = [];
           let tooltipLabel = '';
           if (isParentBadge) {
@@ -1109,14 +960,13 @@ export function NodeLinkView() {
 
           setHighlightedNodeIds(new Set(relatedNodes.map(n => n.id)));
 
-          const visibleIds = new Set(layoutNodes.map(n => n.id));
-          const notVisible = relatedNodes.filter(n => !visibleIds.has(n.id));
+          const notVisible = relatedNodes.filter(n => !displayedNodeIds.has(n.id));
           if (notVisible.length > 0) {
             showTooltip(
               badgeEl, tooltipLabel, notVisible,
               relatedNodes.length - notVisible.length,
-              (id) => addManualNodes([id]),
-              (ids) => addManualNodes(ids),
+              (id) => expandNodes([id], `Added ${getNode(id)?.title ?? id}`),
+              (ids) => expandNodes(ids, `Added ${ids.length} ${tooltipLabel.toLowerCase()}`),
             );
           }
         });
@@ -1124,7 +974,6 @@ export function NodeLinkView() {
         badgeEl.addEventListener('mouseleave', () => {
           tooltipSuppressedRef.current = false;
           scheduleHide();
-          // Delay highlight clear too — tooltip might keep them alive
           if (!tooltipRef.current) {
             setHighlightedNodeIds(new Set());
           }
@@ -1157,11 +1006,11 @@ export function NodeLinkView() {
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
             <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.min(2, z * 1.3))} title="Zoom in">+</button>
-            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.2, z / 1.3))} title="Zoom out">−</button>
-            <button className="zoom-btn" onClick={() => setZoomLevel(1)} title="Reset zoom">↺</button>
-            <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">⊡</button>
-            {manualNodeIds.size > 0 && (
-              <button className="zoom-btn reset-btn" onClick={resetManualNodes} title="Reset neighborhood">✕</button>
+            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.2, z / 1.3))} title="Zoom out">-</button>
+            <button className="zoom-btn" onClick={() => setZoomLevel(1)} title="Reset zoom">&#8634;</button>
+            <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">&#8865;</button>
+            {canUndo && (
+              <button className="zoom-btn reset-btn" onClick={resetNeighborhood} title="Reset neighborhood">&#10005;</button>
             )}
           </div>
         )}

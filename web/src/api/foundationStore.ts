@@ -7,6 +7,7 @@
  */
 
 import type { FoundationEntity } from './icd11';
+import type { SerializedHistory } from '../state/nlHistory';
 
 export interface FoundationGraphJson {
   [id: string]: {
@@ -21,9 +22,10 @@ export interface FoundationGraphJson {
 }
 
 const DB_NAME = 'icd11-foundation';
-const DB_VERSION = 2; // bumped: graph schema now includes depth/height/maxDepth
+const DB_VERSION = 3; // bumped: added history store
 const GRAPH_STORE = 'graph';
 const ENTITY_STORE = 'entities';
+const HISTORY_STORE = 'history';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -39,6 +41,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(ENTITY_STORE)) {
         db.createObjectStore(ENTITY_STORE);
+      }
+      if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+        db.createObjectStore(HISTORY_STORE);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -85,21 +90,35 @@ export const foundationStore = {
     return txPut(db, ENTITY_STORE, id, entity);
   },
 
+  async getHistory(): Promise<SerializedHistory | null> {
+    const db = await openDb();
+    return txGet<SerializedHistory>(db, HISTORY_STORE, 'history');
+  },
+
+  async putHistory(data: SerializedHistory): Promise<void> {
+    const db = await openDb();
+    return txPut(db, HISTORY_STORE, 'history', data);
+  },
+
+  async clearHistory(): Promise<void> {
+    const db = await openDb();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readwrite');
+      tx.objectStore(HISTORY_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+
   async clear(): Promise<void> {
     const db = await openDb();
-    await Promise.all([
+    await Promise.all([GRAPH_STORE, ENTITY_STORE, HISTORY_STORE].map(store =>
       new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(GRAPH_STORE, 'readwrite');
-        tx.objectStore(GRAPH_STORE).clear();
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).clear();
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
-      }),
-      new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(ENTITY_STORE, 'readwrite');
-        tx.objectStore(ENTITY_STORE).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      }),
-    ]);
+      })
+    ));
   },
 };

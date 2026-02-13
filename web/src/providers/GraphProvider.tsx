@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   type ConceptNode,
   type EntityDetail,
@@ -12,7 +12,10 @@ import {
   getGraph,
 } from '../api/foundationData';
 import { type FoundationGraphJson, foundationStore } from '../api/foundationStore';
-import { useUrlState } from '../hooks/useUrlState';
+import { useNlHistory } from '../hooks/useNlHistory';
+import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
+import { buildNlSubgraph, removeNodeWithPruning } from '../state/nlSubgraph';
+import type { Snapshot } from '../state/nlHistory';
 
 export type { ConceptNode, EntityDetail, TreePath };
 
@@ -32,12 +35,15 @@ interface GraphContextValue {
   toggleExpand: (path: TreePath) => void;
   setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
   expandParentPaths: (nodeId: string) => void;
-  // NL view: manually added nodes beyond default neighborhood
-  manualNodeIds: Set<string>;
-  addManualNodes: (ids: string[]) => void;
-  removeManualNode: (id: string) => void;
-  undoManualNodes: () => void;
-  resetManualNodes: () => void;
+  // NL view: snapshot-based displayed nodes
+  displayedNodeIds: Set<string>;
+  expandNodes: (ids: string[], description: string) => void;
+  removeNode: (id: string) => void;
+  resetNeighborhood: () => void;
+  historyBack: () => void;
+  historyForward: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   // Cross-panel badge hover highlighting
   highlightedNodeIds: Set<string>;
   setHighlightedNodeIds: (ids: Set<string>) => void;
@@ -52,52 +58,142 @@ interface GraphContextValue {
 
 const GraphContext = createContext<GraphContextValue | null>(null);
 
+const EMPTY_SET = new Set<string>();
+
 interface GraphProviderProps {
   children: ReactNode;
 }
 
 export function GraphProvider({ children }: GraphProviderProps) {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [rootId, setRootId] = useState<string | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
-  const pendingNodeIdRef = useRef<string | null>(null);
-  const pendingExpandedRef = useRef<string[]>([]);
-
-  // NL view: manually added nodes beyond default neighborhood
-  const [manualNodeIds, setManualNodeIds] = useState<Set<string>>(new Set());
-  const manualHistoryRef = useRef<Set<string>[]>([]);
 
   // Cross-panel badge hover highlighting
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
 
+  // Snapshot-based NL history
+  const {
+    snapshot, push, back, forward, canUndo, canRedo, restored: historyRestored,
+  } = useNlHistory();
+
+  // Derive selectedNodeId from the current snapshot
+  const selectedNodeId = snapshot?.focusNodeId ?? null;
+  const displayedNodeIds = snapshot?.displayedNodeIds ?? EMPTY_SET;
+
+  /** Build a snapshot for a new focus node selection. */
+  const buildAndPushSnapshot = useCallback((focusId: string, description: string) => {
+    const nodeIds = buildInitialNeighborhood(focusId, getParents, getChildren, getNode);
+    const snap: Snapshot = {
+      focusNodeId: focusId,
+      displayedNodeIds: nodeIds,
+      timestamp: Date.now(),
+      description,
+    };
+    push(snap);
+  }, [push]);
+
+  /**
+   * Navigate to a node in the tree: walk up ancestors (all in-memory), expand all path prefixes.
+   */
+  const navigateTreeToNode = useCallback((targetId: string): void => {
+    if (!hasNode(targetId)) return;
+
+    // Walk up first parent chain to root
+    const ancestorPath: string[] = [targetId];
+    let currentId = targetId;
+    const maxDepth = 30;
+
+    for (let i = 0; i < maxDepth; i++) {
+      const parents = getParents(currentId);
+      if (parents.length === 0) break;
+      ancestorPath.unshift(parents[0].id);
+      currentId = parents[0].id;
+    }
+
+    // Batch-expand all path prefixes
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      for (let i = 1; i <= ancestorPath.length; i++) {
+        next.add(pathKey(ancestorPath.slice(0, i)));
+      }
+      return next;
+    });
+  }, []);
+
   const selectNode = useCallback((id: string | null) => {
-    setSelectedNodeId(id);
-    // Reset NL manual expansions and history when selection changes
-    setManualNodeIds(new Set());
-    manualHistoryRef.current = [];
     setHighlightedNodeIds(new Set());
-  }, []);
+    if (!id) {
+      // Push empty snapshot
+      push({
+        focusNodeId: null,
+        displayedNodeIds: new Set(),
+        timestamp: Date.now(),
+        description: 'Deselected',
+      });
+      return;
+    }
+    const title = getNode(id)?.title ?? id;
+    buildAndPushSnapshot(id, `Selected ${title}`);
+    navigateTreeToNode(id);
+  }, [buildAndPushSnapshot, navigateTreeToNode, push]);
 
-  const addManualNodes = useCallback((ids: string[]) => {
-    setManualNodeIds(prev => {
-      manualHistoryRef.current.push(new Set(prev));
-      const next = new Set(prev);
-      for (const id of ids) next.add(id);
-      return next;
+  /** Add nodes to the current displayed set. */
+  const expandNodes = useCallback((ids: string[], description: string) => {
+    if (!snapshot) return;
+    const next = new Set(snapshot.displayedNodeIds);
+    for (const id of ids) next.add(id);
+    push({
+      focusNodeId: snapshot.focusNodeId,
+      displayedNodeIds: next,
+      timestamp: Date.now(),
+      description,
     });
-  }, []);
+  }, [snapshot, push]);
 
-  const removeManualNode = useCallback((id: string) => {
-    setManualNodeIds(prev => {
-      if (!prev.has(id)) return prev;
-      manualHistoryRef.current.push(new Set(prev));
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
+  /** Remove a node. If it's the focus node, clear the view. Otherwise BFS prune. */
+  const removeNode = useCallback((id: string) => {
+    if (!snapshot || !snapshot.focusNodeId) return;
+
+    if (id === snapshot.focusNodeId) {
+      push({
+        focusNodeId: null,
+        displayedNodeIds: new Set(),
+        timestamp: Date.now(),
+        description: 'Removed focus node',
+      });
+      return;
+    }
+
+    const mainGraph = getGraph();
+    const nlSubgraph = buildNlSubgraph(mainGraph, snapshot.displayedNodeIds);
+    const { displayedNodeIds: newIds, prunedCount } = removeNodeWithPruning(
+      nlSubgraph, id, snapshot.focusNodeId,
+    );
+
+    const title = getNode(id)?.title ?? id;
+    const desc = prunedCount > 0
+      ? `Removed ${title} (+${prunedCount} pruned)`
+      : `Removed ${title}`;
+
+    push({
+      focusNodeId: snapshot.focusNodeId,
+      displayedNodeIds: newIds,
+      timestamp: Date.now(),
+      description: desc,
     });
-  }, []);
+  }, [snapshot, push]);
+
+  /** Reset NL to the default neighborhood for the current focus node. */
+  const resetNeighborhood = useCallback(() => {
+    if (!snapshot?.focusNodeId) return;
+    const title = getNode(snapshot.focusNodeId)?.title ?? snapshot.focusNodeId;
+    buildAndPushSnapshot(snapshot.focusNodeId, `Reset neighborhood for ${title}`);
+  }, [snapshot, buildAndPushSnapshot]);
+
+  const historyBack = useCallback(() => { back(); }, [back]);
+  const historyForward = useCallback(() => { forward(); }, [forward]);
 
   /**
    * Expand parent paths for a node — for each parent, walk up to root and
@@ -131,20 +227,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
     });
   }, []);
 
-  const undoManualNodes = useCallback(() => {
-    const history = manualHistoryRef.current;
-    if (history.length === 0) return;
-    const prev = history.pop()!;
-    setManualNodeIds(prev);
-  }, []);
-
-  const resetManualNodes = useCallback(() => {
-    setManualNodeIds(prev => {
-      if (prev.size > 0) manualHistoryRef.current.push(new Set(prev));
-      return new Set();
-    });
-  }, []);
-
   const toggleExpand = useCallback((path: TreePath) => {
     const key = pathKey(path);
     setExpandedPaths(prev => {
@@ -158,60 +240,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
     });
   }, []);
 
-  /**
-   * Navigate to a node: walk up ancestors (all in-memory), expand all path prefixes.
-   */
-  const navigateToNode = useCallback((targetId: string): void => {
-    if (!hasNode(targetId)) return;
-
-    // Walk up first parent chain to root
-    const ancestorPath: string[] = [targetId];
-    let currentId = targetId;
-    const maxDepth = 30;
-
-    for (let i = 0; i < maxDepth; i++) {
-      const parents = getParents(currentId);
-      if (parents.length === 0) break;
-      ancestorPath.unshift(parents[0].id);
-      currentId = parents[0].id;
+  // When undo/redo changes the focus node, also expand the tree to show it
+  const prevFocusRef = useMemo(() => ({ current: selectedNodeId }), []);
+  useEffect(() => {
+    if (selectedNodeId && selectedNodeId !== prevFocusRef.current && rootId) {
+      navigateTreeToNode(selectedNodeId);
     }
-
-    // Batch-expand all path prefixes
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
-      for (let i = 1; i <= ancestorPath.length; i++) {
-        next.add(pathKey(ancestorPath.slice(0, i)));
-      }
-      return next;
-    });
-
-    setSelectedNodeId(targetId);
-  }, []);
-
-  /** Handle URL state restoration */
-  const handleUrlState = useCallback((nodeId: string | null, expandedIds: string[]) => {
-    if (!nodeId) {
-      setSelectedNodeId(null);
-      return;
-    }
-
-    if (!rootId) {
-      pendingNodeIdRef.current = nodeId;
-      pendingExpandedRef.current = expandedIds;
-      return;
-    }
-
-    navigateToNode(nodeId);
-    if (expandedIds.length > 0) {
-      setManualNodeIds(new Set(expandedIds));
-    }
-  }, [rootId, navigateToNode]);
-
-  useUrlState({
-    selectedNodeId,
-    manualNodeIds,
-    onUrlState: handleUrlState,
-  });
+    prevFocusRef.current = selectedNodeId;
+  }, [selectedNodeId, rootId, navigateTreeToNode, prevFocusRef]);
 
   // Init: load graph from IndexedDB cache or fetch JSON
   useEffect(() => {
@@ -241,21 +277,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
         setRootId('root');
         setExpandedPaths(new Set(['root']));
         setGraphLoading(false);
-
-        // Handle pending URL navigation
-        const pendingNodeId = pendingNodeIdRef.current;
-        const pendingExpanded = pendingExpandedRef.current;
-        if (pendingNodeId) {
-          pendingNodeIdRef.current = null;
-          pendingExpandedRef.current = [];
-          // Navigate after a tick to let state settle
-          setTimeout(() => {
-            navigateToNode(pendingNodeId);
-            if (pendingExpanded.length > 0) {
-              setManualNodeIds(new Set(pendingExpanded));
-            }
-          }, 0);
-        }
       } catch (error) {
         console.error('Failed to load Foundation graph:', error);
         setGraphLoading(false);
@@ -266,6 +287,15 @@ export function GraphProvider({ children }: GraphProviderProps) {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only run once
   }, []);
+
+  // After graph loads + history restored: expand tree to the restored focus node
+  useEffect(() => {
+    if (!rootId || !historyRestored) return;
+    if (selectedNodeId && hasNode(selectedNodeId)) {
+      navigateTreeToNode(selectedNodeId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only run once on restore
+  }, [rootId, historyRestored]);
 
   const value: GraphContextValue = useMemo(() => ({
     selectedNodeId,
@@ -278,11 +308,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
     toggleExpand,
     setExpandedPaths,
     expandParentPaths,
-    manualNodeIds,
-    addManualNodes,
-    removeManualNode,
-    undoManualNodes,
-    resetManualNodes,
+    displayedNodeIds,
+    expandNodes,
+    removeNode,
+    resetNeighborhood,
+    historyBack,
+    historyForward,
+    canUndo,
+    canRedo,
     highlightedNodeIds,
     setHighlightedNodeIds,
     getNode,
@@ -293,7 +326,9 @@ export function GraphProvider({ children }: GraphProviderProps) {
     getGraph,
   }), [
     selectedNodeId, hoveredNodeId, expandedPaths, rootId, graphLoading,
-    selectNode, toggleExpand, expandParentPaths, manualNodeIds, addManualNodes, removeManualNode, undoManualNodes, resetManualNodes,
+    selectNode, toggleExpand, expandParentPaths,
+    displayedNodeIds, expandNodes, removeNode, resetNeighborhood,
+    historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds,
   ]);
 

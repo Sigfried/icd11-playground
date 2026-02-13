@@ -18,6 +18,9 @@ vi.mock('../api/foundationStore', () => ({
     putGraph: vi.fn().mockResolvedValue(undefined),
     getEntity: vi.fn().mockResolvedValue(null),
     putEntity: vi.fn().mockResolvedValue(undefined),
+    getHistory: vi.fn().mockResolvedValue(null),
+    putHistory: vi.fn().mockResolvedValue(undefined),
+    clearHistory: vi.fn().mockResolvedValue(undefined),
     clear: vi.fn().mockResolvedValue(undefined),
   },
 }));
