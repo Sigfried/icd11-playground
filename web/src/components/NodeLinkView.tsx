@@ -227,6 +227,7 @@ export function NodeLinkView() {
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
   // Tooltip for badge hover overlay (fallback model: no layout on hover)
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
@@ -293,10 +294,12 @@ export function NodeLinkView() {
     setZoomLevel(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
+    cancelHideTimer();
     if (tooltipRef.current) {
       tooltipRef.current.remove();
       tooltipRef.current = null;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- cancelHideTimer is stable
   }, [selectedNodeId]);
 
   // After zoom changes, resize SVG and keep focus node visible
@@ -657,7 +660,32 @@ export function NodeLinkView() {
     gEl
       .attr('class', 'nl-item node-link-cluster')
       .style('cursor', 'pointer')
-      .on('click', () => toggleCluster(node.id));
+      .on('click', () => toggleCluster(node.id))
+      .on('mouseenter', function () {
+        cancelHideTimer();
+        // Cross-panel highlighting for cluster children
+        setHighlightedNodeIds(new Set(node.childIds));
+        // Show interactive overlay listing hidden children
+        const childNodes = node.childIds
+          .map(id => getNode(id))
+          .filter((n): n is ConceptNode => n !== null);
+        if (childNodes.length > 0) {
+          const rectEl = (this as SVGGElement).querySelector('rect');
+          showTooltip(
+            rectEl ?? this as SVGGElement,
+            `${node.count} clustered children`,
+            childNodes, 0,
+            (id) => addManualNodes([id]),
+            () => toggleCluster(node.id),
+          );
+        }
+      })
+      .on('mouseleave', () => {
+        scheduleHide();
+        if (!tooltipRef.current) {
+          setHighlightedNodeIds(new Set());
+        }
+      });
 
     gEl.append('rect')
       .attr('width', node.width)
@@ -679,60 +707,107 @@ export function NodeLinkView() {
       .text(`${node.totalDescendants.toLocaleString()} descendants`);
   }
 
-  /** Show a floating tooltip near a badge element listing related nodes */
+  /** Show interactive overlay near an element listing related nodes */
   function showTooltip(
-    badgeEl: HTMLElement,
+    anchorEl: HTMLElement | SVGElement,
     label: string,
     nodes: ConceptNode[],
     alreadyVisibleCount: number,
+    onAddNode: (id: string) => void,
+    onAddAll: (ids: string[]) => void,
   ) {
-    hideTooltip();
+    hideTooltip(true);
     const container = containerRef.current;
     if (!container) return;
 
     const tip = document.createElement('div');
     tip.className = 'badge-tooltip';
 
+    // Keep tooltip alive when mouse enters it
+    tip.addEventListener('mouseenter', () => cancelHideTimer());
+    tip.addEventListener('mouseleave', () => scheduleHide());
+
+    // Header
     const header = document.createElement('div');
     header.className = 'badge-tooltip-header';
-    header.textContent = `${label} — click to add`;
+    header.textContent = label;
     tip.appendChild(header);
 
     if (alreadyVisibleCount > 0) {
-      const visible = document.createElement('div');
-      visible.className = 'badge-tooltip-visible';
-      visible.textContent = `${alreadyVisibleCount} already visible`;
-      tip.appendChild(visible);
+      const vis = document.createElement('div');
+      vis.className = 'badge-tooltip-visible';
+      vis.textContent = `${alreadyVisibleCount} already visible`;
+      tip.appendChild(vis);
     }
 
+    // "Add all" button
+    const allIds = nodes.map(n => n.id);
+    const addAllBtn = document.createElement('button');
+    addAllBtn.className = 'badge-tooltip-add-all';
+    addAllBtn.textContent = `Add all ${nodes.length}`;
+    addAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onAddAll(allIds);
+      hideTooltip(true);
+    });
+    tip.appendChild(addAllBtn);
+
+    // Scrollable list
     const list = document.createElement('ul');
     list.className = 'badge-tooltip-list';
-    const maxShow = 10;
-    for (const node of nodes.slice(0, maxShow)) {
+    for (const node of nodes) {
       const li = document.createElement('li');
       li.textContent = node.title;
-      list.appendChild(li);
-    }
-    if (nodes.length > maxShow) {
-      const li = document.createElement('li');
-      li.className = 'badge-tooltip-more';
-      li.textContent = `+ ${nodes.length - maxShow} more`;
+      li.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onAddNode(node.id);
+        li.remove();
+        // Update "Add all" count and close if empty
+        const remaining = list.querySelectorAll('li');
+        if (remaining.length === 0) {
+          hideTooltip(true);
+        } else {
+          addAllBtn.textContent = `Add all ${remaining.length}`;
+        }
+      });
       list.appendChild(li);
     }
     tip.appendChild(list);
 
-    // Position near the badge
-    const badgeRect = badgeEl.getBoundingClientRect();
+    // Position near the anchor element
+    const anchorRect = anchorEl.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
-    tip.style.left = `${badgeRect.right - containerRect.left + container.scrollLeft + 8}px`;
-    tip.style.top = `${badgeRect.top - containerRect.top + container.scrollTop - 4}px`;
+    tip.style.left = `${anchorRect.right - containerRect.left + container.scrollLeft + 8}px`;
+    tip.style.top = `${anchorRect.top - containerRect.top + container.scrollTop - 4}px`;
 
     container.appendChild(tip);
     tooltipRef.current = tip;
   }
 
+  /** Schedule tooltip hide after a delay (hover-intent) */
+  function scheduleHide() {
+    cancelHideTimer();
+    tooltipTimerRef.current = setTimeout(() => {
+      hideTooltip(true);
+      setHighlightedNodeIds(new Set());
+    }, 150);
+  }
+
+  /** Cancel a pending tooltip hide */
+  function cancelHideTimer() {
+    if (tooltipTimerRef.current) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+  }
+
   /** Hide the badge tooltip */
-  function hideTooltip() {
+  function hideTooltip(immediate?: boolean) {
+    if (!immediate) {
+      scheduleHide();
+      return;
+    }
+    cancelHideTimer();
     if (tooltipRef.current) {
       tooltipRef.current.remove();
       tooltipRef.current = null;
@@ -832,29 +907,27 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          // Hide tooltip on click
-          hideTooltip();
+          // If tooltip is showing, let users interact with it; badge click adds all
           if (isParentBadge) {
-            const parentIds = getParents(node.id).map(p => p.id);
-            addManualNodes(parentIds);
+            addManualNodes(getParents(node.id).map(p => p.id));
           } else if (isChildBadge) {
             const clusterId = `cluster:${node.id}`;
             if (expandedClusters.has(clusterId) || node.data.childCount <= MAX_VISIBLE_CHILDREN) {
-              const childIds = getChildren(node.id).map(c => c.id);
-              addManualNodes(childIds);
+              addManualNodes(getChildren(node.id).map(c => c.id));
             } else {
               toggleCluster(clusterId);
             }
           } else if (isDescBadge) {
-            // Expand children + grandchildren (depth 2)
             const childIds = getChildren(node.id).map(c => c.id);
             const grandchildIds = childIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
             addManualNodes([...childIds, ...grandchildIds]);
           }
+          hideTooltip(true);
         });
 
         badgeEl.addEventListener('mouseenter', () => {
-          // Compute related IDs for highlighting and tooltip
+          cancelHideTimer();
+          // Compute related nodes for highlighting and tooltip
           let relatedNodes: ConceptNode[] = [];
           let tooltipLabel = '';
           if (isParentBadge) {
@@ -870,22 +943,28 @@ export function NodeLinkView() {
             tooltipLabel = `Descendants (${node.data.descendantCount} total)`;
           }
 
-          const ids = relatedNodes.map(n => n.id);
+          // Cross-panel highlighting
+          setHighlightedNodeIds(new Set(relatedNodes.map(n => n.id)));
 
-          // Cross-panel highlighting (immediate)
-          setHighlightedNodeIds(new Set(ids));
-
-          // Show tooltip overlay listing nodes not yet visible in graph
+          // Show interactive overlay for nodes not yet visible
           const visibleIds = new Set(layoutNodes.map(n => n.id));
           const notVisible = relatedNodes.filter(n => !visibleIds.has(n.id));
           if (notVisible.length > 0) {
-            showTooltip(badgeEl, tooltipLabel, notVisible, visibleIds.size > 0 ? relatedNodes.length - notVisible.length : 0);
+            showTooltip(
+              badgeEl, tooltipLabel, notVisible,
+              relatedNodes.length - notVisible.length,
+              (id) => addManualNodes([id]),
+              (ids) => addManualNodes(ids),
+            );
           }
         });
 
         badgeEl.addEventListener('mouseleave', () => {
-          setHighlightedNodeIds(new Set());
-          hideTooltip();
+          scheduleHide();
+          // Delay highlight clear too — tooltip might keep them alive
+          if (!tooltipRef.current) {
+            setHighlightedNodeIds(new Set());
+          }
         });
       });
     }

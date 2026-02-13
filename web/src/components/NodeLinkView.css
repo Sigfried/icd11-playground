@@ -169,7 +169,7 @@
   background: rgba(206, 145, 120, 0.15);
 }
 
-/* Badge hover tooltip (fallback overlay model) */
+/* Badge/cluster hover overlay (interactive) */
 .badge-tooltip {
   position: absolute;
   z-index: 10;
@@ -177,10 +177,9 @@
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 8px 10px;
-  min-width: 160px;
-  max-width: 280px;
+  min-width: 180px;
+  max-width: 300px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
 }
 
 .badge-tooltip-header {
@@ -197,22 +196,45 @@
   margin-bottom: 4px;
 }
 
+.badge-tooltip-add-all {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  background: rgba(86, 156, 214, 0.15);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  text-align: center;
+}
+
+.badge-tooltip-add-all:hover {
+  background: rgba(86, 156, 214, 0.3);
+  color: var(--text-primary);
+}
+
 .badge-tooltip-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .badge-tooltip-list li {
   font-size: 0.78rem;
   color: var(--text-primary);
-  padding: 1px 0;
+  padding: 3px 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  border-radius: 3px;
 }
 
-.badge-tooltip-list .badge-tooltip-more {
-  color: var(--text-secondary);
-  font-style: italic;
+.badge-tooltip-list li:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-cyan);
 }
