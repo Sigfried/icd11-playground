@@ -2,6 +2,8 @@
  * React hook wrapping the pure nlHistory logic.
  *
  * Manages state, persists to IndexedDB on change, and restores on init.
+ * Undo/redo is via keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z) and UI buttons
+ * only — no browser history integration.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -42,9 +44,6 @@ interface UseNlHistoryReturn {
 export function useNlHistory(): UseNlHistoryReturn {
   const [history, setHistory] = useState<AppHistory>(createHistory);
   const [restored, setRestored] = useState(false);
-  // Ref to avoid stale closure in persist effect
-  const historyRef = useRef(history);
-  historyRef.current = history;
 
   // Restore from IndexedDB on mount
   useEffect(() => {
@@ -67,7 +66,6 @@ export function useNlHistory(): UseNlHistoryReturn {
     if (!restored) return;
     const serialized = serializeHistory(history);
     const json = JSON.stringify(serialized);
-    // Skip write if nothing changed (avoids IDB churn on restore)
     if (json === prevSerializedRef.current) return;
     prevSerializedRef.current = json;
     foundationStore.putHistory(serialized).catch(err =>

@@ -79,10 +79,12 @@ export function GraphProvider({ children }: GraphProviderProps) {
   } = useNlHistory();
 
   // Derive selectedNodeId from the current snapshot.
-  // Guard: don't expose a restored selection until the graph is loaded,
-  // otherwise components call getNode() before initGraph().
-  const selectedNodeId = graphLoading ? null : (snapshot?.focusNodeId ?? null);
-  const displayedNodeIds = graphLoading ? EMPTY_SET : (snapshot?.displayedNodeIds ?? EMPTY_SET);
+  // Guard: don't expose a restored selection until the graph is loaded
+  // (rootId is only set after initGraph() succeeds), otherwise components
+  // call getNode() before initGraph().
+  const graphReady = !graphLoading && rootId !== null;
+  const selectedNodeId = graphReady ? (snapshot?.focusNodeId ?? null) : null;
+  const displayedNodeIds = graphReady ? (snapshot?.displayedNodeIds ?? EMPTY_SET) : EMPTY_SET;
 
   /** Build a snapshot for a new focus node selection. */
   const buildAndPushSnapshot = useCallback((focusId: string, description: string) => {

@@ -78,30 +78,31 @@ function assertGraph(): Graph<ConceptNode> {
   return graph;
 }
 
-// --- Sync reads (always available after init) ---
+// --- Sync reads (safe to call before init — return null/empty/false) ---
 
 export function getNode(id: string): ConceptNode | null {
-  const g = assertGraph();
-  return g.hasNode(id) ? g.getNodeAttributes(id) : null;
+  if (!graph) return null;
+  return graph.hasNode(id) ? graph.getNodeAttributes(id) : null;
 }
 
 export function getChildren(id: string): ConceptNode[] {
-  const g = assertGraph();
-  if (!g.hasNode(id)) return [];
-  const attrs = g.getNodeAttributes(id);
+  if (!graph) return [];
+  if (!graph.hasNode(id)) return [];
+  const attrs = graph.getNodeAttributes(id);
   return attrs.childOrder
-    .filter(childId => g.hasNode(childId))
-    .map(childId => g.getNodeAttributes(childId));
+    .filter(childId => graph!.hasNode(childId))
+    .map(childId => graph!.getNodeAttributes(childId));
 }
 
 export function getParents(id: string): ConceptNode[] {
-  const g = assertGraph();
-  if (!g.hasNode(id)) return [];
-  return g.inNeighbors(id).map(parentId => g.getNodeAttributes(parentId));
+  if (!graph) return [];
+  if (!graph.hasNode(id)) return [];
+  return graph.inNeighbors(id).map(parentId => graph!.getNodeAttributes(parentId));
 }
 
 export function hasNode(id: string): boolean {
-  return assertGraph().hasNode(id);
+  if (!graph) return false;
+  return graph.hasNode(id);
 }
 
 /** Escape hatch — NodeLinkView needs the raw graph for ELK layout. */
