@@ -29,7 +29,6 @@ interface RealLayoutNode {
   height: number;
   data: ConceptNode;
   manual?: boolean;
-  preview?: boolean;
 }
 
 /** Cluster pseudo-node representing grouped children */
@@ -124,8 +123,6 @@ interface Neighborhood {
   ancestorIds: Set<string>;
   /** IDs of manually added nodes */
   manualIds: Set<string>;
-  /** IDs of preview nodes (hover, not yet committed) */
-  previewIds: Set<string>;
 }
 
 function buildNeighborhood(
@@ -135,7 +132,6 @@ function buildNeighborhood(
   getNode: (id: string) => ConceptNode | null,
   expandedClusters: Set<string>,
   manualNodeIds: Set<string>,
-  previewNodeIds: Set<string>,
 ): Neighborhood {
   const orderedIds: string[] = [];
   const nodeIds = new Set<string>();
@@ -200,16 +196,7 @@ function buildNeighborhood(
     }
   }
 
-  // 7. Preview nodes (hover, not yet committed)
-  const previewIds = new Set<string>();
-  for (const previewId of previewNodeIds) {
-    if (!nodeIds.has(previewId) && getNode(previewId)) {
-      add(previewId);
-      previewIds.add(previewId);
-    }
-  }
-
-  return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds, previewIds };
+  return { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds };
 }
 
 /** Build an SVG path string from ELK edge sections */
@@ -238,12 +225,8 @@ export function NodeLinkView() {
   const [ancestorNodeIds, setAncestorNodeIds] = useState<Set<string>>(new Set());
   const [manualLayoutIds, setManualLayoutIds] = useState<Set<string>>(new Set());
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set());
-  // Preview nodes: shown on badge hover before click commits them
-  const [previewNodeIds, setPreviewNodeIds] = useState<Set<string>>(new Set());
-  const [previewLayoutIds, setPreviewLayoutIds] = useState<Set<string>>(new Set());
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Node whose badge triggered the current preview — anchored at its pre-layout position
-  const previewAnchorRef = useRef<string | null>(null);
+  // Tooltip for badge hover overlay (fallback model: no layout on hover)
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoomLevel;
@@ -304,14 +287,16 @@ export function NodeLinkView() {
     });
   }, []);
 
-  // Reset expanded clusters, previews, and zoom when selection changes
+  // Reset expanded clusters, tooltip, and zoom when selection changes
   useEffect(() => {
     setExpandedClusters(new Set());
-    setPreviewNodeIds(new Set());
-    previewAnchorRef.current = null;
     setZoomLevel(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
+    if (tooltipRef.current) {
+      tooltipRef.current.remove();
+      tooltipRef.current = null;
+    }
   }, [selectedNodeId]);
 
   // After zoom changes, resize SVG and keep focus node visible
@@ -384,8 +369,8 @@ export function NodeLinkView() {
 
     async function computeLayout() {
       const graph = getGraph();
-      const { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds, previewIds } = buildNeighborhood(
-        selectedNodeId!, getParents, getChildren, getNode, expandedClusters, manualNodeIds, previewNodeIds,
+      const { orderedIds, nodeIds, clusterNodes, ancestorIds, manualIds } = buildNeighborhood(
+        selectedNodeId!, getParents, getChildren, getNode, expandedClusters, manualNodeIds,
       );
 
       // Build ELK graph — order matters for NODES_AND_EDGES model order
@@ -468,7 +453,6 @@ export function NodeLinkView() {
             height: elkNode.height ?? NODE_HEIGHT,
             data: getNode(elkNode.id)!,
             manual: manualIds.has(elkNode.id),
-            preview: previewIds.has(elkNode.id),
           };
         });
 
@@ -482,32 +466,17 @@ export function NodeLinkView() {
           };
         });
 
-        // Anchor the node whose badge triggered the preview at its old position
-        // so the cursor stays over the badge during layout animation
-        const anchorId = previewAnchorRef.current;
-        if (anchorId && previewIds.size > 0) {
-          const cachedPos = positionCacheRef.current.get(anchorId);
-          if (cachedPos) {
-            const anchorNode = nodes.find(n => n.id === anchorId);
-            if (anchorNode) {
-              anchorNode.x = cachedPos.x;
-              anchorNode.y = cachedPos.y;
-            }
-          }
-        }
-
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
         setAncestorNodeIds(ancestorIds);
         setManualLayoutIds(manualIds);
-        setPreviewLayoutIds(previewIds);
       } catch (error) {
         console.error('ELK layout error:', error);
       }
     }
 
     computeLayout();
-  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters, manualNodeIds, previewNodeIds]);
+  }, [selectedNodeId, getNode, getParents, getChildren, getGraph, expandedClusters, manualNodeIds]);
 
   // D3 rendering with data-join (enter/update/exit animation)
   useEffect(() => {
@@ -518,10 +487,7 @@ export function NodeLinkView() {
       return;
     }
 
-    // Clear hover state when layout changes (but not during preview — anchor is stable)
-    if (!previewAnchorRef.current) {
-      setHoveredNodeId(null);
-    }
+    setHoveredNodeId(null);
 
     const svg = d3.select(svgRef.current);
     const isInitial = isInitialRenderRef.current;
@@ -630,11 +596,7 @@ export function NodeLinkView() {
     const allNodes = nodeEnter.merge(nodeSelection);
 
     // Re-render inner contents for all nodes (pragmatic: recreate cheap inner elements)
-    // Skip the anchored node during preview — its DOM must stay intact so the
-    // cursor remains over the badge and doesn't trigger mouseleave.
-    const anchorId = previewAnchorRef.current;
     allNodes.each(function (node) {
-      if (anchorId && node.id === anchorId) return;
       const gEl = d3.select<SVGGElement, LayoutNode>(this);
       gEl.selectAll('*').remove();
 
@@ -676,7 +638,7 @@ export function NodeLinkView() {
     isInitialRenderRef.current = false;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId, setHighlightedNodeIds are stable useState setters
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds, manualLayoutIds, previewLayoutIds]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, toggleCluster, ancestorNodeIds, manualLayoutIds]);
 
   // Lightweight highlight effect — toggles CSS class without re-rendering
   useEffect(() => {
@@ -717,6 +679,66 @@ export function NodeLinkView() {
       .text(`${node.totalDescendants.toLocaleString()} descendants`);
   }
 
+  /** Show a floating tooltip near a badge element listing related nodes */
+  function showTooltip(
+    badgeEl: HTMLElement,
+    label: string,
+    nodes: ConceptNode[],
+    alreadyVisibleCount: number,
+  ) {
+    hideTooltip();
+    const container = containerRef.current;
+    if (!container) return;
+
+    const tip = document.createElement('div');
+    tip.className = 'badge-tooltip';
+
+    const header = document.createElement('div');
+    header.className = 'badge-tooltip-header';
+    header.textContent = `${label} — click to add`;
+    tip.appendChild(header);
+
+    if (alreadyVisibleCount > 0) {
+      const visible = document.createElement('div');
+      visible.className = 'badge-tooltip-visible';
+      visible.textContent = `${alreadyVisibleCount} already visible`;
+      tip.appendChild(visible);
+    }
+
+    const list = document.createElement('ul');
+    list.className = 'badge-tooltip-list';
+    const maxShow = 10;
+    for (const node of nodes.slice(0, maxShow)) {
+      const li = document.createElement('li');
+      li.textContent = node.title;
+      list.appendChild(li);
+    }
+    if (nodes.length > maxShow) {
+      const li = document.createElement('li');
+      li.className = 'badge-tooltip-more';
+      li.textContent = `+ ${nodes.length - maxShow} more`;
+      list.appendChild(li);
+    }
+    tip.appendChild(list);
+
+    // Position near the badge
+    const badgeRect = badgeEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    tip.style.left = `${badgeRect.right - containerRect.left + container.scrollLeft + 8}px`;
+    tip.style.top = `${badgeRect.top - containerRect.top + container.scrollTop - 4}px`;
+
+    container.appendChild(tip);
+    tooltipRef.current = tip;
+  }
+
+  /** Hide the badge tooltip */
+  function hideTooltip() {
+    if (tooltipRef.current) {
+      tooltipRef.current.remove();
+      tooltipRef.current = null;
+    }
+  }
+
   /** Render real node inner contents */
   function renderNodeContents(
     gEl: d3.Selection<SVGGElement, LayoutNode, null, undefined>,
@@ -725,7 +747,6 @@ export function NodeLinkView() {
     const isFocus = node.id === selectedNodeId;
     const isAncestorNode = ancestorNodeIds.has(node.id);
     const isManual = node.manual;
-    const isPreview = node.preview;
 
     const fullTitle = node.data.title;
     const truncatedTitle = fullTitle.length > 22
@@ -738,7 +759,6 @@ export function NodeLinkView() {
       isFocus && 'focus',
       isAncestorNode && 'ancestor',
       isManual && 'manual',
-      isPreview && 'preview',
     ].filter(Boolean).join(' ');
 
     gEl
@@ -812,11 +832,8 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          // Clear debounce timer — click commits immediately
-          if (previewTimerRef.current) {
-            clearTimeout(previewTimerRef.current);
-            previewTimerRef.current = null;
-          }
+          // Hide tooltip on click
+          hideTooltip();
           if (isParentBadge) {
             const parentIds = getParents(node.id).map(p => p.id);
             addManualNodes(parentIds);
@@ -834,47 +851,41 @@ export function NodeLinkView() {
             const grandchildIds = childIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
             addManualNodes([...childIds, ...grandchildIds]);
           }
-          // Clear preview since click committed the nodes
-          previewAnchorRef.current = null;
-          setPreviewNodeIds(new Set());
         });
 
         badgeEl.addEventListener('mouseenter', () => {
-          // Compute preview IDs for this badge type
-          let ids: string[] = [];
+          // Compute related IDs for highlighting and tooltip
+          let relatedNodes: ConceptNode[] = [];
+          let tooltipLabel = '';
           if (isParentBadge) {
-            ids = getParents(node.id).map(p => p.id);
+            relatedNodes = getParents(node.id);
+            tooltipLabel = 'Parents';
           } else if (isChildBadge) {
-            ids = getChildren(node.id).map(c => c.id);
+            relatedNodes = getChildren(node.id);
+            tooltipLabel = 'Children';
           } else if (isDescBadge) {
-            // Show descendant stats tooltip; preview children + grandchildren
             const children = getChildren(node.id);
             const grandchildren = children.flatMap(c => getChildren(c.id));
-            badgeEl.title = `${children.length} children, ${grandchildren.length} grandchildren, ${node.data.descendantCount} total descendants`;
-            ids = [...children.map(c => c.id), ...grandchildren.map(gc => gc.id)];
+            relatedNodes = [...children, ...grandchildren];
+            tooltipLabel = `Descendants (${node.data.descendantCount} total)`;
           }
+
+          const ids = relatedNodes.map(n => n.id);
 
           // Cross-panel highlighting (immediate)
           setHighlightedNodeIds(new Set(ids));
 
-          // Debounced preview in NL view
-          if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-          previewTimerRef.current = setTimeout(() => {
-            previewAnchorRef.current = node.id;
-            setPreviewNodeIds(new Set(ids));
-            previewTimerRef.current = null;
-          }, 150);
+          // Show tooltip overlay listing nodes not yet visible in graph
+          const visibleIds = new Set(layoutNodes.map(n => n.id));
+          const notVisible = relatedNodes.filter(n => !visibleIds.has(n.id));
+          if (notVisible.length > 0) {
+            showTooltip(badgeEl, tooltipLabel, notVisible, visibleIds.size > 0 ? relatedNodes.length - notVisible.length : 0);
+          }
         });
 
         badgeEl.addEventListener('mouseleave', () => {
-          // Cancel pending preview
-          if (previewTimerRef.current) {
-            clearTimeout(previewTimerRef.current);
-            previewTimerRef.current = null;
-          }
           setHighlightedNodeIds(new Set());
-          previewAnchorRef.current = null;
-          setPreviewNodeIds(new Set());
+          hideTooltip();
         });
       });
     }

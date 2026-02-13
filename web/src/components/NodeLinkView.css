@@ -117,15 +117,6 @@
   font-size: 9px;
 }
 
-/* Preview nodes (badge hover, not yet committed) */
-.node-link-node.preview {
-  opacity: 0.4;
-}
-
-.node-link-node.preview rect {
-  stroke-dasharray: 2 2;
-}
-
 /* Manually added nodes (via badge click) */
 .node-link-node.manual rect {
   stroke-dasharray: 4 2;
@@ -176,4 +167,52 @@
 .reset-btn:hover {
   color: var(--text-primary);
   background: rgba(206, 145, 120, 0.15);
+}
+
+/* Badge hover tooltip (fallback overlay model) */
+.badge-tooltip {
+  position: absolute;
+  z-index: 10;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 160px;
+  max-width: 280px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.badge-tooltip-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+
+.badge-tooltip-visible {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+.badge-tooltip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.badge-tooltip-list li {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  padding: 1px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-tooltip-list .badge-tooltip-more {
+  color: var(--text-secondary);
+  font-style: italic;
 }
