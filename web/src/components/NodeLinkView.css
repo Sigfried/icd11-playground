@@ -122,6 +122,30 @@
   stroke-dasharray: 4 2;
 }
 
+/* Node close button (× on hover) */
+.nl-close-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.node-link-node:hover .nl-close-btn {
+  opacity: 0.6;
+}
+
+.nl-close-btn:hover {
+  opacity: 1 !important;
+}
+
+.nl-close-icon {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.nl-close-btn:hover .nl-close-icon {
+  fill: var(--accent-orange);
+}
+
 /* Cross-panel highlighted nodes */
 .node-link-node.highlighted rect {
   stroke: var(--accent-cyan);

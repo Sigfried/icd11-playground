@@ -98,7 +98,7 @@ export function NodeLinkView() {
   const {
     selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
-    displayedNodeIds, expandNodes, resetNeighborhood,
+    displayedNodeIds, expandNodes, removeNode, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
   } = useGraph();
@@ -884,6 +884,29 @@ export function NodeLinkView() {
       .attr('y', 16)
       .attr('class', 'node-title')
       .text(truncatedTitle);
+
+    // Close button (top-right, visible on hover via CSS)
+    const closeG = gEl.append('g')
+      .attr('class', 'nl-close-btn')
+      .attr('transform', `translate(${node.width - 16}, 2)`)
+      .style('cursor', 'pointer')
+      .on('click', (e: MouseEvent) => {
+        e.stopPropagation();
+        removeNode(node.id);
+      });
+
+    closeG.append('rect')
+      .attr('width', 14)
+      .attr('height', 14)
+      .attr('rx', 2)
+      .attr('fill', 'transparent');
+
+    closeG.append('text')
+      .attr('x', 7)
+      .attr('y', 11)
+      .attr('text-anchor', 'middle')
+      .attr('class', 'nl-close-icon')
+      .text('\u00D7');
 
     // Badges
     const badgeParts: string[] = [];
