@@ -37,6 +37,12 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 | | Collapsible parents/children lists | :green_circle: |
 | | Parent/child/descendant badges | :green_circle: |
 | | Paths to root | :yellow_circle: |
+| **Node-Link View** | Node removal (× button, connectivity pruning) | :white_circle: |
+| **State & History** | Unified localStorage history (replaces URL state + manualNodeIds) | :white_circle: |
+| | Undo/redo via history pointer | :white_circle: |
+| | Session continuity (resume prompt on load) | :white_circle: |
+| | History review UI (timeline panel) | :white_circle: |
+| | Share button (encode snapshot in URL) | :white_circle: |
 | **Data Layer** | Full graph preload + IndexedDB cache | :green_circle: |
 | | On-demand entity detail fetch | :green_circle: |
 | **Proposal Authoring** | All features | :black_circle: |
@@ -365,9 +371,10 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 - **Hover highlight:** badge background lightens or glows to indicate interactivity
 - **Active state:** brief press feedback on click
 - **Overlay** (hover): floating list near the badge showing nodes not yet visible, with per-item click to add selectively
-- **Manually added nodes:** dashed border to distinguish from default neighborhood nodes
+- **Expanded nodes:** dashed border to distinguish from initial neighborhood nodes
 - **Highlighted nodes** (cross-panel): cyan glow/outline on nodes related to the hovered badge
-- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions. Ctrl+Z undoes the last expansion; Escape dismisses tooltip and resets.
+- **Node removal:** `×` button on hover for every node. Clicking removes the node and connectivity-prunes disconnected subgraphs.
+- **"Reset neighborhood" button:** returns NL graph to the initial neighborhood for the selected node. Undo (Ctrl+Z / back) steps through history; Escape dismisses tooltip.
 
 ##### Layout animation
 
@@ -398,61 +405,58 @@ Reset (`↺`) always returns to 1× zoom regardless of fit mode.
 
 ##### Node removal
 
-:white_circle: Not started — needs design discussion
+:white_circle: Not started
 
-Nodes in the NL view should be removable. An `×` button appears on hover for every node (including the focus node). The removal model is **reachability-based pruning**, not an exclude list.
+Nodes in the NL view should be removable. An `×` button appears on hover for every node (including the focus node). The removal model is **connectivity-based pruning**: the focus node anchors the graph, and removing any other node cascades to anything that becomes disconnected.
 
-**Removing a non-focus node X:**
-1. Remove X from the graph
-2. Walk edges away from the focus node starting from X (i.e., downstream in whatever direction X sits relative to focus)
-3. Remove every node reached in that walk **unless** it is still reachable from the focus node through some other path that doesn't go through X
-4. The result: X and its "dependent subtree" disappear, but nodes connected through multiple paths survive
+**Algorithm — removing non-focus node X:**
+1. Delete X from the displayed node set (and all its edges)
+2. Find all connected components in the remaining graph (treated as **undirected** — parent/child direction doesn't matter for connectivity)
+3. Keep only the component containing the focus node
+4. Everything in other components is pruned
+
+Example: focus is "Acute and transient psychotic disorders", displayed ancestors are ICD Category → Mental behavioural → Schizophrenia → Acute. Removing "Schizophrenia" severs the connection — "Mental behavioural" and "ICD Category" form a disconnected component and are pruned. "Acute" remains because it's the focus node.
 
 **Removing the focus node:**
 - Equivalent to resetting the NL neighborhood (same as clicking the panel title or the reset button)
-- May be extended later if there's useful state worth preserving (e.g., keeping manual expansions and just deselecting)
 
 **Badge-triggered removal:**
 - Red badge or indicator on groups of nodes added by a badge expansion
-- Clicking removes the entry-point node + prunes downstream — same algorithm as single-node removal, just triggered from the badge context
-- For parent/child/descendant groups, this removes the subset that was added by that specific expansion
+- Clicking removes the entry-point node + connectivity-prunes — same algorithm as single-node removal, just triggered from the badge context
+
+**Scope:** Removal only affects the NL view. The tree view is not affected (though tree filtering/search is a separate desired feature — see [Open questions](#open-questions)).
 
 **Implementation notes:**
-- `manualNodeIds` is the source of truth for what was explicitly expanded
-- `buildNeighborhood` determines reachability: only include a manual node if it connects to an already-included node via an edge in the graph
-- No separate `excludedNodeIds` needed — removal just deletes from `manualNodeIds` and lets reachability handle the rest
-- `removeManualNode` already exists in GraphProvider (with undo history)
+- The displayed node set is the sole source of truth — see [History & State Model](#history--state-model)
+- No distinction between "default" and "manually added" nodes for removal purposes
+- No `excludedNodeIds` or refcounting needed — connectivity check on removal is sufficient
+- `buildNeighborhood` becomes `buildInitialNeighborhood` — runs once when a focus node is selected to produce the first snapshot, not recomputed on every render
+- Each removal pushes a new snapshot to the history stack
 
 **Edge cases:**
-- Node A added by both expansion-1 and expansion-2: removing expansion-1's entry point doesn't remove A because it's still reachable through expansion-2's path
-- Ancestor nodes (part of default neighborhood): removing them requires either the exclude-list approach or changing `buildNeighborhood` to support "pinned" exclusions. Needs design — may be simplest to only allow removal of manual nodes initially.
-- Deep pruning could be expensive for large expansions — may need to debounce or batch
+- Node reachable via two paths: survives removal of one path's intermediary because it stays connected to focus through the other
+- Deep pruning could touch many nodes for large expansions — may need to batch the state update
 
 ##### Open questions
 
-1. ~~**Reset button**~~ :green_circle: Resolved: reset button included, manually-added nodes have dashed border, Ctrl+Z undoes, Escape resets.
-2. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Current implementation expands all at once — may need progressive expansion (one level up per click) after user testing.
-3. ~~**Undo**~~ :green_circle: Resolved: Ctrl+Z steps back one expansion, Escape resets. Expansion state saved to URL (`?expanded=id1,id2`). Resets on new node selection.
-4. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
-5. ~~**Hover animation timing**~~ :green_circle: Resolved: animated layout preview proved infeasible (see design note above). Using overlay/highlight model instead.
-6. ~~**Descendant hover depth**~~ :green_circle: Resolved: level-by-level overlay (BFS up to depth 5) with per-level add buttons and cumulative totals.
-7. ~~**Detail panel upward expansion**~~ :green_circle: Resolved: parents shown as indented sub-list above the item with cyan left border.
-8. ~~**Animated preview feasibility**~~ :green_circle: Resolved: infeasible due to layout repositioning causing flicker. Using overlay model.
+1. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Current implementation expands all at once — may need progressive expansion (one level up per click) after user testing.
+2. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
+3. **Tree search/filter** — Need a mechanism for searching and filtering in the tree view. Node removal only affects NL view; tree needs its own discoverability story.
 
 ##### Implementation status
 
 - :green_circle: Badge component has `onClick`, `onMouseEnter`/`onMouseLeave` wiring
-- :green_circle: NL view incrementally adds/removes nodes via `manualNodeIds` in GraphProvider — D3 data-join handles enter/update/exit animation
-- :green_circle: Manually added nodes tracked separately from default neighborhood (dashed border, reset button, undo history)
+- :green_circle: NL view incrementally adds/removes nodes via D3 data-join (enter/update/exit animation)
 - :green_circle: Tree `↑` expand walks up all parent chains and expands each path prefix via `expandParentPaths`
 - :green_circle: Cross-panel coordination via shared `highlightedNodeIds` state in GraphProvider
-- :green_circle: URL state encodes expansion history (`?node=ID&expanded=id1,id2,id3`)
 - :green_circle: Detail panel inline expansion via `RelationListItem` component with expandable sub-lists
 - :green_circle: NL badge hover overlay is interactive: per-item click to add selectively, "Add all" button, hover-intent keeps tooltip alive
 - :green_circle: Cluster nodes reuse the same interactive overlay (hover shows hidden children list)
 - :green_circle: Descendant badge shows level-by-level overlay with per-level add buttons
 - :green_circle: Tooltip positioning: zone-based vertical alignment (top/center/bottom based on anchor position in panel)
 - :green_circle: Escape dismisses tooltips (with suppress flag to prevent re-creation while cursor hovers)
+- :white_circle: Node removal (`×` button, connectivity pruning) — see [History & State Model](#history--state-model) for the state architecture
+- :white_circle: History/undo system (replaces current `manualNodeIds` + URL state)
 
 #### Implementation Priority
 
@@ -482,8 +486,7 @@ Nodes in the NL view should be removable. An `×` button appears on hover for ev
 **Defer:**
 - Fisheye — only if the above doesn't suffice
 - Fit-to-view cycling — see [Zoom and fit-to-view](#zoom-and-fit-to-view) section above
-- Node removal — see [Node removal](#node-removal) section above
-- Global undo button in app title bar — undo across node selections, tree expand/collapse, and NL manual expansions. Needs a unified action history stack in GraphProvider rather than the current per-type history.
+- Node removal + history/undo system — see [Node removal](#node-removal) and [History & State Model](#history--state-model). Replaces current `manualNodeIds` + URL state approach with unified localStorage history.
 - Tooltip/overlay positioning package — current `positionTooltip()` helper is adequate but has a TODO to consider a package if positioning gets more complex
 
 ### 3. Detail Panel
@@ -514,6 +517,82 @@ Shows concept metadata, parents list, children list. Title appears instantly fro
     1. ... > Bacterial intestinal infections > Abdominal actinomycosis
     2. ... > Other bacterial diseases > Actinomycosis > Abdominal actinomycosis
   ```
+
+---
+
+## History & State Model
+
+:white_circle: Not started — replaces current `manualNodeIds` + URL state approach
+
+The app maintains a **unified history** of all user actions in localStorage. This supports undo/redo, session continuity, and sharing — without using browser history or URL parameters during normal use.
+
+### Data structure
+
+```typescript
+interface Snapshot {
+  focusNodeId: string | null;   // selected node (null = nothing selected)
+  displayedNodeIds: Set<string>; // all nodes currently shown in NL view
+  timestamp: number;
+  description: string;           // human-readable action description
+}
+
+// In localStorage:
+interface AppHistory {
+  snapshots: Snapshot[];  // ordered list of states
+  pointer: number;        // index of current state (0-based)
+}
+```
+
+### Operations
+
+| Action | Effect on history |
+|--------|-------------------|
+| **Select focus node** | Compute initial neighborhood (`buildInitialNeighborhood`), push snapshot with description e.g. "Selected Cholera" |
+| **Expand (badge click)** | Add nodes to displayed set, push snapshot e.g. "Expanded 3 children of X" |
+| **Remove node X** | Delete X from displayed set, run connectivity pruning (keep only focus node's connected component), push snapshot e.g. "Removed Schizophrenia (+2 pruned)" |
+| **Back / Undo** | Decrement pointer, render `snapshots[pointer]` |
+| **Forward / Redo** | Increment pointer (if not at end), render `snapshots[pointer]` |
+| **New action from earlier state** | Truncate everything after pointer, push new snapshot |
+
+### URL and browser history
+
+- **No URL parameters** during normal use — state lives entirely in localStorage
+- Browser back/forward are not used until the history stack is exhausted (pointer reaches 0 and user hits back → falls through to actual browser navigation, leaving the app)
+- **Share button** generates a URL encoding the current snapshot's `displayedNodeIds` + `focusNodeId` for small sets. On load, this writes to the recipient's localStorage and renders. For large sets: alternative sharing mechanism TBD (deal with later).
+
+### Session continuity
+
+- On app load, if localStorage contains history, prompt user: "Return to previous session?" with options to resume (restore `snapshots[pointer]`) or start fresh (clear history)
+- Auto-clear snapshots older than N days (configurable, e.g. 7 days)
+
+### History UI
+
+A reviewable history panel/dropdown showing the exploration timeline:
+- List of snapshots with descriptions and relative timestamps ("2 min ago", "yesterday")
+- Current position highlighted
+- Click any entry to jump directly (sets pointer, no need to step through)
+- Optional scrubber/slider for quick traversal through long histories
+
+### What this replaces
+
+The current state model uses several separate mechanisms that this unifies:
+
+| Current | Replaced by |
+|---------|-------------|
+| `manualNodeIds` in GraphProvider | `displayedNodeIds` in snapshot — no manual/default distinction |
+| `manualHistoryRef` (undo stack) | History array with pointer |
+| `excludedNodeIds` (was proposed) | Not needed — connectivity pruning handles removal |
+| `buildNeighborhood` (per-render) | `buildInitialNeighborhood` (once per focus selection) |
+| `useUrlState` / `?node=ID&expanded=...` | No URL params; state in localStorage |
+| Ctrl+Z undo (per-type) | Unified back through history array |
+| Escape = reset | Back to initial snapshot for current focus node (or just undo repeatedly) |
+
+### Implementation notes
+
+- Snapshot `displayedNodeIds` is typically 10–50 IDs. Even with hundreds of snapshots, localStorage usage is modest.
+- Connectivity pruning on removal: build adjacency from `displayedNodeIds` + edges from the full graphology instance, BFS/DFS from focus node, keep only visited nodes. Treat graph as undirected for this check.
+- `buildInitialNeighborhood` is the current `buildNeighborhood` logic (ancestor DAG + children + clusters) but only runs once to produce the first snapshot when a focus node is selected.
+- Tree view state (expand/collapse) could also be tracked in snapshots if we want unified undo across panels. For now, tree state is separate.
 
 ---
 
