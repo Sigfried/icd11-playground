@@ -341,7 +341,7 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 |-------|---------------|
 | **N↑ parents** | Add all parents to the graph permanently. |
 | **N↓ children** | Add children to the graph (expand cluster if clustered). |
-| **N▽ descendants** | Add next level of descendants (children + grandchildren?). Depth/scope TBD. |
+| **N▽ descendants** | Show level-by-level overlay (children, grandchildren, great-grandchildren, etc.) with per-level add buttons and cumulative "add all through depth N". |
 
 **Tree View:**
 - `↑` click: Find and expand all paths through this node's parents (expensive for deeply nested polyhierarchy — may need progressive expansion: one level up per click)
@@ -351,7 +351,7 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 **Node-Link View:**
 - `↑` click: Add all parents to the NL graph (even those filtered by ANCESTOR_MIN_DEPTH). Animate layout transition.
 - `↓` click: Expand cluster if children are clustered; otherwise add children to graph. Animate layout transition.
-- `▽` click: Add descendants to graph (depth TBD). Animate layout transition.
+- `▽` click: Show level-by-level descendant overlay with per-level add buttons. Animate layout transition.
 
 **Detail Panel:**
 - `↑` click on a list item: Expand upward within the detail panel — show the item's parents indented above it (inline expansion, not navigation). How upward indentation works visually is an open question — reverse indentation? separate "ancestors" sub-list?
@@ -367,7 +367,7 @@ Clicking a badge makes the preview persistent: preview nodes become permanent gr
 - **Overlay** (hover): floating list near the badge showing nodes not yet visible, with per-item click to add selectively
 - **Manually added nodes:** dashed border to distinguish from default neighborhood nodes
 - **Highlighted nodes** (cross-panel): cyan glow/outline on nodes related to the hovered badge
-- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions. Ctrl+Z undoes the last expansion; Escape resets entirely.
+- **"Reset neighborhood" button:** returns NL graph to the default computed neighborhood for the selected node, clearing all manual expansions. Ctrl+Z undoes the last expansion; Escape dismisses tooltip and resets.
 
 ##### Layout animation
 
@@ -387,7 +387,7 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 3. ~~**Undo**~~ :green_circle: Resolved: Ctrl+Z steps back one expansion, Escape resets. Expansion state saved to URL (`?expanded=id1,id2`). Resets on new node selection.
 4. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
 5. ~~**Hover animation timing**~~ :green_circle: Resolved: animated layout preview proved infeasible (see design note above). Using overlay/highlight model instead.
-6. **Descendant hover depth** — Currently showing children + grandchildren in overlay with total count. May need experimentation for deeper trees.
+6. ~~**Descendant hover depth**~~ :green_circle: Resolved: level-by-level overlay (BFS up to depth 5) with per-level add buttons and cumulative totals.
 7. ~~**Detail panel upward expansion**~~ :green_circle: Resolved: parents shown as indented sub-list above the item with cyan left border.
 8. ~~**Animated preview feasibility**~~ :green_circle: Resolved: infeasible due to layout repositioning causing flicker. Using overlay model.
 
@@ -400,8 +400,11 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 - :green_circle: Cross-panel coordination via shared `highlightedNodeIds` state in GraphProvider
 - :green_circle: URL state encodes expansion history (`?node=ID&expanded=id1,id2,id3`)
 - :green_circle: Detail panel inline expansion via `RelationListItem` component with expandable sub-lists
-- :yellow_circle: NL badge hover overlay needs to be made interactive (per-item click to add selectively)
-- :yellow_circle: Cluster nodes should reuse the same interactive overlay
+- :green_circle: NL badge hover overlay is interactive: per-item click to add selectively, "Add all" button, hover-intent keeps tooltip alive
+- :green_circle: Cluster nodes reuse the same interactive overlay (hover shows hidden children list)
+- :green_circle: Descendant badge shows level-by-level overlay with per-level add buttons
+- :green_circle: Tooltip positioning: zone-based vertical alignment (top/center/bottom based on anchor position in panel)
+- :green_circle: Escape dismisses tooltips (with suppress flag to prevent re-creation while cursor hovers)
 
 #### Implementation Priority
 
@@ -411,11 +414,11 @@ All NL graph changes (from badge click or node selection) animate via D3 data-jo
 **Phase 2 — Stress test + medium effort features:**
 - #10 Full ancestor DAG — :green_circle: done; [stress test results](#stress-test-high-parent-count-nodes) confirm layout is the bottleneck
 - #6 Area-proportional badges — :green_circle: done: shared Badge component with per-type count→font-weight bins, consistent colors (parents=cyan, children=green, descendants=orange) across all three panels, aligned columns in tree view, foreignObject in NL SVG
-- #3 Badge interactions — :green_circle: done: overlay/highlight hover model (animated preview infeasible), badge click expands in all panels, cross-panel highlighting, undo/reset, URL state. Interactive overlay for selective expansion in progress.
+- #3 Badge interactions — :green_circle: done: overlay/highlight hover model (animated preview infeasible), badge click expands in all panels, cross-panel highlighting, undo/reset, URL state. Interactive overlay with per-item add, level-by-level descendant breakdown, cluster overlay unification.
 - #12 Full-width bottom panel — :green_circle: done: two switchable layouts, RIGHT direction, viewBox zoom, scroll-to-focus, zoom controls
 
 **Phase 3 — Next up:**
-- #11 Scrollable clusters — unify with badge interactive overlay: cluster hover shows same overlay listing hidden children for selective expansion
+- ~~#11 Scrollable clusters~~ — :green_circle: done: cluster hover shows same interactive overlay listing hidden children for selective expansion
 - #3 Tree highlight — highlight hovered node in tree view
 - #4+5 Toggle/Close (unified as visibility state)
 - #7 Staggered levels — evaluate after clusters; may require replacing elkjs
