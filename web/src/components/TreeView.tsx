@@ -279,6 +279,8 @@ export function TreeView() {
           path={descTooltip.path}
           anchorRect={descTooltip.anchorRect}
           onClose={hide}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
         />
       )}
     </DescTooltipContext.Provider>

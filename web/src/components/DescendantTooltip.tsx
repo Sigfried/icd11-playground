@@ -3,6 +3,9 @@
  *
  * Shows a level-by-level breakdown of descendants with per-level "Expand" buttons.
  * Rendered as a portal to document.body for correct z-index/positioning.
+ *
+ * Hide/cancel timers are managed by the parent (TreeView) via onMouseEnter/onMouseLeave
+ * props — the tooltip itself has no timers.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -16,51 +19,38 @@ interface DescendantTooltipProps {
   path: TreePath;
   anchorRect: DOMRect;
   onClose: () => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }
 
-export function DescendantTooltip({ nodeId, path, anchorRect, onClose }: DescendantTooltipProps) {
+export function DescendantTooltip({ nodeId, path, anchorRect, onClose, onMouseEnter, onMouseLeave }: DescendantTooltipProps) {
   const { getNode, getChildren, setExpandedPaths } = useGraph();
   const tipRef = useRef<HTMLDivElement>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const node = getNode(nodeId);
   const levels = computeDescendantLevels(nodeId, getChildren, 5);
 
-  const cancelHide = useCallback(() => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleHide = useCallback(() => {
-    cancelHide();
-    hideTimerRef.current = setTimeout(onClose, 150);
-  }, [onClose, cancelHide]);
-
-  // Dismiss on scroll or click outside
+  // Dismiss on click outside (but not on clicks inside the tooltip)
   useEffect(() => {
-    const onScroll = () => onClose();
     const onClick = (e: MouseEvent) => {
       if (tipRef.current && !tipRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('mousedown', onClick);
+    // Use setTimeout so the click that opened the tooltip doesn't immediately close it
+    const timer = setTimeout(() => {
+      window.addEventListener('mousedown', onClick);
+    }, 0);
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
+      clearTimeout(timer);
       window.removeEventListener('mousedown', onClick);
-      cancelHide();
     };
-  }, [onClose, cancelHide]);
+  }, [onClose]);
 
   const expandToLevel = useCallback((_level: DescendantLevel, levelIdx: number) => {
-    // Expand the tree to show all descendants through this level
     const throughLevels = levels.slice(0, levelIdx + 1);
     setExpandedPaths(prev => {
       const next = new Set(prev);
-      // BFS expand: for each level, expand all nodes in all preceding levels
       const expandBfs = (id: string, currentPath: string[], remainingDepth: number) => {
         next.add(pathKey(currentPath));
         if (remainingDepth <= 0) return;
@@ -81,7 +71,7 @@ export function DescendantTooltip({ nodeId, path, anchorRect, onClose }: Descend
     top: anchorRect.top,
   };
 
-  // After first render, check if it overflows right and flip if needed
+  // After first render, check if it overflows and flip if needed
   useEffect(() => {
     const tip = tipRef.current;
     if (!tip) return;
@@ -89,7 +79,6 @@ export function DescendantTooltip({ nodeId, path, anchorRect, onClose }: Descend
     if (tipRect.right > window.innerWidth - 8) {
       tip.style.left = `${anchorRect.left - tipRect.width - 8}px`;
     }
-    // Vertical: keep in viewport
     if (tipRect.bottom > window.innerHeight - 8) {
       tip.style.top = `${window.innerHeight - tipRect.height - 8}px`;
     }
@@ -102,8 +91,8 @@ export function DescendantTooltip({ nodeId, path, anchorRect, onClose }: Descend
       ref={tipRef}
       className="desc-tooltip"
       style={tipStyle}
-      onMouseEnter={cancelHide}
-      onMouseLeave={scheduleHide}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <div className="desc-tooltip-title">{node.title}</div>
       <div className="desc-tooltip-total">

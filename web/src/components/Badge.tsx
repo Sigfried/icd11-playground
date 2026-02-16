@@ -53,7 +53,7 @@ export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: Badg
     <span
       className={`count-badge count-badge-${type}${interactive ? ' count-badge-interactive' : ''}`}
       style={{ fontWeight: weight }}
-      title={`${count} ${type}`}
+      title={interactive ? undefined : `${count} ${type}`}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
