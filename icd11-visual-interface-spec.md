@@ -443,6 +443,7 @@ Example: focus is "Acute and transient psychotic disorders", displayed ancestors
 1. **Tree expand-all-parents** — For a node with 9 parents, expanding all parent paths at once could be overwhelming. Current implementation expands all at once — may need progressive expansion (one level up per click) after user testing.
 2. **Toggle behavior** — Tree `↓` badge click = toggle (expand if collapsed, collapse if expanded).
 3. **Tree search/filter** — Need a mechanism for searching and filtering in the tree view. Node removal only affects NL view; tree needs its own discoverability story.
+4. **Badge removal overlap** — Expanding descendants adds children + grandchildren, which turns the *child* badge red (all children displayed). The descendant badge stays normal. Clicking descendant again is a no-op (nodes already there). This is technically correct but potentially confusing. Revisit after the help system is in place — the right UX should be explainable in help text. Options considered: descendant badge turns red when its expansion is fully visible; track provenance of which badge added which nodes; second click on descendant undoes only the descendant expansion.
 
 ##### Implementation status
 
@@ -456,8 +457,9 @@ Example: focus is "Acute and transient psychotic disorders", displayed ancestors
 - :green_circle: Descendant badge shows level-by-level overlay with per-level add buttons
 - :green_circle: Tooltip positioning: zone-based vertical alignment (top/center/bottom based on anchor position in panel)
 - :green_circle: Escape dismisses tooltips (with suppress flag to prevent re-creation while cursor hovers)
-- :white_circle: Node removal (`×` button, connectivity pruning) — see [History & State Model](#history--state-model) for the state architecture
-- :white_circle: History/undo system (replaces current `manualNodeIds` + URL state)
+- :green_circle: Node removal (`×` button on hover, connectivity pruning via NL subgraph)
+- :green_circle: Badge toggle: parent/child badges turn red when fully expanded; clicking removes with pruning
+- :green_circle: History/undo system (snapshot-based, IndexedDB persistence, Ctrl+Z / Ctrl+Shift+Z + toolbar buttons)
 
 #### Implementation Priority
 
