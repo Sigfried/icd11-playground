@@ -25,26 +25,36 @@ Legend: :green_circle: Done | :red_circle: Bug | :yellow_circle: In progress / n
 | **Tree View** | Expand/collapse, parent/child badges | :green_circle: |
 | | Multi-path highlighting | :green_circle: |
 | | Descendant count + depth badges in tree | :green_circle: Font-weight badges |
+| | Descendant tooltip (level-by-level expand) | :green_circle: Portal tooltip with per-level buttons |
 | | First-occurring path expansion via URL | :red_circle: Uses arbitrary parent |
 | | Collapse heuristics for large trees | :white_circle: |
-| **Node-Link View** | Hierarchical layout (elkjs), click to navigate | :green_circle: |
+| | Tree search/filter | :white_circle: |
+| **Node-Link View** | Hierarchical layout (elkjs web worker), click to navigate | :green_circle: |
 | | Full ancestor DAG to second level | :green_circle: |
 | | Collapsible clusters (threshold: 2) | :green_circle: |
 | | Resizable panels | :green_circle: |
 | | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
-| | [Scalability features #3–12](#potential-solutions) | :white_circle: See design section |
+| | Badge interactions (hover overlay, add/remove) | :green_circle: |
+| | Node removal (× button, connectivity pruning) | :green_circle: |
+| | Badge-triggered removal (red toggle) | :green_circle: |
+| | Node hover tooltip (title + stats) | :green_circle: |
+| | Descendant badge level-by-level overlay | :green_circle: |
+| | Merge neighborhood on re-select | :green_circle: |
+| | Layout progress overlay with cancel | :green_circle: ELK web worker + cancel button |
+| | Zoom (buttons + pinch/trackpad) | :green_circle: Ref-based, no React re-renders |
+| | Cross-panel badge hover highlighting | :green_circle: |
 | **Detail Panel** | Title, definition (async), browser link | :green_circle: |
 | | Collapsible parents/children lists | :green_circle: |
 | | Parent/child/descendant badges | :green_circle: |
 | | Paths to root | :yellow_circle: |
-| **Node-Link View** | Node removal (× button, connectivity pruning) | :white_circle: |
-| **State & History** | Unified localStorage history (replaces URL state + manualNodeIds) | :white_circle: |
-| | Undo/redo via history pointer | :white_circle: |
-| | Session continuity (resume prompt on load) | :white_circle: |
+| **State & History** | Snapshot-based IndexedDB history | :green_circle: Replaces URL state + manualNodeIds |
+| | Undo/redo (Ctrl+Z/Shift+Z + toolbar) | :green_circle: |
+| | Session continuity (resume/fresh modal) | :green_circle: |
 | | History review UI (timeline panel) | :white_circle: |
 | | Share button (encode snapshot in URL) | :white_circle: |
 | **Data Layer** | Full graph preload + IndexedDB cache | :green_circle: |
 | | On-demand entity detail fetch | :green_circle: |
+| **Help System** | Help mode with contextual popovers | :white_circle: |
 | **Proposal Authoring** | All features | :black_circle: |
 
 ---
@@ -472,24 +482,32 @@ Example: focus is "Acute and transient psychotic disorders", displayed ancestors
 - #3 Badge interactions — :green_circle: done: overlay/highlight hover model (animated preview infeasible), badge click expands in all panels, cross-panel highlighting, undo/reset, URL state. Interactive overlay with per-item add, level-by-level descendant breakdown, cluster overlay unification.
 - #12 Full-width bottom panel — :green_circle: done: two switchable layouts, RIGHT direction, viewBox zoom, scroll-to-focus, zoom controls
 
-**Phase 3 — Next up:**
+**Phase 3 — Tooltips, history, removal:** :green_circle: Done
 - ~~#11 Scrollable clusters~~ — :green_circle: done: cluster hover shows same interactive overlay listing hidden children for selective expansion
-- #3 Tree highlight — highlight hovered node in tree view
-- #4+5 Toggle/Close (unified as visibility state)
+- #4+5 Toggle/Close — :green_circle: done: node removal (× button), badge-triggered removal (red toggle), connectivity pruning
+- Tooltips — :green_circle: done: NL node hover tooltip (title + stats), badge tooltip headers, tree descendant tooltip (level-by-level expand)
+- History/undo — :green_circle: done: snapshot-based IndexedDB history, resume modal, ELK web worker with cancel
+- Merge on re-select — :green_circle: done: clicking an already-visible node merges neighborhoods instead of replacing
+
+**Phase 4 — Next up:**
+- #3 Tree highlight — highlight hovered node in tree view (cross-panel: hover in NL → highlight in tree)
 - #7 Staggered levels — evaluate after clusters; may require replacing elkjs
+- Tree search/filter — discoverability story for the tree view
+- History review UI — timeline panel for exploring past snapshots
+- Help system — contextual popovers for all interactive elements
 
 **Layout engine:**
 - Evaluate elkjs vs igraph vs manual layout — edge crossing minimization is poor for complex DAGs
 - igraph supports forced vertical layering (nodes assigned to specific layers)
 
 **Rendering refinements (backlog):**
-- ~~NL hover positioning refactor~~ — resolved: removed in-place NL hover expansion entirely; full title shown via native SVG `<title>` tooltip
+- ~~NL hover positioning refactor~~ — resolved: custom hover tooltip shows full title + parent/child/descendant stats; native SVG `<title>` removed
 - Selected node vertical positioning — place focus node near top or aligned with tree selection
 
 **Defer:**
 - Fisheye — only if the above doesn't suffice
 - Fit-to-view cycling — see [Zoom and fit-to-view](#zoom-and-fit-to-view) section above
-- Node removal + history/undo system — see [Node removal](#node-removal) and [History & State Model](#history--state-model). Replaces current `manualNodeIds` + URL state approach with unified localStorage history.
+- ~~Node removal + history/undo system~~ — :green_circle: done: snapshot-based history with IndexedDB persistence, resume modal on reload, node removal with connectivity pruning, badge-triggered removal
 - Tooltip/overlay positioning package — current `positionTooltip()` helper is adequate but has a TODO to consider a package if positioning gets more complex
 
 ### 3. Detail Panel
@@ -565,8 +583,9 @@ interface AppHistory {
 
 ### Session continuity
 
-- On app load, if localStorage contains history, prompt user: "Return to previous session?" with options to resume (restore `snapshots[pointer]`) or start fresh (clear history)
-- Auto-clear snapshots older than N days (configurable, e.g. 7 days)
+:green_circle: **Implemented.** On app load, if IndexedDB contains history with snapshots, `useNlHistory` exposes a `pendingRestore` object. `ResumeModal` renders over the NL panel showing the focus node title, node count, and undo step count, with Resume and Start Fresh buttons. Resume restores the full history; Start Fresh clears IndexedDB.
+
+- Auto-clear snapshots older than N days (configurable, e.g. 7 days) — :white_circle: not yet implemented
 
 ### History UI
 
