@@ -98,7 +98,7 @@ export function NodeLinkView() {
   const {
     selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
-    displayedNodeIds, expandNodes, removeNode, resetNeighborhood,
+    displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
   } = useGraph();
@@ -908,13 +908,18 @@ export function NodeLinkView() {
       .attr('class', 'nl-close-icon')
       .text('\u00D7');
 
-    // Badges
+    // Badges — mark as "expanded" (red) if all related nodes are already displayed
+    const parentIds = node.data.parentCount > 1 ? getParents(node.id).map(p => p.id) : [];
+    const childIds = node.data.childCount > 0 ? getChildren(node.id).map(c => c.id) : [];
+    const allParentsDisplayed = parentIds.length > 0 && parentIds.every(id => displayedNodeIds.has(id));
+    const allChildrenDisplayed = childIds.length > 0 && childIds.every(id => displayedNodeIds.has(id));
+
     const badgeParts: string[] = [];
     if (node.data.parentCount > 1) {
-      badgeParts.push(renderBadgeHTML('parents', node.data.parentCount));
+      badgeParts.push(renderBadgeHTML('parents', node.data.parentCount, allParentsDisplayed ? 'count-badge-expanded' : undefined));
     }
     if (node.data.childCount > 0) {
-      badgeParts.push(renderBadgeHTML('children', node.data.childCount));
+      badgeParts.push(renderBadgeHTML('children', node.data.childCount, allChildrenDisplayed ? 'count-badge-expanded' : undefined));
     }
     if (node.data.descendantCount > node.data.childCount) {
       badgeParts.push(renderBadgeHTML('descendants', node.data.descendantCount));
@@ -945,15 +950,21 @@ export function NodeLinkView() {
         badgeEl.addEventListener('click', (e) => {
           e.stopPropagation();
           if (isParentBadge) {
-            const parentIds = getParents(node.id).map(p => p.id);
-            expandNodes(parentIds, `Added ${parentIds.length} parents of ${node.data.title}`);
+            if (allParentsDisplayed) {
+              removeNodes(parentIds, `Removed ${parentIds.length} parents of ${node.data.title}`);
+            } else {
+              expandNodes(parentIds, `Added ${parentIds.length} parents of ${node.data.title}`);
+            }
           } else if (isChildBadge) {
-            const childIds = getChildren(node.id).map(c => c.id);
-            expandNodes(childIds, `Added ${childIds.length} children of ${node.data.title}`);
+            if (allChildrenDisplayed) {
+              removeNodes(childIds, `Removed ${childIds.length} children of ${node.data.title}`);
+            } else {
+              expandNodes(childIds, `Added ${childIds.length} children of ${node.data.title}`);
+            }
           } else if (isDescBadge) {
-            const childIds = getChildren(node.id).map(c => c.id);
-            const grandchildIds = childIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
-            expandNodes([...childIds, ...grandchildIds], `Added descendants of ${node.data.title}`);
+            const descChildIds = getChildren(node.id).map(c => c.id);
+            const grandchildIds = descChildIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
+            expandNodes([...descChildIds, ...grandchildIds], `Added descendants of ${node.data.title}`);
           }
           hideTooltip(true);
         });

@@ -23,6 +23,11 @@
   color: var(--accent-orange);
 }
 
+.count-badge-expanded {
+  color: var(--accent-red, #f44747) !important;
+  background: rgba(244, 71, 71, 0.1);
+}
+
 .count-badge-interactive {
   cursor: pointer;
   transition: background 0.15s;

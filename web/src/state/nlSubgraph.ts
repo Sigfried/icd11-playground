@@ -110,3 +110,42 @@ export function removeNodeWithPruning(
 
   return { displayedNodeIds: reachable, prunedCount };
 }
+
+/**
+ * Remove multiple nodes from the NL subgraph, then BFS from focusNodeId
+ * to find reachable nodes. Same as removeNodeWithPruning but batched.
+ */
+export function removeNodesWithPruning(
+  nlSubgraph: Graph<ConceptNode>,
+  removeIds: string[],
+  focusNodeId: string,
+): { displayedNodeIds: Set<string>; prunedCount: number } {
+  const sub = nlSubgraph.copy();
+  const originalSize = sub.order;
+
+  for (const id of removeIds) {
+    if (sub.hasNode(id)) sub.dropNode(id);
+  }
+
+  if (!sub.hasNode(focusNodeId)) {
+    return { displayedNodeIds: new Set(), prunedCount: originalSize };
+  }
+
+  // BFS from focusNodeId treating edges as undirected
+  const reachable = new Set<string>();
+  const queue = [focusNodeId];
+  reachable.add(focusNodeId);
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const neighbor of sub.neighbors(current)) {
+      if (!reachable.has(neighbor)) {
+        reachable.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  const prunedCount = (sub.order - reachable.size);
+  return { displayedNodeIds: reachable, prunedCount };
+}

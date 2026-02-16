@@ -14,7 +14,7 @@ import {
 import { type FoundationGraphJson, foundationStore } from '../api/foundationStore';
 import { useNlHistory } from '../hooks/useNlHistory';
 import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
-import { buildNlSubgraph, removeNodeWithPruning } from '../state/nlSubgraph';
+import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot } from '../state/nlHistory';
 
 export type { ConceptNode, EntityDetail, TreePath };
@@ -39,6 +39,7 @@ interface GraphContextValue {
   displayedNodeIds: Set<string>;
   expandNodes: (ids: string[], description: string) => void;
   removeNode: (id: string) => void;
+  removeNodes: (ids: string[], description: string) => void;
   resetNeighborhood: () => void;
   historyBack: () => void;
   historyForward: () => void;
@@ -189,6 +190,35 @@ export function GraphProvider({ children }: GraphProviderProps) {
     });
   }, [snapshot, push]);
 
+  /** Remove multiple nodes with connectivity pruning. */
+  const removeNodes = useCallback((ids: string[], description: string) => {
+    if (!snapshot || !snapshot.focusNodeId) return;
+
+    // If removing the focus node, clear the view
+    if (ids.includes(snapshot.focusNodeId)) {
+      push({
+        focusNodeId: null,
+        displayedNodeIds: new Set(),
+        timestamp: Date.now(),
+        description: 'Removed focus node',
+      });
+      return;
+    }
+
+    const mainGraph = getGraph();
+    const nlSubgraph = buildNlSubgraph(mainGraph, snapshot.displayedNodeIds);
+    const { displayedNodeIds: newIds } = removeNodesWithPruning(
+      nlSubgraph, ids, snapshot.focusNodeId,
+    );
+
+    push({
+      focusNodeId: snapshot.focusNodeId,
+      displayedNodeIds: newIds,
+      timestamp: Date.now(),
+      description,
+    });
+  }, [snapshot, push]);
+
   /** Reset NL to the default neighborhood for the current focus node. */
   const resetNeighborhood = useCallback(() => {
     if (!snapshot?.focusNodeId) return;
@@ -315,6 +345,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     displayedNodeIds,
     expandNodes,
     removeNode,
+    removeNodes,
     resetNeighborhood,
     historyBack,
     historyForward,
@@ -331,7 +362,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   }), [
     selectedNodeId, hoveredNodeId, expandedPaths, rootId, graphLoading,
     selectNode, toggleExpand, expandParentPaths,
-    displayedNodeIds, expandNodes, removeNode, resetNeighborhood,
+    displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds,
   ]);

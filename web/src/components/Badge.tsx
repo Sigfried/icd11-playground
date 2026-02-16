@@ -67,7 +67,8 @@ export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: Badg
  * Render badge as an HTML string — for D3/foreignObject contexts
  * where we can't use React components directly.
  */
-export function renderBadgeHTML(type: BadgeType, count: number): string {
+export function renderBadgeHTML(type: BadgeType, count: number, extraClass?: string): string {
   const weight = badgeWeight(type, count);
-  return `<span class="count-badge count-badge-${type}" style="font-weight: ${weight}">${count}${SYMBOLS[type]}</span>`;
+  const classes = `count-badge count-badge-${type}${extraClass ? ` ${extraClass}` : ''}`;
+  return `<span class="${classes}" style="font-weight: ${weight}">${count}${SYMBOLS[type]}</span>`;
 }
