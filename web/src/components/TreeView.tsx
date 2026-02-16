@@ -16,7 +16,7 @@ import './TreeView.css';
  * - [N↑] parent count badge on each node
  * - [N↓] child count badge on each node
  * - Instant expand/collapse (full graph in memory)
- * - Search with dropdown, filter, and highlight modes
+ * - Search with highlight and filter modes
  *
  * See icd11-visual-interface-spec.md for full requirements.
  */
@@ -50,7 +50,6 @@ interface SearchCtx {
   filterAncestorIds: Set<string> | null;
   highlightMatchIds: Set<string> | null;
   highlightQuery: string;
-  currentMatchId: string | null;
 }
 
 const SearchContext = createContext<SearchCtx>({
@@ -58,7 +57,6 @@ const SearchContext = createContext<SearchCtx>({
   filterAncestorIds: null,
   highlightMatchIds: null,
   highlightQuery: '',
-  currentMatchId: null,
 });
 
 interface TreeNodeProps {
@@ -93,7 +91,6 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const isFilterMatch = searchCtx.filterMatchIds?.has(nodeId) ?? false;
   const isFilterAncestor = searchCtx.filterAncestorIds?.has(nodeId) ?? false;
   const isSearchMatch = searchCtx.highlightMatchIds?.has(nodeId) ?? false;
-  const isCurrentMatch = searchCtx.currentMatchId === nodeId;
 
   const nodeData: ConceptNode | null = getNode(nodeId);
   const hasChildren = (nodeData?.childCount ?? 0) > 0;
@@ -178,7 +175,6 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     isSelected && 'selected',
     isHighlighted && 'highlighted',
     isSearchMatch && 'search-match',
-    isCurrentMatch && 'search-current-match',
     isFilterActive && !isFilterMatch && isFilterAncestor && 'filter-ancestor',
   ].filter(Boolean).join(' ');
 
@@ -305,7 +301,6 @@ export function TreeView() {
   const [filterMatchIds, setFilterMatchIds] = useState<Set<string> | null>(null);
   const [highlightMatchIds, setHighlightMatchIds] = useState<Set<string> | null>(null);
   const [highlightQuery, setHighlightQuery] = useState('');
-  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
 
   // Compute filter ancestors
   const filterAncestorIds = useMemo(() => {
@@ -359,16 +354,6 @@ export function TreeView() {
   const handleHighlightChange = useCallback((ids: Set<string> | null, query: string) => {
     setHighlightMatchIds(ids);
     setHighlightQuery(query);
-    setCurrentMatchId(ids && ids.size > 0 ? [...ids][0] : null);
-  }, []);
-
-  const handleNavigateToMatch = useCallback((nodeId: string) => {
-    setCurrentMatchId(nodeId);
-    // Scroll to this node after a tick for DOM update
-    requestAnimationFrame(() => {
-      const el = contentRef.current?.querySelector(`[data-node-id="${nodeId}"]`);
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    });
   }, []);
 
   // Scroll the selected node into view when selection changes
@@ -410,8 +395,7 @@ export function TreeView() {
     filterAncestorIds,
     highlightMatchIds,
     highlightQuery,
-    currentMatchId,
-  }), [filterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery, currentMatchId]);
+  }), [filterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery]);
 
   // Global keyboard shortcut: Ctrl+F or / to focus search
   useEffect(() => {
@@ -445,7 +429,6 @@ export function TreeView() {
         <TreeSearch
           onFilterChange={handleFilterChange}
           onHighlightChange={handleHighlightChange}
-          onNavigateToMatch={handleNavigateToMatch}
         />
         <div className="panel-content tree-content" ref={contentRef}>
           {graphLoading ? (

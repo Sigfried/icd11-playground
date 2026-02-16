@@ -107,10 +107,10 @@ export default {
       );
     }
 
-    // Proxy ICD API requests
+    // Proxy ICD API requests (preserve query string for search etc.)
     if (path.startsWith('/icd/')) {
       try {
-        return await proxyRequest(path, env);
+        return await proxyRequest(path + url.search, env);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return new Response(JSON.stringify({ error: message }), {

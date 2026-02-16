@@ -45,6 +45,9 @@ interface GraphContextValue {
   historyForward: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  // Search query (persisted in snapshot history)
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
   // Cross-panel badge hover highlighting
   highlightedNodeIds: Set<string>;
   setHighlightedNodeIds: (ids: Set<string>) => void;
@@ -89,6 +92,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const graphReady = !graphLoading && rootId !== null;
   const selectedNodeId = graphReady ? (snapshot?.focusNodeId ?? null) : null;
   const displayedNodeIds = graphReady ? (snapshot?.displayedNodeIds ?? EMPTY_SET) : EMPTY_SET;
+  const searchQuery = snapshot?.searchQuery ?? '';
 
   /** Build a snapshot for a new focus node selection. */
   const buildAndPushSnapshot = useCallback((focusId: string, description: string) => {
@@ -243,6 +247,19 @@ export function GraphProvider({ children }: GraphProviderProps) {
     buildAndPushSnapshot(snapshot.focusNodeId, `Reset neighborhood for ${title}`);
   }, [snapshot, buildAndPushSnapshot]);
 
+  /** Update the search query in snapshot history. */
+  const setSearchQuery = useCallback((query: string) => {
+    const currentQuery = snapshot?.searchQuery ?? '';
+    if (query === currentQuery) return;
+    push({
+      focusNodeId: snapshot?.focusNodeId ?? null,
+      displayedNodeIds: snapshot?.displayedNodeIds ?? new Set(),
+      timestamp: Date.now(),
+      description: query ? `Search: ${query}` : 'Cleared search',
+      searchQuery: query || undefined,
+    });
+  }, [snapshot, push]);
+
   const historyBack = useCallback(() => { back(); }, [back]);
   const historyForward = useCallback(() => { forward(); }, [forward]);
 
@@ -368,6 +385,8 @@ export function GraphProvider({ children }: GraphProviderProps) {
     historyForward,
     canUndo,
     canRedo,
+    searchQuery,
+    setSearchQuery,
     highlightedNodeIds,
     setHighlightedNodeIds,
     pendingRestore,
@@ -382,6 +401,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     selectNode, toggleExpand, expandParentPaths,
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
+    searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
   ]);
 

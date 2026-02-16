@@ -1,31 +1,43 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type SearchResult, searchFoundation } from '../api/icd11';
 import { searchNodes } from '../api/foundationData';
 import { useGraph } from '../providers/GraphProvider';
 import './TreeSearch.css';
 
-export type SearchMode = 'dropdown' | 'filter' | 'highlight';
+export type SearchMode = 'search' | 'filter';
 
 interface TreeSearchProps {
   onFilterChange: (matchIds: Set<string> | null, query: string) => void;
   onHighlightChange: (matchIds: Set<string> | null, query: string) => void;
-  onNavigateToMatch: (nodeId: string) => void;
 }
 
-export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatch }: TreeSearchProps) {
-  const { selectNode, hasNode } = useGraph();
-  const [query, setQuery] = useState('');
-  const [mode, setMode] = useState<SearchMode>('dropdown');
+/** Magnifying glass icon (14×14) */
+const SearchIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="6" cy="6" r="4.25" />
+    <line x1="9" y1="9" x2="12.5" y2="12.5" />
+  </svg>
+);
+
+/** Funnel icon (14×14) */
+const FilterIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1.5 2.5h11l-4 4.5v4l-3 1.5V7z" />
+  </svg>
+);
+
+export function TreeSearch({ onFilterChange, onHighlightChange }: TreeSearchProps) {
+  const { hasNode, searchQuery, setSearchQuery } = useGraph();
+  const [query, setQuery] = useState(searchQuery);
+  const [mode, setMode] = useState<SearchMode>('search');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
-  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const cacheRef = useRef(new Map<string, SearchResult[]>());
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // Track whether the current search was triggered externally (undo/redo)
+  const externalUpdateRef = useRef(false);
 
   // Expose inputRef for keyboard shortcut focusing
   useEffect(() => {
@@ -71,18 +83,18 @@ export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatc
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
-    setFocusedIndex(-1);
-    setCurrentMatchIdx(0);
 
     clearTimeout(debounceRef.current);
     if (!val.trim()) {
       setResults([]);
-      setDropdownOpen(false);
+      setSearchQuery('');
       return;
     }
-    setDropdownOpen(true);
-    debounceRef.current = setTimeout(() => doSearch(val), 300);
-  }, [doSearch]);
+    debounceRef.current = setTimeout(async () => {
+      await doSearch(val);
+      setSearchQuery(val);
+    }, 300);
+  }, [doSearch, setSearchQuery]);
 
   // Push filter/highlight state to TreeView when results or mode change.
   // Use refs for callbacks to avoid re-triggering the effect when parent re-renders.
@@ -101,54 +113,19 @@ export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatc
     if (mode === 'filter') {
       onFilterChangeRef.current(ids, query);
       onHighlightChangeRef.current(null, '');
-    } else if (mode === 'highlight') {
-      onFilterChangeRef.current(null, '');
-      onHighlightChangeRef.current(ids, query);
     } else {
       onFilterChangeRef.current(null, '');
-      onHighlightChangeRef.current(null, '');
+      onHighlightChangeRef.current(ids, query);
     }
   }, [mode, results, query]);
-
-  const navigateMatch = useCallback((dir: number) => {
-    if (results.length === 0) return;
-    const next = (currentMatchIdx + dir + results.length) % results.length;
-    setCurrentMatchIdx(next);
-    onNavigateToMatch(results[next].id);
-  }, [results, currentMatchIdx, onNavigateToMatch]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
     setResults([]);
-    setDropdownOpen(false);
-    setFocusedIndex(-1);
-    setCurrentMatchIdx(0);
-  }, []);
+    setSearchQuery('');
+  }, [setSearchQuery]);
 
-  // Dropdown keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (mode === 'dropdown' && dropdownOpen && results.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setFocusedIndex(prev => Math.min(prev + 1, results.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setFocusedIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter' && focusedIndex >= 0) {
-        e.preventDefault();
-        selectNode(results[focusedIndex].id);
-        setDropdownOpen(false);
-      }
-    }
-
-    if (mode === 'highlight' && results.length > 0) {
-      if (e.key === 'Enter' || e.key === 'F3') {
-        e.preventDefault();
-        const dir = e.shiftKey ? -1 : 1;
-        navigateMatch(dir);
-      }
-    }
-
     if (e.key === 'Escape') {
       e.preventDefault();
       if (query) {
@@ -157,44 +134,26 @@ export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatc
         inputRef.current?.blur();
       }
     }
-  }, [mode, dropdownOpen, results, focusedIndex, selectNode, query, clearSearch, navigateMatch]);
+  }, [query, clearSearch]);
 
-  // Scroll focused dropdown item into view
+  // Sync from external searchQuery changes (undo/redo/session restore)
   useEffect(() => {
-    if (focusedIndex < 0 || !dropdownRef.current) return;
-    const item = dropdownRef.current.children[focusedIndex] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: 'nearest' });
-  }, [focusedIndex]);
-
-  const handleModeChange = useCallback((newMode: SearchMode) => {
-    setMode(newMode);
-    setDropdownOpen(newMode === 'dropdown' && results.length > 0 && query.trim() !== '');
-  }, [results.length, query]);
-
-  const handleResultClick = useCallback((id: string) => {
-    selectNode(id);
-    setDropdownOpen(false);
-  }, [selectNode]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (!target) return;
-      const searchEl = inputRef.current?.closest('.tree-search');
-      if (searchEl && !searchEl.contains(target)) {
-        setDropdownOpen(false);
+    if (searchQuery !== query) {
+      externalUpdateRef.current = true;
+      setQuery(searchQuery);
+      if (searchQuery) {
+        doSearch(searchQuery);
+      } else {
+        setResults([]);
       }
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+    // Only react to searchQuery changes from context, not local query changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
-  const resultCount = useMemo(() => {
-    if (loading) return null;
-    if (!query.trim()) return null;
-    return `${results.length} result${results.length !== 1 ? 's' : ''}`;
-  }, [loading, query, results.length]);
+  const resultCount = loading ? null
+    : !query.trim() ? null
+    : `${results.length} result${results.length !== 1 ? 's' : ''}`;
 
   return (
     <div className="tree-search">
@@ -206,74 +165,30 @@ export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatc
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
-            if (mode === 'dropdown' && results.length > 0 && query.trim()) {
-              setDropdownOpen(true);
-            }
-          }}
         />
         {loading && <span className="tree-search-spinner" />}
         {resultCount && <span className="tree-search-count">{resultCount}</span>}
 
         <div className="tree-search-modes">
-          {(['dropdown', 'filter', 'highlight'] as const).map(m => (
-            <button
-              key={m}
-              className={`tree-search-mode-btn${mode === m ? ' active' : ''}`}
-              onClick={() => handleModeChange(m)}
-              title={modeLabels[m]}
-            >
-              {modeIcons[m]}
-            </button>
-          ))}
+          <button
+            className={`tree-search-mode-btn${mode === 'search' ? ' active' : ''}`}
+            onClick={() => setMode('search')}
+            title="Highlight matches in tree"
+          >
+            <SearchIcon />
+          </button>
+          <button
+            className={`tree-search-mode-btn${mode === 'filter' ? ' active' : ''}`}
+            onClick={() => setMode('filter')}
+            title="Filter tree to matches"
+          >
+            <FilterIcon />
+          </button>
         </div>
-
-        {mode === 'highlight' && results.length > 0 && (
-          <div className="tree-search-nav">
-            <span className="tree-search-pos">
-              {currentMatchIdx + 1}/{results.length}
-            </span>
-            <button className="tree-search-nav-btn" onClick={() => navigateMatch(-1)} title="Previous (Shift+Enter)">&#9650;</button>
-            <button className="tree-search-nav-btn" onClick={() => navigateMatch(1)} title="Next (Enter)">&#9660;</button>
-          </div>
-        )}
       </div>
-
-      {mode === 'dropdown' && dropdownOpen && results.length > 0 && (
-        <div className="tree-search-dropdown" ref={dropdownRef}>
-          {results.map((r, i) => (
-            <div
-              key={r.id}
-              className={`tree-search-result${i === focusedIndex ? ' focused' : ''}`}
-              onClick={() => handleResultClick(r.id)}
-              onMouseEnter={() => setFocusedIndex(i)}
-            >
-              <span
-                className="tree-search-result-title"
-                dangerouslySetInnerHTML={{ __html: r.highlightedTitle }}
-              />
-              {r.matchedProperty && (
-                <span className="tree-search-result-badge">{r.matchedProperty}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
-
-const modeIcons: Record<SearchMode, string> = {
-  dropdown: '▾',
-  filter: '⊟',
-  highlight: '✦',
-};
-
-const modeLabels: Record<SearchMode, string> = {
-  dropdown: 'Dropdown results',
-  filter: 'Filter tree',
-  highlight: 'Highlight in tree',
-};
 
 /** Client-side highlight for fallback search — wraps matches in <em> */
 function highlightText(text: string, query: string): string {

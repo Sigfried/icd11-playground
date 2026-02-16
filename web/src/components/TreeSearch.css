@@ -79,88 +79,6 @@
   color: var(--accent-cyan);
 }
 
-/* Highlight mode prev/next */
-.tree-search-nav {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.tree-search-pos {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.tree-search-nav-btn {
-  padding: 1px 5px;
-  background: none;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.tree-search-nav-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* Dropdown overlay */
-.tree-search-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-top: none;
-  z-index: 5;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.tree-search-result {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-
-.tree-search-result:hover,
-.tree-search-result.focused {
-  background: var(--bg-tertiary);
-}
-
-.tree-search-result-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-search-result-title em {
-  font-style: normal;
-  color: var(--accent-orange);
-  font-weight: 600;
-}
-
-.tree-search-result-badge {
-  font-size: 0.65rem;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  color: var(--accent-orange);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* Search match highlight in tree (highlight mode) */
 .tree-node.search-match {
   border-left: 3px solid var(--accent-orange);
@@ -168,11 +86,6 @@
 
 .tree-node.search-match .tree-node-title {
   color: var(--accent-orange);
-}
-
-/* Current match in highlight nav */
-.tree-node.search-current-match {
-  background: rgba(206, 145, 120, 0.15);
 }
 
 /* Filter mode: ancestor-only nodes are muted */

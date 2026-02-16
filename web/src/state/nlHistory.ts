@@ -10,6 +10,7 @@ export interface Snapshot {
   displayedNodeIds: Set<string>;
   timestamp: number;
   description: string;
+  searchQuery?: string;
 }
 
 export interface AppHistory {
@@ -24,6 +25,7 @@ export interface SerializedHistory {
     displayedNodeIds: string[];
     timestamp: number;
     description: string;
+    searchQuery?: string;
   }>;
   pointer: number;
 }
@@ -74,6 +76,7 @@ export function serializeHistory(history: AppHistory): SerializedHistory {
       displayedNodeIds: [...s.displayedNodeIds],
       timestamp: s.timestamp,
       description: s.description,
+      searchQuery: s.searchQuery,
     })),
     pointer: history.pointer,
   };
@@ -86,6 +89,7 @@ export function deserializeHistory(data: SerializedHistory): AppHistory {
       displayedNodeIds: new Set(s.displayedNodeIds),
       timestamp: s.timestamp,
       description: s.description,
+      searchQuery: s.searchQuery,
     })),
     pointer: data.pointer,
   };
