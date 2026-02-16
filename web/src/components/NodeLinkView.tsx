@@ -6,7 +6,6 @@ import { type ConceptNode, useGraph } from '../providers/GraphProvider';
 import { buildNlSubgraph } from '../state/nlSubgraph';
 import { computeDescendantLevels } from '../utils/descendantLevels';
 import { renderBadgeHTML } from './Badge';
-import { ResumeModal } from './ResumeModal';
 import './Badge.css';
 import './NodeLinkView.css';
 
@@ -106,7 +105,6 @@ export function NodeLinkView() {
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
-    pendingRestore,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomWrapperRef = useRef<HTMLDivElement>(null);
@@ -1169,9 +1167,6 @@ export function NodeLinkView() {
                 )}
               </div>
             </div>
-          )}
-          {pendingRestore && (
-            <ResumeModal pending={pendingRestore} />
           )}
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (

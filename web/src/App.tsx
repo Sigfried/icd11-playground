@@ -1,7 +1,8 @@
-import { GraphProvider } from './providers/GraphProvider';
+import { GraphProvider, useGraph } from './providers/GraphProvider';
 import { TreeView } from './components/TreeView';
 import { NodeLinkView } from './components/NodeLinkView';
 import { DetailPanel } from './components/DetailPanel';
+import { ResumeModal } from './components/ResumeModal';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import './App.css';
 
@@ -39,11 +40,18 @@ function LayoutToggle({ mode, onToggle }: { mode: string; onToggle: () => void }
   );
 }
 
+function GlobalResumeModal() {
+  const { pendingRestore } = useGraph();
+  if (!pendingRestore) return null;
+  return <ResumeModal pending={pendingRestore} />;
+}
+
 function App() {
   const { containerRef, mode, toggleMode, sizes, onDividerMouseDown } = useLayoutMode();
 
   return (
     <GraphProvider>
+      <GlobalResumeModal />
       <div className="app">
         <header className="app-header">
           <h1><a href={import.meta.env.BASE_URL}>ICD-11 Foundation Explorer</a></h1>
