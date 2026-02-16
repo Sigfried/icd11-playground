@@ -110,6 +110,26 @@ export function getGraph(): Graph<ConceptNode> {
   return assertGraph();
 }
 
+/**
+ * In-memory fallback search: case-insensitive substring match on title.
+ * Starts-with matches are ranked first.
+ */
+export function searchNodes(query: string, limit = 200): ConceptNode[] {
+  const g = assertGraph();
+  const q = query.toLowerCase();
+  const startsWith: ConceptNode[] = [];
+  const contains: ConceptNode[] = [];
+
+  g.forEachNode((_id, attrs) => {
+    if (startsWith.length + contains.length >= limit * 2) return;
+    const idx = attrs.title.toLowerCase().indexOf(q);
+    if (idx === 0) startsWith.push(attrs);
+    else if (idx > 0) contains.push(attrs);
+  });
+
+  return [...startsWith.slice(0, limit), ...contains.slice(0, limit - startsWith.length)].slice(0, limit);
+}
+
 // --- Async detail fetch (IndexedDB-cached) ---
 
 function entityToDetail(entity: FoundationEntity): EntityDetail {

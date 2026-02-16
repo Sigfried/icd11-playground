@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
+import { TreeSearch } from './TreeSearch';
 import './TreeView.css';
 
 /**
@@ -15,6 +16,7 @@ import './TreeView.css';
  * - [N↑] parent count badge on each node
  * - [N↓] child count badge on each node
  * - Instant expand/collapse (full graph in memory)
+ * - Search with dropdown, filter, and highlight modes
  *
  * See icd11-visual-interface-spec.md for full requirements.
  */
@@ -42,6 +44,23 @@ const DescTooltipContext = createContext<DescTooltipCtx>({
   cancelHide: () => {},
 });
 
+/** Search state shared with TreeNode via context */
+interface SearchCtx {
+  filterMatchIds: Set<string> | null;
+  filterAncestorIds: Set<string> | null;
+  highlightMatchIds: Set<string> | null;
+  highlightQuery: string;
+  currentMatchId: string | null;
+}
+
+const SearchContext = createContext<SearchCtx>({
+  filterMatchIds: null,
+  filterAncestorIds: null,
+  highlightMatchIds: null,
+  highlightQuery: '',
+  currentMatchId: null,
+});
+
 interface TreeNodeProps {
   nodeId: string;
   path: TreePath;
@@ -62,11 +81,19 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     getParents,
   } = useGraph();
   const descCtx = useContext(DescTooltipContext);
+  const searchCtx = useContext(SearchContext);
 
   const pk = pathKey(path);
   const isExpanded = expandedPaths.has(pk);
   const isSelected = selectedNodeId === nodeId;
   const isHighlighted = highlightedNodeIds.has(nodeId);
+
+  // Search state
+  const isFilterActive = searchCtx.filterMatchIds !== null;
+  const isFilterMatch = searchCtx.filterMatchIds?.has(nodeId) ?? false;
+  const isFilterAncestor = searchCtx.filterAncestorIds?.has(nodeId) ?? false;
+  const isSearchMatch = searchCtx.highlightMatchIds?.has(nodeId) ?? false;
+  const isCurrentMatch = searchCtx.currentMatchId === nodeId;
 
   const nodeData: ConceptNode | null = getNode(nodeId);
   const hasChildren = (nodeData?.childCount ?? 0) > 0;
@@ -93,7 +120,6 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 
   const handleDescendantBadgeClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    // Toggle: if tooltip is already showing for this node, close it
     if (descCtx.tooltip?.nodeId === nodeId) {
       descCtx.hide();
       return;
@@ -130,6 +156,11 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     setHighlightedNodeIds(new Set());
   }, [setHighlightedNodeIds]);
 
+  // In filter mode, skip nodes that are neither matches nor ancestors
+  if (isFilterActive && !isFilterMatch && !isFilterAncestor) {
+    return null;
+  }
+
   if (!nodeData) {
     return (
       <div className="tree-node loading" style={{ paddingLeft: depth * 20 }}>
@@ -146,7 +177,15 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     'tree-node',
     isSelected && 'selected',
     isHighlighted && 'highlighted',
+    isSearchMatch && 'search-match',
+    isCurrentMatch && 'search-current-match',
+    isFilterActive && !isFilterMatch && isFilterAncestor && 'filter-ancestor',
   ].filter(Boolean).join(' ');
+
+  // Render title with search highlighting in filter/highlight modes
+  const titleContent = (isSearchMatch || isFilterMatch) && searchCtx.highlightQuery
+    ? highlightTitle(nodeData.title, searchCtx.highlightQuery)
+    : nodeData.title;
 
   return (
     <div className="tree-node-container">
@@ -163,7 +202,9 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
           {hasChildren ? (isExpanded ? '▼' : '▶') : '·'}
         </span>
         <span className="tree-node-title" title={nodeData.title}>
-          {nodeData.title}
+          {typeof titleContent === 'string'
+            ? titleContent
+            : titleContent}
         </span>
         <span className="tree-node-badges">
           <span className="badge-slot">
@@ -218,16 +259,113 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   );
 }
 
+/** Highlight query matches in a title — returns React elements with <mark> tags */
+function highlightTitle(title: string, query: string): React.ReactNode {
+  if (!query) return title;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  const parts = title.split(re);
+  if (parts.length === 1) return title;
+  return parts.map((part, i) =>
+    re.test(part) ? <mark key={i}>{part}</mark> : part
+  );
+}
+
+/**
+ * Compute ancestor IDs for all match IDs (BFS upward through all parents).
+ * Polyhierarchy-aware: follows all parent edges.
+ */
+function computeFilterAncestors(
+  matchIds: Set<string>,
+  getParents: (id: string) => ConceptNode[],
+): Set<string> {
+  const ancestors = new Set<string>();
+  const queue = [...matchIds];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    for (const parent of getParents(id)) {
+      if (!ancestors.has(parent.id) && !matchIds.has(parent.id)) {
+        ancestors.add(parent.id);
+        queue.push(parent.id);
+      }
+    }
+  }
+  return ancestors;
+}
+
 export function TreeView() {
-  const { rootId, selectedNodeId, graphLoading } = useGraph();
+  const { rootId, selectedNodeId, graphLoading, setExpandedPaths, getParents } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Search state
+  const [filterMatchIds, setFilterMatchIds] = useState<Set<string> | null>(null);
+  const [highlightMatchIds, setHighlightMatchIds] = useState<Set<string> | null>(null);
+  const [highlightQuery, setHighlightQuery] = useState('');
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+
+  // Compute filter ancestors
+  const filterAncestorIds = useMemo(() => {
+    if (!filterMatchIds) return null;
+    return computeFilterAncestors(filterMatchIds, getParents);
+  }, [filterMatchIds, getParents]);
+
+  // Auto-expand paths to matches in filter/highlight mode
+  useEffect(() => {
+    const matchIds = filterMatchIds ?? highlightMatchIds;
+    if (!matchIds || matchIds.size === 0) return;
+
+    // Limit auto-expand to prevent performance issues with too many matches
+    const MAX_EXPAND = 100;
+    const idsToExpand = [...matchIds].slice(0, MAX_EXPAND);
+
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      for (const id of idsToExpand) {
+        // Walk up first parent chain and expand all prefixes
+        const ancestorPath: string[] = [id];
+        let currentId = id;
+        for (let i = 0; i < 30; i++) {
+          const parents = getParents(currentId);
+          if (parents.length === 0) break;
+          ancestorPath.unshift(parents[0].id);
+          currentId = parents[0].id;
+        }
+        for (let i = 1; i <= ancestorPath.length; i++) {
+          next.add(pathKey(ancestorPath.slice(0, i)));
+        }
+      }
+      return next;
+    });
+  }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
+
+  // Search callbacks
+  const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
+    setFilterMatchIds(ids);
+    // In filter mode, also set the highlight query for title marking
+    if (ids) setHighlightQuery(query);
+    else if (!highlightMatchIds) setHighlightQuery('');
+  }, [highlightMatchIds]);
+
+  const handleHighlightChange = useCallback((ids: Set<string> | null, query: string) => {
+    setHighlightMatchIds(ids);
+    setHighlightQuery(query);
+    setCurrentMatchId(ids && ids.size > 0 ? [...ids][0] : null);
+  }, []);
+
+  const handleNavigateToMatch = useCallback((nodeId: string) => {
+    setCurrentMatchId(nodeId);
+    // Scroll to this node after a tick for DOM update
+    requestAnimationFrame(() => {
+      const el = contentRef.current?.querySelector(`[data-node-id="${nodeId}"]`);
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, []);
+
   // Scroll the selected node into view when selection changes
   useEffect(() => {
     if (!selectedNodeId || !contentRef.current) return;
-    // Wait a tick for the DOM to update after expansion
     requestAnimationFrame(() => {
       const el = contentRef.current?.querySelector(`[data-node-id="${selectedNodeId}"]`);
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -259,30 +397,73 @@ export function TreeView() {
     cancelHide,
   };
 
+  const searchCtxValue: SearchCtx = useMemo(() => ({
+    filterMatchIds,
+    filterAncestorIds,
+    highlightMatchIds,
+    highlightQuery,
+    currentMatchId,
+  }), [filterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery, currentMatchId]);
+
+  // Global keyboard shortcut: Ctrl+F or / to focus search
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const input = document.querySelector<HTMLInputElement>('[data-tree-search-input]');
+        if (input) {
+          e.preventDefault();
+          input.focus();
+          input.select();
+        }
+      }
+      if (e.key === '/' && !isInputFocused()) {
+        const input = document.querySelector<HTMLInputElement>('[data-tree-search-input]');
+        if (input) {
+          e.preventDefault();
+          input.focus();
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <DescTooltipContext.Provider value={descCtxValue}>
-      <div className="panel-header">
-        Tree View -- <span className="header-hint">Foundation hierarchy</span>
-      </div>
-      <div className="panel-content tree-content" ref={contentRef}>
-        {graphLoading ? (
-          <div className="placeholder">Loading Foundation...</div>
-        ) : rootId ? (
-          <TreeNode nodeId={rootId} path={[rootId]} depth={0} />
-        ) : (
-          <div className="placeholder">Failed to load Foundation</div>
-        )}
-      </div>
-      {descTooltip && (
-        <DescendantTooltip
-          nodeId={descTooltip.nodeId}
-          path={descTooltip.path}
-          anchorRect={descTooltip.anchorRect}
-          onClose={hide}
-          onMouseEnter={cancelHide}
-          onMouseLeave={scheduleHide}
+      <SearchContext.Provider value={searchCtxValue}>
+        <div className="panel-header">
+          Tree View -- <span className="header-hint">Foundation hierarchy</span>
+        </div>
+        <TreeSearch
+          onFilterChange={handleFilterChange}
+          onHighlightChange={handleHighlightChange}
+          onNavigateToMatch={handleNavigateToMatch}
         />
-      )}
+        <div className="panel-content tree-content" ref={contentRef}>
+          {graphLoading ? (
+            <div className="placeholder">Loading Foundation...</div>
+          ) : rootId ? (
+            <TreeNode nodeId={rootId} path={[rootId]} depth={0} />
+          ) : (
+            <div className="placeholder">Failed to load Foundation</div>
+          )}
+        </div>
+        {descTooltip && (
+          <DescendantTooltip
+            nodeId={descTooltip.nodeId}
+            path={descTooltip.path}
+            anchorRect={descTooltip.anchorRect}
+            onClose={hide}
+            onMouseEnter={cancelHide}
+            onMouseLeave={scheduleHide}
+          />
+        )}
+      </SearchContext.Provider>
     </DescTooltipContext.Provider>
   );
+}
+
+function isInputFocused(): boolean {
+  const el = document.activeElement;
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el?.getAttribute('contenteditable') === 'true');
 }

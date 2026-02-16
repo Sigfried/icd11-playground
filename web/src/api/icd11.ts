@@ -116,3 +116,81 @@ export function getTextValue(
 ): string {
   return text?.['@value'] ?? '';
 }
+
+// --- Search ---
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  highlightedTitle: string;
+  score: number;
+  matchedProperty?: string;
+}
+
+/** Raw shape returned by the ICD-11 search API. */
+interface SearchApiResponse {
+  destinationEntities?: Array<{
+    id: string;
+    title: string;
+    score: number;
+    matchingPVs?: Array<{
+      propertyId: string;
+      label: string;
+    }>;
+  }>;
+}
+
+/**
+ * Search Foundation entities via the ICD-11 `/icd/entity/search` endpoint.
+ *
+ * Results are filtered to only include entities present in our graph.
+ */
+export async function searchFoundation(
+  query: string,
+  hasNode: (id: string) => boolean,
+  options?: { properties?: string[]; flexisearch?: boolean },
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({
+    q: query,
+    flatResults: 'true',
+    highlightingEnabled: 'true',
+  });
+  if (options?.properties?.length) {
+    params.set('propertiesToBeSearched', options.properties.join(','));
+  }
+  if (options?.flexisearch) {
+    params.set('useFlexisearch', 'true');
+  }
+
+  const data = await fetchJson<SearchApiResponse>(
+    `/icd/entity/search?${params.toString()}`,
+  );
+
+  if (!data.destinationEntities) return [];
+
+  const results: SearchResult[] = [];
+  for (const entity of data.destinationEntities) {
+    let id: string;
+    try {
+      id = extractIdFromUri(entity.id);
+    } catch {
+      continue;
+    }
+    if (!hasNode(id)) continue;
+
+    // First non-Title matched property, if any
+    const nonTitleMatch = entity.matchingPVs?.find(
+      pv => pv.propertyId !== 'Title',
+    );
+
+    results.push({
+      id,
+      title: entity.title.replace(/<\/?em>/g, ''),
+      highlightedTitle: entity.title,
+      score: entity.score,
+      matchedProperty: nonTitleMatch?.propertyId,
+    });
+  }
+
+  return results;
+}
