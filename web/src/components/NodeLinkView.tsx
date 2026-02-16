@@ -1,9 +1,12 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
-import ELK from 'elkjs/lib/elk.bundled.js';
+import ELK from 'elkjs/lib/elk-api';
+import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url';
 import { type ConceptNode, useGraph } from '../providers/GraphProvider';
 import { buildNlSubgraph } from '../state/nlSubgraph';
+import { computeDescendantLevels } from '../utils/descendantLevels';
 import { renderBadgeHTML } from './Badge';
+import { ResumeModal } from './ResumeModal';
 import './Badge.css';
 import './NodeLinkView.css';
 
@@ -55,7 +58,9 @@ interface LayoutEdge {
   }>;
 }
 
-const elk = new ELK();
+function createElk() {
+  return new ELK({ workerUrl: elkWorkerUrl });
+}
 
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
@@ -101,14 +106,18 @@ export function NodeLinkView() {
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
+    pendingRestore,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
-  // Tooltip for badge hover overlay
+  // Tooltip for badge hover overlay (interactive)
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Non-interactive info tooltip for node body hover
+  const infoTooltipRef = useRef<HTMLDivElement | null>(null);
+  const infoTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Suppress tooltip re-creation after ESC (cleared on next mouseleave)
   const tooltipSuppressedRef = useRef(false);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -124,6 +133,10 @@ export function NodeLinkView() {
   const isInitialRenderRef = useRef(true);
   // Track offset for viewBox -> SVG coordinate mapping
   const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // ELK Web Worker instance (replaceable for cancellation)
+  const elkRef = useRef(createElk());
+  // Layout progress state for overlay
+  const [layoutInProgress, setLayoutInProgress] = useState(false);
 
   // Scroll container so the focus node is visible (not force-centered)
   const scrollToFocus = useCallback((zoom: number) => {
@@ -181,6 +194,10 @@ export function NodeLinkView() {
       tooltipRef.current.remove();
       tooltipRef.current = null;
     }
+    if (infoTooltipRef.current) {
+      infoTooltipRef.current.remove();
+      infoTooltipRef.current = null;
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cancelHideTimer is stable
   }, [selectedNodeId]);
 
@@ -222,6 +239,7 @@ export function NodeLinkView() {
         historyForward();
       } else if (e.key === 'Escape') {
         hideTooltip(true);
+        hideInfoTooltip();
         tooltipSuppressedRef.current = true;
         setHighlightedNodeIds(new Set());
         resetNeighborhood();
@@ -255,11 +273,12 @@ export function NodeLinkView() {
     );
   }, [displayedNodeIds, getChildren, getNode, expandNodes]);
 
-  // Compute layout from displayedNodeIds
+  // Compute layout from displayedNodeIds (runs ELK in Web Worker)
   useEffect(() => {
     if (!selectedNodeId || displayedNodeIds.size === 0) {
       setLayoutNodes([]);
       setLayoutEdges([]);
+      setLayoutInProgress(false);
       return;
     }
 
@@ -267,8 +286,12 @@ export function NodeLinkView() {
     if (!nodeData) {
       setLayoutNodes([]);
       setLayoutEdges([]);
+      setLayoutInProgress(false);
       return;
     }
+
+    let cancelled = false;
+    setLayoutInProgress(true);
 
     async function computeLayout() {
       const graph = getGraph();
@@ -284,7 +307,6 @@ export function NodeLinkView() {
         if (!id.startsWith('cluster:')) continue;
         const parentId = id.slice('cluster:'.length);
         const info = computeClusterInfo(parentId, getChildren, displayedNodeIds);
-        // Skip clusters with 0 hidden children (fully expanded)
         if (info.count === 0) continue;
         clusterInfos.push({ id, parentId, ...info });
       }
@@ -299,25 +321,18 @@ export function NodeLinkView() {
         return a.localeCompare(b);
       });
 
-      // Build ELK graph
       const elkNodes = [
         ...realNodeIds.map(id => ({
-          id,
-          width: NODE_WIDTH,
-          height: NODE_HEIGHT,
+          id, width: NODE_WIDTH, height: NODE_HEIGHT,
         })),
         ...clusterInfos.map(c => ({
-          id: c.id,
-          width: CLUSTER_WIDTH,
-          height: CLUSTER_HEIGHT,
+          id: c.id, width: CLUSTER_WIDTH, height: CLUSTER_HEIGHT,
         })),
       ];
 
       const elkEdges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
 
-      // Real edges from the NL subgraph (between real nodes only)
       nlSubgraph.forEachEdge((_edge, _attrs, source, target) => {
-        // Skip edges involving cluster pseudo-nodes (we add those separately)
         if (source.startsWith('cluster:') || target.startsWith('cluster:')) return;
         elkEdges.push({
           id: `${source}->${target}`,
@@ -326,7 +341,6 @@ export function NodeLinkView() {
         });
       });
 
-      // Edges from parent to cluster pseudo-node
       for (const c of clusterInfos) {
         elkEdges.push({
           id: `${c.parentId}->${c.id}`,
@@ -336,7 +350,7 @@ export function NodeLinkView() {
       }
 
       try {
-        const elkGraph = await elk.layout({
+        const elkGraph = await elkRef.current.layout({
           id: 'root',
           layoutOptions: {
             'elk.algorithm': 'layered',
@@ -349,6 +363,8 @@ export function NodeLinkView() {
           children: elkNodes,
           edges: elkEdges,
         });
+
+        if (cancelled) return;
 
         const clusterMap = new Map(clusterInfos.map(c => [c.id, c]));
 
@@ -391,12 +407,22 @@ export function NodeLinkView() {
 
         setLayoutNodes(nodes);
         setLayoutEdges(edges);
+        setLayoutInProgress(false);
       } catch (error) {
+        if (cancelled) return;
         console.error('ELK layout error:', error);
+        setLayoutInProgress(false);
       }
     }
 
     computeLayout();
+
+    return () => {
+      cancelled = true;
+      // Kill the worker and replace with a fresh instance
+      elkRef.current.terminateWorker();
+      elkRef.current = createElk();
+    };
   }, [selectedNodeId, displayedNodeIds, getNode, getChildren, getGraph]);
 
   // D3 rendering with data-join (enter/update/exit animation)
@@ -572,6 +598,7 @@ export function NodeLinkView() {
           const rectEl = (this as SVGGElement).querySelector('rect');
           showTooltip(
             rectEl ?? this as SVGGElement,
+            node.parentId,
             `${node.count} clustered children`,
             childNodes, 0,
             (id) => expandNodes([id], `Added ${getNode(id)?.title ?? id}`),
@@ -607,40 +634,75 @@ export function NodeLinkView() {
       .text(`${node.totalDescendants.toLocaleString()} descendants`);
   }
 
-  /** Compute descendant levels (BFS) up to a depth limit */
-  function computeDescendantLevels(
-    rootId: string,
-    getChildrenFn: (id: string) => ConceptNode[],
-    maxDepth = 5,
-  ): Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }> {
-    const labels = ['Children', 'Grandchildren', 'Great-grandchildren'];
-    const levels: Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }> = [];
-    let currentIds = [rootId];
-    let cumulativeCount = 0;
-    const seen = new Set<string>([rootId]);
+  /** Build a common tooltip header with title and stats */
+  function buildTooltipHeader(nodeId: string): HTMLDivElement {
+    const node = getNode(nodeId);
+    const header = document.createElement('div');
+    header.className = 'tooltip-node-header';
 
-    for (let depth = 0; depth < maxDepth; depth++) {
-      const nextNodes: ConceptNode[] = [];
-      for (const id of currentIds) {
-        for (const child of getChildrenFn(id)) {
-          if (!seen.has(child.id)) {
-            seen.add(child.id);
-            nextNodes.push(child);
-          }
-        }
+    const title = document.createElement('div');
+    title.className = 'tooltip-node-title';
+    title.textContent = node?.title ?? nodeId;
+    header.appendChild(title);
+
+    if (node) {
+      const parents = getParents(nodeId);
+      const children = getChildren(nodeId);
+      const parentsShown = parents.filter(p => displayedNodeIds.has(p.id)).length;
+      const childrenShown = children.filter(c => displayedNodeIds.has(c.id)).length;
+
+      // Count displayed descendants (bounded BFS)
+      const levels = computeDescendantLevels(nodeId, getChildren, 5);
+      const descIds = levels.flatMap(l => l.ids);
+      const descShown = descIds.filter(id => displayedNodeIds.has(id)).length;
+
+      const parts: string[] = [];
+      if (node.parentCount > 0) {
+        parts.push(`${node.parentCount} parents (${parentsShown} shown)`);
       }
-      if (nextNodes.length === 0) break;
-      cumulativeCount += nextNodes.length;
-      const label = depth < labels.length ? labels[depth] : `Depth ${depth + 1}`;
-      levels.push({
-        label,
-        nodes: nextNodes,
-        ids: nextNodes.map(n => n.id),
-        cumulative: cumulativeCount,
-      });
-      currentIds = nextNodes.map(n => n.id);
+      if (node.childCount > 0) {
+        parts.push(`${node.childCount} children (${childrenShown} shown)`);
+      }
+      if (node.descendantCount > node.childCount) {
+        parts.push(`${node.descendantCount.toLocaleString()} desc (${descShown} shown)`);
+      }
+
+      if (parts.length > 0) {
+        const stats = document.createElement('div');
+        stats.className = 'tooltip-node-stats';
+        stats.textContent = parts.join(' · ');
+        header.appendChild(stats);
+      }
     }
-    return levels;
+
+    return header;
+  }
+
+  /** Show a non-interactive info tooltip on node body hover */
+  function showInfoTooltip(anchorEl: SVGGElement, nodeId: string) {
+    hideInfoTooltip();
+    const container = containerRef.current;
+    if (!container) return;
+
+    const tip = document.createElement('div');
+    tip.className = 'badge-tooltip node-info-tooltip';
+    tip.style.pointerEvents = 'none';
+    tip.appendChild(buildTooltipHeader(nodeId));
+
+    container.appendChild(tip);
+    positionTooltip(tip, anchorEl, container);
+    infoTooltipRef.current = tip;
+  }
+
+  function hideInfoTooltip() {
+    if (infoTooltipTimerRef.current) {
+      clearTimeout(infoTooltipTimerRef.current);
+      infoTooltipTimerRef.current = null;
+    }
+    if (infoTooltipRef.current) {
+      infoTooltipRef.current.remove();
+      infoTooltipRef.current = null;
+    }
   }
 
   /**
@@ -683,6 +745,7 @@ export function NodeLinkView() {
   /** Show descendant overlay with level-by-level breakdown */
   function showDescendantTooltip(
     anchorEl: HTMLElement,
+    nodeId: string,
     totalDescendants: number,
     levels: Array<{ label: string; nodes: ConceptNode[]; ids: string[]; cumulative: number }>,
     visibleIds: Set<string>,
@@ -695,6 +758,8 @@ export function NodeLinkView() {
     tip.className = 'badge-tooltip';
     tip.addEventListener('mouseenter', () => cancelHideTimer());
     tip.addEventListener('mouseleave', () => scheduleHide());
+
+    tip.appendChild(buildTooltipHeader(nodeId));
 
     const header = document.createElement('div');
     header.className = 'badge-tooltip-header';
@@ -719,7 +784,10 @@ export function NodeLinkView() {
       addBtn.title = `Add ${notVisibleIds.length.toLocaleString()} ${level.label.toLowerCase()} (${level.cumulative.toLocaleString()} cumulative)`;
       addBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        expandNodes(notVisibleIds, `Added ${notVisibleIds.length} ${level.label.toLowerCase()}`);
+        // Include all preceding levels so added nodes have edges to their parents
+        const levelIdx = levels.indexOf(level);
+        const throughLevel = levels.slice(0, levelIdx + 1).flatMap(l => l.ids).filter(id => !visibleIds.has(id));
+        expandNodes(throughLevel, `Added ${level.label.toLowerCase()} (${throughLevel.length} nodes through depth ${levelIdx + 1})`);
         hideTooltip(true);
       });
       levelHeader.appendChild(addBtn);
@@ -751,6 +819,7 @@ export function NodeLinkView() {
   /** Show interactive overlay near an element listing related nodes */
   function showTooltip(
     anchorEl: HTMLElement | SVGElement,
+    nodeId: string,
     label: string,
     nodes: ConceptNode[],
     alreadyVisibleCount: number,
@@ -766,6 +835,8 @@ export function NodeLinkView() {
 
     tip.addEventListener('mouseenter', () => cancelHideTimer());
     tip.addEventListener('mouseleave', () => scheduleHide());
+
+    tip.appendChild(buildTooltipHeader(nodeId));
 
     const header = document.createElement('div');
     header.className = 'badge-tooltip-header';
@@ -867,17 +938,21 @@ export function NodeLinkView() {
       .on('mouseenter', function () {
         d3.select(this).raise();
         setHoveredNodeId(node.id);
+        if (!tooltipSuppressedRef.current) {
+          infoTooltipTimerRef.current = setTimeout(() => {
+            showInfoTooltip(this as SVGGElement, node.id);
+          }, 300);
+        }
       })
       .on('mouseleave', function () {
         setHoveredNodeId(null);
+        hideInfoTooltip();
       });
 
     gEl.append('rect')
       .attr('width', node.width)
       .attr('height', node.height)
       .attr('rx', 4);
-
-    gEl.append('title').text(fullTitle);
 
     gEl.append('text')
       .attr('x', 8)
@@ -970,6 +1045,7 @@ export function NodeLinkView() {
         });
 
         badgeEl.addEventListener('mouseenter', () => {
+          hideInfoTooltip();
           if (tooltipSuppressedRef.current) return;
           cancelHideTimer();
 
@@ -978,7 +1054,7 @@ export function NodeLinkView() {
             const allIds = levels.flatMap(l => l.ids);
             setHighlightedNodeIds(new Set(allIds));
             showDescendantTooltip(
-              badgeEl, node.data.descendantCount, levels,
+              badgeEl, node.id, node.data.descendantCount, levels,
               displayedNodeIds,
             );
             return;
@@ -999,7 +1075,7 @@ export function NodeLinkView() {
           const notVisible = relatedNodes.filter(n => !displayedNodeIds.has(n.id));
           if (notVisible.length > 0) {
             showTooltip(
-              badgeEl, tooltipLabel, notVisible,
+              badgeEl, node.id, tooltipLabel, notVisible,
               relatedNodes.length - notVisible.length,
               (id) => expandNodes([id], `Added ${getNode(id)?.title ?? id}`),
               (ids) => expandNodes(ids, `Added ${ids.length} ${tooltipLabel.toLowerCase()}`),
@@ -1030,13 +1106,26 @@ export function NodeLinkView() {
           {selectedNodeId ? (
             layoutNodes.length > 0 ? (
               <svg ref={svgRef} className="node-link-svg" />
-            ) : (
+            ) : !layoutInProgress ? (
               <div className="placeholder">Computing layout...</div>
-            )
+            ) : null
           ) : (
             <div className="placeholder">
               Select a concept in the tree to see its neighborhood
             </div>
+          )}
+          {layoutInProgress && (
+            <div className="layout-progress-overlay">
+              <div className="layout-progress-content">
+                <span>Computing layout ({displayedNodeIds.size} nodes)...</span>
+                {canUndo && (
+                  <button className="layout-cancel-btn" onClick={historyBack}>Cancel</button>
+                )}
+              </div>
+            </div>
+          )}
+          {pendingRestore && (
+            <ResumeModal pending={pendingRestore} />
           )}
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (

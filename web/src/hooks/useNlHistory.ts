@@ -4,6 +4,9 @@
  * Manages state, persists to IndexedDB on change, and restores on init.
  * Undo/redo is via keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z) and UI buttons
  * only — no browser history integration.
+ *
+ * When saved history exists, exposes a `pendingRestore` object so the UI can
+ * show a Resume/Start Fresh modal instead of auto-restoring.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +25,15 @@ import {
 } from '../state/nlHistory';
 import { foundationStore } from '../api/foundationStore';
 
+export interface PendingRestore {
+  focusNodeId: string | null;
+  displayedCount: number;
+  snapshotCount: number;
+  description: string;
+  resume: () => void;
+  startFresh: () => void;
+}
+
 interface UseNlHistoryReturn {
   /** Current snapshot (null if history is empty) */
   snapshot: Snapshot | null;
@@ -37,22 +49,52 @@ interface UseNlHistoryReturn {
   canRedo: boolean;
   /** Clear all history */
   clear: () => void;
-  /** Whether history has been restored from IndexedDB */
+  /** Whether history has been restored from IndexedDB (or user chose fresh) */
   restored: boolean;
+  /** Non-null when saved history exists and user hasn't chosen yet */
+  pendingRestore: PendingRestore | null;
 }
 
 export function useNlHistory(): UseNlHistoryReturn {
   const [history, setHistory] = useState<AppHistory>(createHistory);
   const [restored, setRestored] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
+  // Stash the deserialized history until the user chooses resume
+  const pendingHistoryRef = useRef<AppHistory | null>(null);
 
-  // Restore from IndexedDB on mount
+  // Check IndexedDB for saved history on mount
   useEffect(() => {
     foundationStore.getHistory()
       .then(data => {
-        if (data) {
-          setHistory(deserializeHistory(data));
+        if (data && data.snapshots.length > 0) {
+          const restored = deserializeHistory(data);
+          const snap = currentSnapshot(restored);
+          pendingHistoryRef.current = restored;
+
+          setPendingRestore({
+            focusNodeId: snap?.focusNodeId ?? null,
+            displayedCount: snap?.displayedNodeIds.size ?? 0,
+            snapshotCount: data.snapshots.length,
+            description: snap?.description ?? 'Previous session',
+            resume: () => {
+              if (pendingHistoryRef.current) {
+                setHistory(pendingHistoryRef.current);
+                pendingHistoryRef.current = null;
+              }
+              setPendingRestore(null);
+              setRestored(true);
+            },
+            startFresh: () => {
+              pendingHistoryRef.current = null;
+              foundationStore.clearHistory().catch(() => {});
+              setPendingRestore(null);
+              setRestored(true);
+            },
+          });
+        } else {
+          // No saved history — just start fresh
+          setRestored(true);
         }
-        setRestored(true);
       })
       .catch(err => {
         console.warn('Failed to restore NL history from IndexedDB:', err);
@@ -103,5 +145,6 @@ export function useNlHistory(): UseNlHistoryReturn {
     canRedo: historyCanRedo(history),
     clear,
     restored,
+    pendingRestore,
   };
 }

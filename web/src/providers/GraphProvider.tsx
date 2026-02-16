@@ -12,7 +12,7 @@ import {
   getGraph,
 } from '../api/foundationData';
 import { type FoundationGraphJson, foundationStore } from '../api/foundationStore';
-import { useNlHistory } from '../hooks/useNlHistory';
+import { useNlHistory, type PendingRestore } from '../hooks/useNlHistory';
 import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot } from '../state/nlHistory';
@@ -48,6 +48,8 @@ interface GraphContextValue {
   // Cross-panel badge hover highlighting
   highlightedNodeIds: Set<string>;
   setHighlightedNodeIds: (ids: Set<string>) => void;
+  // Resume modal
+  pendingRestore: PendingRestore | null;
   // Re-export foundationData functions so components use context
   getNode: typeof getNode;
   getChildren: typeof getChildren;
@@ -76,7 +78,8 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   // Snapshot-based NL history
   const {
-    snapshot, push, back, forward, canUndo, canRedo, restored: historyRestored,
+    snapshot, push, back, forward, canUndo, canRedo,
+    restored: historyRestored, pendingRestore,
   } = useNlHistory();
 
   // Derive selectedNodeId from the current snapshot.
@@ -353,6 +356,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     canRedo,
     highlightedNodeIds,
     setHighlightedNodeIds,
+    pendingRestore,
     getNode,
     getChildren,
     getParents,
@@ -364,7 +368,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     selectNode, toggleExpand, expandParentPaths,
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
-    highlightedNodeIds,
+    highlightedNodeIds, pendingRestore,
   ]);
 
   return (

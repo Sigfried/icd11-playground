@@ -1,0 +1,83 @@
+/* Resume modal overlay */
+.resume-modal-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 30, 30, 0.7);
+  z-index: 20;
+}
+
+.resume-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-width: 260px;
+  max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.resume-modal-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.resume-modal-info {
+  margin-bottom: 16px;
+}
+
+.resume-modal-focus {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.resume-modal-focus strong {
+  color: var(--accent-yellow);
+}
+
+.resume-modal-stats {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.resume-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.resume-modal-btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.resume-btn {
+  background: rgba(86, 156, 214, 0.2);
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-cyan);
+}
+
+.resume-btn:hover {
+  background: rgba(86, 156, 214, 0.35);
+  color: var(--text-primary);
+}
+
+.fresh-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.fresh-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}

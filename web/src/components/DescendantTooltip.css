@@ -1,0 +1,62 @@
+/* Descendant tooltip (tree view) */
+
+.desc-tooltip {
+  z-index: 100;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 180px;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-size: 0.8rem;
+}
+
+.desc-tooltip-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.desc-tooltip-total {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.desc-tooltip-level {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.desc-tooltip-level:last-child {
+  border-bottom: none;
+}
+
+.desc-tooltip-level-label {
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.desc-tooltip-level-btn {
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  background: rgba(86, 156, 214, 0.15);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.desc-tooltip-level-btn:hover {
+  background: rgba(86, 156, 214, 0.3);
+  color: var(--text-primary);
+}

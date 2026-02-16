@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
 import { Badge } from './Badge';
+import { DescendantTooltip } from './DescendantTooltip';
 import './TreeView.css';
 
 /**
@@ -18,6 +19,29 @@ import './TreeView.css';
  * See icd11-visual-interface-spec.md for full requirements.
  */
 
+/** Descendant tooltip state (shared via context to avoid prop drilling) */
+interface DescTooltipState {
+  nodeId: string;
+  path: TreePath;
+  anchorRect: DOMRect;
+}
+
+interface DescTooltipCtx {
+  tooltip: DescTooltipState | null;
+  show: (state: DescTooltipState) => void;
+  hide: () => void;
+  scheduleHide: () => void;
+  cancelHide: () => void;
+}
+
+const DescTooltipContext = createContext<DescTooltipCtx>({
+  tooltip: null,
+  show: () => {},
+  hide: () => {},
+  scheduleHide: () => {},
+  cancelHide: () => {},
+});
+
 interface TreeNodeProps {
   nodeId: string;
   path: TreePath;
@@ -30,7 +54,6 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     expandedPaths,
     selectNode,
     toggleExpand,
-    setExpandedPaths,
     expandParentPaths,
     highlightedNodeIds,
     setHighlightedNodeIds,
@@ -38,6 +61,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     getChildren,
     getParents,
   } = useGraph();
+  const descCtx = useContext(DescTooltipContext);
 
   const pk = pathKey(path);
   const isExpanded = expandedPaths.has(pk);
@@ -69,21 +93,27 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 
   const handleDescendantBadgeClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    // Recursive expand to depth 3
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
-      const expand = (id: string, currentPath: string[], remainingDepth: number) => {
-        next.add(pathKey(currentPath));
-        if (remainingDepth <= 0) return;
-        for (const child of getChildren(id)) {
-          const childPath = [...currentPath, child.id];
-          expand(child.id, childPath, remainingDepth - 1);
-        }
-      };
-      expand(nodeId, path, 3);
-      return next;
-    });
-  }, [nodeId, path, setExpandedPaths, getChildren]);
+    // Toggle: if tooltip is already showing for this node, close it
+    if (descCtx.tooltip?.nodeId === nodeId) {
+      descCtx.hide();
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    descCtx.show({ nodeId, path, anchorRect: rect });
+  }, [nodeId, path, descCtx]);
+
+  const handleDescendantBadgeHover = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHighlightedNodeIds(new Set(getChildren(nodeId).map(c => c.id)));
+    descCtx.cancelHide();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    descCtx.show({ nodeId, path, anchorRect: rect });
+  }, [nodeId, path, getChildren, setHighlightedNodeIds, descCtx]);
+
+  const handleDescendantBadgeLeave = useCallback(() => {
+    setHighlightedNodeIds(new Set());
+    descCtx.scheduleHide();
+  }, [setHighlightedNodeIds, descCtx]);
 
   // Badge hover handlers for cross-panel highlighting
   const handleParentHover = useCallback((e: React.MouseEvent) => {
@@ -164,8 +194,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
                 type="descendants"
                 count={nodeData.descendantCount}
                 onClick={handleDescendantBadgeClick}
-                onMouseEnter={handleChildHover}
-                onMouseLeave={handleBadgeLeave}
+                onMouseEnter={handleDescendantBadgeHover}
+                onMouseLeave={handleDescendantBadgeLeave}
               />
             )}
           </span>
@@ -191,6 +221,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 export function TreeView() {
   const { rootId, selectedNodeId, graphLoading } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
+  const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Scroll the selected node into view when selection changes
   useEffect(() => {
@@ -202,8 +234,33 @@ export function TreeView() {
     });
   }, [selectedNodeId]);
 
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const hide = useCallback(() => {
+    cancelHide();
+    setDescTooltip(null);
+  }, [cancelHide]);
+
+  const scheduleHide = useCallback(() => {
+    cancelHide();
+    hideTimerRef.current = setTimeout(() => setDescTooltip(null), 150);
+  }, [cancelHide]);
+
+  const descCtxValue: DescTooltipCtx = {
+    tooltip: descTooltip,
+    show: (state) => { cancelHide(); setDescTooltip(state); },
+    hide,
+    scheduleHide,
+    cancelHide,
+  };
+
   return (
-    <>
+    <DescTooltipContext.Provider value={descCtxValue}>
       <div className="panel-header">
         Tree View -- <span className="header-hint">Foundation hierarchy</span>
       </div>
@@ -216,6 +273,14 @@ export function TreeView() {
           <div className="placeholder">Failed to load Foundation</div>
         )}
       </div>
-    </>
+      {descTooltip && (
+        <DescendantTooltip
+          nodeId={descTooltip.nodeId}
+          path={descTooltip.path}
+          anchorRect={descTooltip.anchorRect}
+          onClose={hide}
+        />
+      )}
+    </DescTooltipContext.Provider>
   );
 }
