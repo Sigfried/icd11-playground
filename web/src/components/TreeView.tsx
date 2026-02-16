@@ -266,8 +266,10 @@ function highlightTitle(title: string, query: string): React.ReactNode {
   const re = new RegExp(`(${escaped})`, 'gi');
   const parts = title.split(re);
   if (parts.length === 1) return title;
+  // split with a capturing group alternates: non-match, match, non-match, ...
+  // Odd-indexed parts are the matches.
   return parts.map((part, i) =>
-    re.test(part) ? <mark key={i}>{part}</mark> : part
+    i % 2 === 1 ? <mark key={i}>{part}</mark> : part
   );
 }
 
@@ -344,9 +346,15 @@ export function TreeView() {
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
     setFilterMatchIds(ids);
     // In filter mode, also set the highlight query for title marking
-    if (ids) setHighlightQuery(query);
-    else if (!highlightMatchIds) setHighlightQuery('');
-  }, [highlightMatchIds]);
+    if (ids) {
+      setHighlightQuery(query);
+    } else {
+      setHighlightMatchIds(prev => {
+        if (!prev) setHighlightQuery('');
+        return prev;
+      });
+    }
+  }, []);
 
   const handleHighlightChange = useCallback((ids: Set<string> | null, query: string) => {
     setHighlightMatchIds(ids);

@@ -84,25 +84,31 @@ export function TreeSearch({ onFilterChange, onHighlightChange, onNavigateToMatc
     debounceRef.current = setTimeout(() => doSearch(val), 300);
   }, [doSearch]);
 
-  // Push filter/highlight state to TreeView when results or mode change
+  // Push filter/highlight state to TreeView when results or mode change.
+  // Use refs for callbacks to avoid re-triggering the effect when parent re-renders.
+  const onFilterChangeRef = useRef(onFilterChange);
+  const onHighlightChangeRef = useRef(onHighlightChange);
+  onFilterChangeRef.current = onFilterChange;
+  onHighlightChangeRef.current = onHighlightChange;
+
   useEffect(() => {
     if (!query.trim() || results.length === 0) {
-      onFilterChange(null, '');
-      onHighlightChange(null, '');
+      onFilterChangeRef.current(null, '');
+      onHighlightChangeRef.current(null, '');
       return;
     }
     const ids = new Set(results.map(r => r.id));
     if (mode === 'filter') {
-      onFilterChange(ids, query);
-      onHighlightChange(null, '');
+      onFilterChangeRef.current(ids, query);
+      onHighlightChangeRef.current(null, '');
     } else if (mode === 'highlight') {
-      onFilterChange(null, '');
-      onHighlightChange(ids, query);
+      onFilterChangeRef.current(null, '');
+      onHighlightChangeRef.current(ids, query);
     } else {
-      onFilterChange(null, '');
-      onHighlightChange(null, '');
+      onFilterChangeRef.current(null, '');
+      onHighlightChangeRef.current(null, '');
     }
-  }, [mode, results, query, onFilterChange, onHighlightChange]);
+  }, [mode, results, query]);
 
   const navigateMatch = useCallback((dir: number) => {
     if (results.length === 0) return;
