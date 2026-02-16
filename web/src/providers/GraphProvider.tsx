@@ -133,7 +133,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const selectNode = useCallback((id: string | null) => {
     setHighlightedNodeIds(new Set());
     if (!id) {
-      // Push empty snapshot
       push({
         focusNodeId: null,
         displayedNodeIds: new Set(),
@@ -143,9 +142,24 @@ export function GraphProvider({ children }: GraphProviderProps) {
       return;
     }
     const title = getNode(id)?.title ?? id;
-    buildAndPushSnapshot(id, `Selected ${title}`);
+
+    // If the node is already displayed, merge its neighborhood into the
+    // existing set instead of replacing — preserves exploration context.
+    if (snapshot && snapshot.displayedNodeIds.has(id)) {
+      const newNeighborhood = buildInitialNeighborhood(id, getParents, getChildren, getNode);
+      const merged = new Set(snapshot.displayedNodeIds);
+      for (const nid of newNeighborhood) merged.add(nid);
+      push({
+        focusNodeId: id,
+        displayedNodeIds: merged,
+        timestamp: Date.now(),
+        description: `Selected ${title}`,
+      });
+    } else {
+      buildAndPushSnapshot(id, `Selected ${title}`);
+    }
     navigateTreeToNode(id);
-  }, [buildAndPushSnapshot, navigateTreeToNode, push]);
+  }, [buildAndPushSnapshot, navigateTreeToNode, push, snapshot]);
 
   /** Add nodes to the current displayed set. */
   const expandNodes = useCallback((ids: string[], description: string) => {
