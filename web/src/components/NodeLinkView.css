@@ -12,12 +12,26 @@
   overflow: auto;
 }
 
+/* Zoom spacer: sized to scaled dimensions so the scroll container scrolls correctly.
+   The zoom wrapper is positioned at 0,0 inside and CSS-transformed for GPU zoom. */
+.node-link-zoom-spacer {
+  position: relative;
+  /* Dimensions set via CSS custom properties from JS */
+  width: var(--zoom-w, 0);
+  height: var(--zoom-h, 0);
+}
+
+.node-link-zoom-wrapper {
+  transform-origin: 0 0;
+  will-change: transform;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 .node-link-svg {
   display: block;
   overflow: visible;
-  /* Extra scroll room for hover expansion beyond layout bounds */
-  margin-right: 200px;
-  margin-bottom: 100px;
 }
 
 .node-link-node {

@@ -109,6 +109,7 @@ export function NodeLinkView() {
     pendingRestore,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
+  const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
   const [layoutEdges, setLayoutEdges] = useState<LayoutEdge[]>([]);
@@ -120,9 +121,7 @@ export function NodeLinkView() {
   const infoTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Suppress tooltip re-creation after ESC (cleared on next mouseleave)
   const tooltipSuppressedRef = useRef(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const zoomRef = useRef(1);
-  zoomRef.current = zoomLevel;
   // Position cache for animation: node ID -> last known {x, y}
   const positionCacheRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   // SVG-space position of focus node center (set during D3 rendering)
@@ -137,6 +136,25 @@ export function NodeLinkView() {
   const elkRef = useRef(createElk());
   // Layout progress state for overlay
   const [layoutInProgress, setLayoutInProgress] = useState(false);
+  // Suppress tooltips during pinch zoom (cleared after a short delay)
+  const zoomingRef = useRef(false);
+  const zoomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Apply zoom level directly to DOM — bypasses React to avoid re-render storms during pinch */
+  const applyZoom = useCallback((level: number) => {
+    const clamped = Math.min(2, Math.max(0.2, level));
+    zoomRef.current = clamped;
+    const wrapper = zoomWrapperRef.current;
+    const container = containerRef.current;
+    const dims = svgDimsRef.current;
+    if (wrapper && dims.width) {
+      wrapper.style.transform = `scale(${clamped})`;
+    }
+    if (container && dims.width) {
+      container.style.setProperty('--zoom-w', `${dims.width * clamped}px`);
+      container.style.setProperty('--zoom-h', `${dims.height * clamped}px`);
+    }
+  }, []);
 
   // Scroll container so the focus node is visible (not force-centered)
   const scrollToFocus = useCallback((zoom: number) => {
@@ -177,16 +195,16 @@ export function NodeLinkView() {
       container.clientHeight / dims.height,
       1,
     );
-    setZoomLevel(fitZoom);
+    applyZoom(fitZoom);
     requestAnimationFrame(() => {
       container.scrollLeft = 0;
       container.scrollTop = 0;
     });
-  }, []);
+  }, [applyZoom]);
 
   // Reset tooltip and zoom when selection changes
   useEffect(() => {
-    setZoomLevel(1);
+    applyZoom(1);
     isInitialRenderRef.current = true;
     positionCacheRef.current.clear();
     cancelHideTimer();
@@ -201,16 +219,7 @@ export function NodeLinkView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cancelHideTimer is stable
   }, [selectedNodeId]);
 
-  // After zoom changes, resize SVG and keep focus node visible
-  useEffect(() => {
-    const svg = svgRef.current;
-    const dims = svgDimsRef.current;
-    if (svg && dims.width) {
-      svg.setAttribute('width', String(dims.width * zoomLevel));
-      svg.setAttribute('height', String(dims.height * zoomLevel));
-    }
-    scrollToFocus(zoomLevel);
-  }, [zoomLevel, scrollToFocus]);
+  // (Zoom is applied directly via applyZoom() — no React state involved)
 
   // Ctrl+wheel zoom (no pan — native scroll handles that)
   useEffect(() => {
@@ -219,13 +228,19 @@ export function NodeLinkView() {
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      setZoomLevel(prev => {
-        const next = prev * (1 - e.deltaY * 0.005);
-        return Math.min(2, Math.max(0.2, next));
-      });
+      // Suppress tooltips during pinch zoom
+      hideInfoTooltip();
+      hideTooltip(true);
+      zoomingRef.current = true;
+      if (zoomingTimerRef.current) clearTimeout(zoomingTimerRef.current);
+      zoomingTimerRef.current = setTimeout(() => { zoomingRef.current = false; }, 200);
+      const next = zoomRef.current * (1 - e.deltaY * 0.005);
+      applyZoom(next);
+      scrollToFocus(zoomRef.current);
     };
     container.addEventListener('wheel', onWheel, { passive: false });
     return () => container.removeEventListener('wheel', onWheel);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- applyZoom/scrollToFocus are stable refs
   }, []);
 
   // Keyboard shortcuts: Ctrl+Z = undo, Ctrl+Shift+Z = redo, Escape = reset
@@ -454,8 +469,8 @@ export function NodeLinkView() {
 
     svg
       .attr('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
-      .attr('width', svgWidth * zoomRef.current)
-      .attr('height', svgHeight * zoomRef.current);
+      .attr('width', svgWidth)
+      .attr('height', svgHeight);
 
     // Ensure top-level groups exist (create once, reuse)
     let g = svg.select<SVGGElement>('g.root-group');
@@ -550,6 +565,20 @@ export function NodeLinkView() {
     }
 
     svgDimsRef.current = { width: svgWidth, height: svgHeight };
+
+    // Set zoom wrapper dimensions and scroll area
+    const wrapper = zoomWrapperRef.current;
+    const container = containerRef.current;
+    if (wrapper) {
+      wrapper.style.width = `${svgWidth}px`;
+      wrapper.style.height = `${svgHeight}px`;
+      wrapper.style.transform = `scale(${zoomRef.current})`;
+    }
+    if (container) {
+      container.style.setProperty('--zoom-w', `${svgWidth * zoomRef.current}px`);
+      container.style.setProperty('--zoom-h', `${svgHeight * zoomRef.current}px`);
+    }
+
     const focusNode = layoutNodes.find(n => n.id === selectedNodeId);
     if (focusNode) {
       focusPosRef.current = {
@@ -588,7 +617,7 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => expandCluster(node.id))
       .on('mouseenter', function () {
-        if (tooltipSuppressedRef.current) return;
+        if (tooltipSuppressedRef.current || zoomingRef.current) return;
         cancelHideTimer();
         setHighlightedNodeIds(new Set(node.childIds));
         const childNodes = node.childIds
@@ -651,11 +680,6 @@ export function NodeLinkView() {
       const parentsShown = parents.filter(p => displayedNodeIds.has(p.id)).length;
       const childrenShown = children.filter(c => displayedNodeIds.has(c.id)).length;
 
-      // Count displayed descendants (bounded BFS)
-      const levels = computeDescendantLevels(nodeId, getChildren, 5);
-      const descIds = levels.flatMap(l => l.ids);
-      const descShown = descIds.filter(id => displayedNodeIds.has(id)).length;
-
       const parts: string[] = [];
       if (node.parentCount > 0) {
         parts.push(`${node.parentCount} parents (${parentsShown} shown)`);
@@ -664,7 +688,7 @@ export function NodeLinkView() {
         parts.push(`${node.childCount} children (${childrenShown} shown)`);
       }
       if (node.descendantCount > node.childCount) {
-        parts.push(`${node.descendantCount.toLocaleString()} desc (${descShown} shown)`);
+        parts.push(`${node.descendantCount.toLocaleString()} descendants`);
       }
 
       if (parts.length > 0) {
@@ -938,9 +962,9 @@ export function NodeLinkView() {
       .on('mouseenter', function () {
         d3.select(this).raise();
         setHoveredNodeId(node.id);
-        if (!tooltipSuppressedRef.current) {
+        if (!tooltipSuppressedRef.current && !zoomingRef.current) {
           infoTooltipTimerRef.current = setTimeout(() => {
-            showInfoTooltip(this as SVGGElement, node.id);
+            if (!zoomingRef.current) showInfoTooltip(this as SVGGElement, node.id);
           }, 300);
         }
       })
@@ -1046,7 +1070,7 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('mouseenter', () => {
           hideInfoTooltip();
-          if (tooltipSuppressedRef.current) return;
+          if (tooltipSuppressedRef.current || zoomingRef.current) return;
           cancelHideTimer();
 
           if (isDescBadge) {
@@ -1105,7 +1129,11 @@ export function NodeLinkView() {
         <div className="panel-content node-link-content" ref={containerRef}>
           {selectedNodeId ? (
             layoutNodes.length > 0 ? (
-              <svg ref={svgRef} className="node-link-svg" />
+              <div className="node-link-zoom-spacer">
+                <div className="node-link-zoom-wrapper" ref={zoomWrapperRef}>
+                  <svg ref={svgRef} className="node-link-svg" />
+                </div>
+              </div>
             ) : !layoutInProgress ? (
               <div className="placeholder">Computing layout...</div>
             ) : null
@@ -1130,9 +1158,9 @@ export function NodeLinkView() {
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
-            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.min(2, z * 1.3))} title="Zoom in">+</button>
-            <button className="zoom-btn" onClick={() => setZoomLevel(z => Math.max(0.2, z / 1.3))} title="Zoom out">-</button>
-            <button className="zoom-btn" onClick={() => setZoomLevel(1)} title="Reset zoom">&#8634;</button>
+            <button className="zoom-btn" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
+            <button className="zoom-btn" onClick={() => { applyZoom(zoomRef.current / 1.3); scrollToFocus(zoomRef.current); }} title="Zoom out">-</button>
+            <button className="zoom-btn" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">&#8634;</button>
             <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">&#8865;</button>
             <button className="zoom-btn" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>&#8630;</button>
             <button className="zoom-btn" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>&#8631;</button>
