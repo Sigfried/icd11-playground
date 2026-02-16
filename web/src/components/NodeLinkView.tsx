@@ -139,21 +139,35 @@ export function NodeLinkView() {
   // Suppress tooltips during pinch zoom (cleared after a short delay)
   const zoomingRef = useRef(false);
   const zoomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // RAF-based zoom throttle: only one DOM update per animation frame
+  const zoomRafRef = useRef<number | null>(null);
+  // Debounced spacer resize (triggers layout reflow — keep infrequent)
+  const spacerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Apply zoom level directly to DOM — bypasses React to avoid re-render storms during pinch */
   const applyZoom = useCallback((level: number) => {
     const clamped = Math.min(2, Math.max(0.2, level));
     zoomRef.current = clamped;
-    const wrapper = zoomWrapperRef.current;
-    const container = containerRef.current;
-    const dims = svgDimsRef.current;
-    if (wrapper && dims.width) {
-      wrapper.style.transform = `scale(${clamped})`;
-    }
-    if (container && dims.width) {
-      container.style.setProperty('--zoom-w', `${dims.width * clamped}px`);
-      container.style.setProperty('--zoom-h', `${dims.height * clamped}px`);
-    }
+    // CSS transform is cheap (GPU composited), apply immediately or via RAF
+    if (zoomRafRef.current) cancelAnimationFrame(zoomRafRef.current);
+    zoomRafRef.current = requestAnimationFrame(() => {
+      zoomRafRef.current = null;
+      const wrapper = zoomWrapperRef.current;
+      if (wrapper) {
+        wrapper.style.transform = `scale(${zoomRef.current})`;
+      }
+    });
+    // Spacer resize triggers layout reflow — debounce to ~100ms
+    if (spacerTimerRef.current) clearTimeout(spacerTimerRef.current);
+    spacerTimerRef.current = setTimeout(() => {
+      spacerTimerRef.current = null;
+      const container = containerRef.current;
+      const dims = svgDimsRef.current;
+      if (container && dims.width) {
+        container.style.setProperty('--zoom-w', `${dims.width * zoomRef.current}px`);
+        container.style.setProperty('--zoom-h', `${dims.height * zoomRef.current}px`);
+      }
+    }, 100);
   }, []);
 
   // Scroll container so the focus node is visible (not force-centered)
@@ -636,6 +650,7 @@ export function NodeLinkView() {
         }
       })
       .on('mouseleave', () => {
+        if (zoomingRef.current) return;
         tooltipSuppressedRef.current = false;
         scheduleHide();
         if (!tooltipRef.current) {
@@ -960,15 +975,17 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
+        if (zoomingRef.current) return;
         d3.select(this).raise();
         setHoveredNodeId(node.id);
-        if (!tooltipSuppressedRef.current && !zoomingRef.current) {
+        if (!tooltipSuppressedRef.current) {
           infoTooltipTimerRef.current = setTimeout(() => {
             if (!zoomingRef.current) showInfoTooltip(this as SVGGElement, node.id);
           }, 300);
         }
       })
       .on('mouseleave', function () {
+        if (zoomingRef.current) return;
         setHoveredNodeId(null);
         hideInfoTooltip();
       });
@@ -1108,6 +1125,7 @@ export function NodeLinkView() {
         });
 
         badgeEl.addEventListener('mouseleave', () => {
+          if (zoomingRef.current) return;
           tooltipSuppressedRef.current = false;
           scheduleHide();
           if (!tooltipRef.current) {
