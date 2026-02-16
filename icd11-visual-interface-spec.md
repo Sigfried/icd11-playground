@@ -551,10 +551,11 @@ The app maintains a **unified history** of all user actions in localStorage. Thi
 
 ```typescript
 interface Snapshot {
-  focusNodeId: string | null;   // selected node (null = nothing selected)
+  focusNodeId: string | null;    // selected node (null = nothing selected)
   displayedNodeIds: Set<string>; // all nodes currently shown in NL view
   timestamp: number;
   description: string;           // human-readable action description
+  searchQuery?: string;          // :green_circle: active tree search text (persisted for undo/restore)
 }
 
 // In localStorage:
@@ -571,6 +572,7 @@ interface AppHistory {
 | **Select focus node** | Compute initial neighborhood (`buildInitialNeighborhood`), push snapshot with description e.g. "Selected Cholera" |
 | **Expand (badge click)** | Add nodes to displayed set, push snapshot e.g. "Expanded 3 children of X" |
 | **Remove node X** | Delete X from displayed set, run connectivity pruning (keep only focus node's connected component), push snapshot e.g. "Removed Schizophrenia (+2 pruned)" |
+| **Search** | :green_circle: After debounce, push snapshot with `searchQuery` e.g. "Search: diabetes". Undo restores previous query (or clears it). |
 | **Back / Undo** | Decrement pointer, render `snapshots[pointer]` |
 | **Forward / Redo** | Increment pointer (if not at end), render `snapshots[pointer]` |
 | **New action from earlier state** | Truncate everything after pointer, push new snapshot |
@@ -617,7 +619,7 @@ The current state model uses several separate mechanisms that this unifies:
   - Connectivity pruning on removal: `subgraph.dropNode(id)`, then `connectedComponents(subgraph)` (from `graphology-components`; treats directed edges as undirected), drop any component not containing focus node
   - Available for future graph algorithms (shortest path, centrality, etc.) on the visible neighborhood
 - `buildInitialNeighborhood` is the current `buildNeighborhood` logic (ancestor DAG + children + clusters) but only runs once to produce the first snapshot when a focus node is selected.
-- Tree view state (expand/collapse) could also be tracked in snapshots if we want unified undo across panels. For now, tree state is separate.
+- **Tree & detail state in history (future):** Currently only NL view state and search query are tracked in snapshots. A fuller model would include tree expand/collapse paths, selected node (already tracked as `focusNodeId`), search mode (search vs filter), detail panel scroll position, and possibly tree scroll position captured just before each new action. This would enable true unified undo across all panels — undoing a node selection would also restore the tree's collapsed state and scroll position. Trade-off: snapshot size grows (expand paths can be large sets of path keys), and some state (like scroll offsets) is fragile across window resizes. Consider storing these as optional fields so old snapshots remain compatible.
 
 ---
 
