@@ -34,6 +34,16 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
   - The panel also appears automatically on your first visit
   - Check "Don't show on startup" to suppress the auto-show
 
+### share-button
+
+- **Title:** Share current view
+- **Description:** Copies a shareable URL to the clipboard that encodes the current node-link view — which nodes are displayed and which is focused.
+- **Interactions:**
+  - Click to copy the share URL to clipboard
+  - A checkmark appears briefly to confirm the copy
+  - Disabled when the node-link view is empty (no nodes displayed)
+- **Context:** Opening the shared URL in a new tab restores the exact same set of displayed nodes and focus node, bypassing the resume modal if one would normally appear.
+
 ### polyhierarchy
 
 - **Title:** Polyhierarchy

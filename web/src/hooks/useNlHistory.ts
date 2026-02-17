@@ -53,11 +53,14 @@ interface UseNlHistoryReturn {
   restored: boolean;
   /** Non-null when saved history exists and user hasn't chosen yet */
   pendingRestore: PendingRestore | null;
+  /** True once the IndexedDB check is done (before user chooses resume/fresh) */
+  initComplete: boolean;
 }
 
 export function useNlHistory(): UseNlHistoryReturn {
   const [history, setHistory] = useState<AppHistory>(createHistory);
   const [restored, setRestored] = useState(false);
+  const [initComplete, setInitComplete] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
   // Stash the deserialized history until the user chooses resume
   const pendingHistoryRef = useRef<AppHistory | null>(null);
@@ -91,14 +94,17 @@ export function useNlHistory(): UseNlHistoryReturn {
               setRestored(true);
             },
           });
+          setInitComplete(true);
         } else {
           // No saved history — just start fresh
           setRestored(true);
+          setInitComplete(true);
         }
       })
       .catch(err => {
         console.warn('Failed to restore NL history from IndexedDB:', err);
         setRestored(true);
+        setInitComplete(true);
       });
   }, []);
 
@@ -146,5 +152,6 @@ export function useNlHistory(): UseNlHistoryReturn {
     clear,
     restored,
     pendingRestore,
+    initComplete,
   };
 }

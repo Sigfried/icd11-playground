@@ -38,6 +38,10 @@ export type TreePath = string[];
 // Module-level graphology instance — created once in initGraph
 let graph: Graph<ConceptNode> | null = null;
 
+// Canonical sorted node IDs for compact encoding (built in initGraph)
+let sortedNodeIds: string[] = [];
+let nodeIdToIndex: Map<string, number> = new Map();
+
 // In-flight detail requests to avoid duplicate fetches
 const detailInflight = new Map<string, Promise<EntityDetail>>();
 
@@ -66,6 +70,10 @@ export function initGraph(data: FoundationGraphJson): void {
       }
     }
   }
+
+  // Build canonical index for snapshot URL encoding
+  sortedNodeIds = graph.nodes().sort();
+  nodeIdToIndex = new Map(sortedNodeIds.map((id, i) => [id, i]));
 
   // Expose for debugging
   (window as unknown as Record<string, unknown>).graph = graph;
@@ -108,6 +116,18 @@ export function hasNode(id: string): boolean {
 /** Escape hatch — NodeLinkView needs the raw graph for ELK layout. */
 export function getGraph(): Graph<ConceptNode> {
   return assertGraph();
+}
+
+/** Get the canonical index for a node ID (for snapshot URL encoding). */
+export function getNodeIndex(id: string): number {
+  const idx = nodeIdToIndex.get(id);
+  if (idx === undefined) throw new Error(`Unknown node ID: ${id}`);
+  return idx;
+}
+
+/** Get the node ID for a canonical index (for snapshot URL decoding). */
+export function getNodeIdByIndex(index: number): string | null {
+  return sortedNodeIds[index] ?? null;
 }
 
 /**

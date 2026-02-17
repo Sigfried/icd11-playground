@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { GraphProvider, useGraph } from './providers/GraphProvider';
 import { TreeView } from './components/TreeView';
 import { NodeLinkView } from './components/NodeLinkView';
@@ -113,6 +113,45 @@ function AboutButton() {
   );
 }
 
+function ShareButton() {
+  const { shareCurrentView, displayedNodeIds } = useGraph();
+  const [copied, setCopied] = useState(false);
+  const disabled = displayedNodeIds.size === 0;
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <button
+      className={`share-button${copied ? ' copied' : ''}`}
+      data-help-id="share-button"
+      disabled={disabled}
+      onClick={async () => {
+        const ok = await shareCurrentView();
+        if (ok) setCopied(true);
+      }}
+      title={copied ? 'Copied!' : 'Copy shareable link to clipboard'}
+    >
+      {copied ? (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 8 7 12 13 4" />
+        </svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="4" cy="8" r="2" />
+          <circle cx="12" cy="3.5" r="2" />
+          <circle cx="12" cy="12.5" r="2" />
+          <line x1="5.8" y1="7" x2="10.2" y2="4.5" />
+          <line x1="5.8" y1="9" x2="10.2" y2="11.5" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function HelpToggle() {
   const { helpMode, toggleHelpMode } = useGraph();
   return (
@@ -152,6 +191,7 @@ function AppContent() {
             </svg>
           </a>
           <AboutButton />
+          <ShareButton />
           <HelpToggle />
           <LayoutToggle mode={mode} onToggle={toggleMode} />
         </header>

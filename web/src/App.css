@@ -96,6 +96,31 @@ body {
   color: var(--text-primary);
 }
 
+/* Share button */
+.share-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.share-button:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.share-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.share-button.copied {
+  color: var(--accent-green);
+}
+
 /* Help toggle button */
 .help-toggle {
   background: none;

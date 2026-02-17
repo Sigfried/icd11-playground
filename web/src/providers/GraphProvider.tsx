@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ConceptNode,
   type EntityDetail,
@@ -17,6 +17,7 @@ import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot } from '../state/nlHistory';
 import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
+import { getSnapshotFromUrl, decodeSnapshot, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
 
 export type { ConceptNode, EntityDetail, TreePath };
 
@@ -62,6 +63,8 @@ interface GraphContextValue {
   activeHelpEntry: { id: string; rect: DOMRect } | null;
   showHelpEntry: (id: string, rect: DOMRect) => void;
   dismissHelpEntry: () => void;
+  // Share
+  shareCurrentView: () => Promise<boolean>;
   // About panel
   showAbout: boolean;
   setShowAbout: (show: boolean) => void;
@@ -122,7 +125,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   // Snapshot-based NL history
   const {
     snapshot, push, back, forward, canUndo, canRedo,
-    restored: historyRestored, pendingRestore,
+    restored: historyRestored, pendingRestore, initComplete,
   } = useNlHistory();
 
   // Derive selectedNodeId from the current snapshot.
@@ -300,6 +303,36 @@ export function GraphProvider({ children }: GraphProviderProps) {
     });
   }, [snapshot, push]);
 
+  // --- URL snapshot decode on init ---
+  const [urlParam] = useState(() => getSnapshotFromUrl());
+  const urlAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!graphReady || !urlParam || !initComplete || urlAppliedRef.current) return;
+    urlAppliedRef.current = true;
+    try {
+      const decoded = decodeSnapshot(urlParam);
+      if (pendingRestore) pendingRestore.startFresh();
+      push({ ...decoded, timestamp: Date.now(), description: 'Shared view' });
+      clearSnapshotFromUrl();
+    } catch (err) {
+      console.warn('Failed to decode snapshot URL:', err);
+    }
+  }, [graphReady, urlParam, initComplete, pendingRestore, push]);
+
+  // --- Share function ---
+  const shareCurrentView = useCallback(async (): Promise<boolean> => {
+    if (!snapshot || snapshot.displayedNodeIds.size === 0) return false;
+    try {
+      const url = buildShareUrl(snapshot);
+      await navigator.clipboard.writeText(url);
+      return true;
+    } catch (err) {
+      console.warn('Failed to copy share URL:', err);
+      return false;
+    }
+  }, [snapshot]);
+
   const historyBack = useCallback(() => { back(); }, [back]);
   const historyForward = useCallback(() => { forward(); }, [forward]);
 
@@ -461,6 +494,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     activeHelpEntry,
     showHelpEntry,
     dismissHelpEntry,
+    shareCurrentView,
     showAbout, setShowAbout,
     getNode,
     getChildren,
@@ -476,7 +510,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
     helpMode, toggleHelpMode, exitHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
-    showAbout,
+    shareCurrentView, showAbout,
   ]);
 
   return (

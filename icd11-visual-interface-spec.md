@@ -25,7 +25,7 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | **Data Model** | Relationship types beyond is-a | :white_circle: |
 | | Canonical vs linked parents | :white_circle: Investigation |
 | **State & History** | History review UI (timeline panel) | :white_circle: |
-| | Share button (encode snapshot in URL) | :white_circle: |
+| | Share button (encode snapshot in URL) | :white_check_mark: |
 | | Auto-clear old snapshots | :white_circle: |
 | | Tree & detail state in history | :white_circle: |
 | **Search** | Advanced search field options | :white_circle: |
@@ -183,9 +183,9 @@ A reviewable history panel/dropdown showing the exploration timeline:
 - Click any entry to jump directly (sets pointer, no need to step through)
 - Optional scrubber/slider for quick traversal through long histories
 
-### Share button
+### ~~Share button~~ (Implemented)
 
-Generate a URL encoding the current snapshot's `displayedNodeIds` + `focusNodeId`. On load, write to the recipient's IndexedDB and render. For large sets: alternative sharing mechanism TBD.
+Uses a BFS-bitmask encoding that exploits the shared DAG structure: both encoder and decoder have the full graph in memory, so only BFS expansion decisions (1 bit per candidate child) are stored. The bitstream is deflate-compressed and base64url-encoded into a `?s=` URL parameter. Typical URLs are 500 bytes–2KB for up to 4K-node subgraphs. Opening a share URL restores the exact displayed nodes and focus node, bypassing the resume modal.
 
 ### Auto-clear old snapshots
 
