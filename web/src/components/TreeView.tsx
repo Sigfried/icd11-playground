@@ -75,6 +75,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     expandParentPaths,
     highlightedNodeIds,
     setHighlightedNodeIds,
+    helpMode,
     getNode,
     getChildren,
     getParents,
@@ -127,12 +128,13 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   }, [nodeId, path, descCtx]);
 
   const handleDescendantBadgeHover = useCallback((e: React.MouseEvent) => {
+    if (helpMode) return;
     e.stopPropagation();
     setHighlightedNodeIds(new Set(getChildren(nodeId).map(c => c.id)));
     descCtx.cancelHide();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     descCtx.show({ nodeId, path, anchorRect: rect });
-  }, [nodeId, path, getChildren, setHighlightedNodeIds, descCtx]);
+  }, [nodeId, path, getChildren, setHighlightedNodeIds, descCtx, helpMode]);
 
   const handleDescendantBadgeLeave = useCallback(() => {
     setHighlightedNodeIds(new Set());
@@ -141,14 +143,16 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 
   // Badge hover handlers for cross-panel highlighting
   const handleParentHover = useCallback((e: React.MouseEvent) => {
+    if (helpMode) return;
     e.stopPropagation();
     setHighlightedNodeIds(new Set(getParents(nodeId).map(p => p.id)));
-  }, [nodeId, getParents, setHighlightedNodeIds]);
+  }, [nodeId, getParents, setHighlightedNodeIds, helpMode]);
 
   const handleChildHover = useCallback((e: React.MouseEvent) => {
+    if (helpMode) return;
     e.stopPropagation();
     setHighlightedNodeIds(new Set(getChildren(nodeId).map(c => c.id)));
-  }, [nodeId, getChildren, setHighlightedNodeIds]);
+  }, [nodeId, getChildren, setHighlightedNodeIds, helpMode]);
 
   const handleBadgeLeave = useCallback(() => {
     setHighlightedNodeIds(new Set());

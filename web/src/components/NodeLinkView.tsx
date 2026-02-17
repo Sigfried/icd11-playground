@@ -105,8 +105,12 @@ export function NodeLinkView() {
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     highlightedNodeIds, setHighlightedNodeIds,
+    helpMode,
   } = useGraph();
   const svgRef = useRef<SVGSVGElement>(null);
+  // Ref so D3 closures always see current helpMode
+  const helpModeRef = useRef(helpMode);
+  helpModeRef.current = helpMode;
   const zoomWrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
@@ -630,7 +634,7 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => expandCluster(node.id))
       .on('mouseenter', function () {
-        if (tooltipSuppressedRef.current || zoomingRef.current) return;
+        if (tooltipSuppressedRef.current || zoomingRef.current || helpModeRef.current) return;
         cancelHideTimer();
         setHighlightedNodeIds(new Set(node.childIds));
         const childNodes = node.childIds
@@ -975,7 +979,7 @@ export function NodeLinkView() {
       .style('cursor', 'pointer')
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
-        if (zoomingRef.current) return;
+        if (zoomingRef.current || helpModeRef.current) return;
         d3.select(this).raise();
         setHoveredNodeId(node.id);
         if (!tooltipSuppressedRef.current) {
@@ -1088,7 +1092,7 @@ export function NodeLinkView() {
 
         badgeEl.addEventListener('mouseenter', () => {
           hideInfoTooltip();
-          if (tooltipSuppressedRef.current || zoomingRef.current) return;
+          if (tooltipSuppressedRef.current || zoomingRef.current || helpModeRef.current) return;
           cancelHideTimer();
 
           if (isDescBadge) {
