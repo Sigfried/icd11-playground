@@ -31,7 +31,7 @@ export function ResumeModal({ pending }: ResumeModalProps) {
             <div className="resume-modal-focus">Previous session</div>
           )}
           <div className="resume-modal-stats">
-            {pending.displayedCount} nodes · {pending.snapshotCount} undo steps
+            {pending.snapshotCount} undo step{pending.snapshotCount === 1 ? '' : 's'}
           </div>
         </div>
         <div className="resume-modal-actions">

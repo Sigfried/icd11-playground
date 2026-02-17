@@ -28,6 +28,8 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Share button (encode snapshot in URL) | :white_check_mark: |
 | | Auto-clear old snapshots | :white_circle: |
 | | Tree & detail state in history | :white_circle: |
+| **Infrastructure** | Cloudflare Worker proxy 500 errors on entity detail fetch | :white_circle: Bug |
+| | Multi-tab IndexedDB history conflict (last-write-wins overwrites other tabs) | :white_circle: Bug |
 | **Search** | Advanced search field options | :white_circle: |
 | **Help System** | First-visit guided tour | :white_circle: |
 | | Stakeholder feedback mechanism | :white_circle: |

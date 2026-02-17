@@ -17,7 +17,7 @@ import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot, SnapshotOp } from '../state/nlHistory';
 import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
-import { getSnapshotFromUrl, decodeSnapshot, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
+import { getSnapshotFromUrl, decodeSnapshots, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
 import type { GraphMeta } from '../api/foundationStore';
 
 export type { ConceptNode, EntityDetail, TreePath };
@@ -125,7 +125,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   // Snapshot-based NL history
   const {
-    snapshot, push, back, forward, canUndo, canRedo,
+    snapshot, push, loadSnapshots, back, forward, canUndo, canRedo,
     restored: historyRestored, pendingRestore, initComplete,
     historyOps,
   } = useNlHistory();
@@ -319,24 +319,29 @@ export function GraphProvider({ children }: GraphProviderProps) {
     if (!graphReady || !urlParam || !initComplete || urlAppliedRef.current) return;
     urlAppliedRef.current = true;
     try {
-      const decoded = decodeSnapshot(urlParam);
+      const snapshots = decodeSnapshots(urlParam);
+      if (snapshots.length === 0) return;
       if (pendingRestore) pendingRestore.startFresh();
-      push({ ...decoded, timestamp: Date.now(), description: 'Shared view' });
+      loadSnapshots(snapshots, snapshots.length - 1);
       clearSnapshotFromUrl();
     } catch (err) {
       console.warn('Failed to decode snapshot URL:', err);
     }
-  }, [graphReady, urlParam, initComplete, pendingRestore, push]);
+  }, [graphReady, urlParam, initComplete, pendingRestore, loadSnapshots]);
 
   // --- Share function ---
   const shareCurrentView = useCallback(async (): Promise<boolean> => {
-    if (!snapshot || snapshot.displayedNodeIds.size === 0) return false;
+    if (!snapshot || snapshot.displayedNodeIds.size === 0 || historyOps.length === 0) return false;
     try {
-      const url = buildShareUrl(historyOps, snapshot.focusNodeId, snapshot.displayedNodeIds);
+      const url = buildShareUrl(historyOps);
       await navigator.clipboard.writeText(url);
       return true;
     } catch (err) {
-      console.warn('Failed to copy share URL:', err);
+      if (err instanceof Error && err.message.includes('too long')) {
+        alert(err.message);
+      } else {
+        console.warn('Failed to copy share URL:', err);
+      }
       return false;
     }
   }, [snapshot, historyOps]);

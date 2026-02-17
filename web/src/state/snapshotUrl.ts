@@ -1,11 +1,8 @@
 /**
  * Encode/decode node-link snapshots as compact URL parameters.
  *
- * Two encoding modes:
- * 1. **Instruction replay** (primary) — encodes the sequence of operations that
- *    produced the view. Decoder replays them to reconstruct exact state.
- * 2. **Diff mode** (fallback) — encodes focus node + added/removed IDs relative
- *    to the default neighborhood. Used when instruction sequence > 2KB.
+ * Encodes the sequence of operations (SnapshotOp) that produced the view.
+ * Decoder replays them to reconstruct full history with undo/redo support.
  *
  * URL format: ?s=<base64url-encoded JSON>
  */
@@ -13,7 +10,7 @@
 import { getNode, getGraph, getChildren, getParents, getGraphRelease } from '../api/foundationData';
 import { buildInitialNeighborhood } from './buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from './nlSubgraph';
-import type { SnapshotOp } from './nlHistory';
+import type { Snapshot, SnapshotOp } from './nlHistory';
 
 /** Compact serialized op: [type, ...params] */
 type SerializedOp =
@@ -28,15 +25,6 @@ interface InstructionPayload {
   v: string;
   ops: SerializedOp[];
 }
-
-interface DiffPayload {
-  v: string;
-  f: string;
-  a?: string[];
-  r?: string[];
-}
-
-const MAX_ENCODED_LENGTH = 2000;
 
 // --- Base64url ---
 
@@ -84,58 +72,93 @@ function buildNeighborhood(nodeId: string): Set<string> {
   return buildInitialNeighborhood(nodeId, getParents, getChildren, getNode);
 }
 
-/** Replay a sequence of ops to reconstruct focus + displayed nodes. */
+function describeOp(op: SnapshotOp): string {
+  switch (op.type) {
+    case 'select': return `Selected ${getNode(op.nodeId)?.title ?? op.nodeId}`;
+    case 'reselect': return `Selected ${getNode(op.nodeId)?.title ?? op.nodeId}`;
+    case 'add': return `Added ${op.ids.length} node${op.ids.length === 1 ? '' : 's'}`;
+    case 'remove': return `Removed ${getNode(op.id)?.title ?? op.id}`;
+    case 'removeBatch': return `Removed ${op.ids.length} node${op.ids.length === 1 ? '' : 's'}`;
+    case 'reset': return 'Reset neighborhood';
+  }
+}
+
+/** Apply a single op to produce new state. */
+function applyOp(
+  op: SnapshotOp,
+  focusNodeId: string | null,
+  displayedNodeIds: Set<string>,
+): { focusNodeId: string | null; displayedNodeIds: Set<string> } {
+  switch (op.type) {
+    case 'select':
+      return { focusNodeId: op.nodeId, displayedNodeIds: buildNeighborhood(op.nodeId) };
+    case 'reselect': {
+      const merged = new Set(displayedNodeIds);
+      for (const id of buildNeighborhood(op.nodeId)) merged.add(id);
+      return { focusNodeId: op.nodeId, displayedNodeIds: merged };
+    }
+    case 'add': {
+      const next = new Set(displayedNodeIds);
+      for (const id of op.ids) next.add(id);
+      return { focusNodeId, displayedNodeIds: next };
+    }
+    case 'remove': {
+      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
+      const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
+      return { focusNodeId, displayedNodeIds: removeNodeWithPruning(sub, op.id, focusNodeId).displayedNodeIds };
+    }
+    case 'removeBatch': {
+      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
+      const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
+      return { focusNodeId, displayedNodeIds: removeNodesWithPruning(sub, op.ids, focusNodeId).displayedNodeIds };
+    }
+    case 'reset': {
+      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
+      return { focusNodeId, displayedNodeIds: buildNeighborhood(focusNodeId) };
+    }
+  }
+}
+
+/** Replay a sequence of ops, returning only the final state. */
 export function replayOps(ops: SnapshotOp[]): {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
 } {
   let focusNodeId: string | null = null;
   let displayedNodeIds = new Set<string>();
+  for (const op of ops) {
+    ({ focusNodeId, displayedNodeIds } = applyOp(op, focusNodeId, displayedNodeIds));
+  }
+  return { focusNodeId, displayedNodeIds };
+}
+
+/** Replay a sequence of ops, returning a Snapshot for each step (full history). */
+export function replayOpsToSnapshots(ops: SnapshotOp[]): Snapshot[] {
+  const snapshots: Snapshot[] = [];
+  let focusNodeId: string | null = null;
+  let displayedNodeIds = new Set<string>();
 
   for (const op of ops) {
-    switch (op.type) {
-      case 'select': {
-        focusNodeId = op.nodeId;
-        displayedNodeIds = buildNeighborhood(op.nodeId);
-        break;
-      }
-      case 'reselect': {
-        focusNodeId = op.nodeId;
-        const neighborhood = buildNeighborhood(op.nodeId);
-        for (const id of neighborhood) displayedNodeIds.add(id);
-        break;
-      }
-      case 'add': {
-        for (const id of op.ids) displayedNodeIds.add(id);
-        break;
-      }
-      case 'remove': {
-        if (!focusNodeId) break;
-        const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
-        ({ displayedNodeIds } = removeNodeWithPruning(sub, op.id, focusNodeId));
-        break;
-      }
-      case 'removeBatch': {
-        if (!focusNodeId) break;
-        const sub2 = buildNlSubgraph(getGraph(), displayedNodeIds);
-        ({ displayedNodeIds } = removeNodesWithPruning(sub2, op.ids, focusNodeId));
-        break;
-      }
-      case 'reset': {
-        if (focusNodeId) {
-          displayedNodeIds = buildNeighborhood(focusNodeId);
-        }
-        break;
-      }
-    }
+    ({ focusNodeId, displayedNodeIds } = applyOp(op, focusNodeId, displayedNodeIds));
+    snapshots.push({
+      focusNodeId,
+      displayedNodeIds: new Set(displayedNodeIds), // defensive copy
+      timestamp: Date.now(),
+      description: describeOp(op),
+      op,
+    });
   }
 
-  return { focusNodeId, displayedNodeIds };
+  return snapshots;
 }
 
 // --- Encode ---
 
-function encodeInstructions(ops: SnapshotOp[]): string {
+/** Encode ops for a share URL. Throws if the encoded result exceeds ~2KB. */
+export function encodeOps(ops: SnapshotOp[]): string {
+  if (ops.length === 0) {
+    throw new Error('No operations to encode');
+  }
   const release = getGraphRelease();
   const payload: InstructionPayload = {
     v: release ?? 'unknown',
@@ -143,82 +166,25 @@ function encodeInstructions(ops: SnapshotOp[]): string {
   };
   const json = JSON.stringify(payload);
   const bytes = new TextEncoder().encode(json);
-  return toBase64url(bytes);
-}
+  const encoded = toBase64url(bytes);
 
-function encodeDiff(
-  focusNodeId: string,
-  displayedNodeIds: Set<string>,
-): string {
-  // Filter clusters from displayed
-  const realDisplayed = new Set<string>();
-  for (const id of displayedNodeIds) {
-    if (!id.startsWith('cluster:')) realDisplayed.add(id);
+  if (encoded.length > 2000) {
+    throw new Error(
+      `Share URL too long (${encoded.length} chars). ` +
+      'Try a shorter exploration history, or reset and re-explore.'
+    );
   }
 
-  // Compute base neighborhood
-  const base = buildNeighborhood(focusNodeId);
-  const realBase = new Set<string>();
-  for (const id of base) {
-    if (!id.startsWith('cluster:')) realBase.add(id);
-  }
-
-  // Compute diff
-  const added: string[] = [];
-  for (const id of realDisplayed) {
-    if (!realBase.has(id)) added.push(id);
-  }
-  const removed: string[] = [];
-  for (const id of realBase) {
-    if (!realDisplayed.has(id)) removed.push(id);
-  }
-
-  const release = getGraphRelease();
-  const payload: DiffPayload = {
-    v: release ?? 'unknown',
-    f: focusNodeId,
-  };
-  if (added.length > 0) payload.a = added;
-  if (removed.length > 0) payload.r = removed;
-
-  const json = JSON.stringify(payload);
-  const bytes = new TextEncoder().encode(json);
-  return toBase64url(bytes);
-}
-
-/**
- * Encode a snapshot for sharing. Uses instruction replay by default,
- * falls back to diff encoding if the instruction sequence is too long.
- */
-export function encodeSnapshot(
-  ops: SnapshotOp[],
-  focusNodeId: string | null,
-  displayedNodeIds: Set<string>,
-): string {
-  // Try instruction encoding first
-  if (ops.length > 0) {
-    const encoded = encodeInstructions(ops);
-    if (encoded.length <= MAX_ENCODED_LENGTH) {
-      return encoded;
-    }
-  }
-
-  // Fall back to diff encoding
-  if (!focusNodeId) {
-    throw new Error('Cannot encode snapshot: no focus node and instruction encoding too long');
-  }
-  return encodeDiff(focusNodeId, displayedNodeIds);
+  return encoded;
 }
 
 // --- Decode ---
 
-export function decodeSnapshot(encoded: string): {
-  focusNodeId: string | null;
-  displayedNodeIds: Set<string>;
-} {
+/** Decode a share URL parameter into a full history of snapshots. */
+export function decodeSnapshots(encoded: string): Snapshot[] {
   const bytes = fromBase64url(encoded);
   const json = new TextDecoder().decode(bytes);
-  const payload = JSON.parse(json) as InstructionPayload | DiffPayload;
+  const payload = JSON.parse(json) as InstructionPayload;
 
   // Version check
   const currentRelease = getGraphRelease();
@@ -229,44 +195,18 @@ export function decodeSnapshot(encoded: string): {
     );
   }
 
-  // Detect format by key presence
-  if ('ops' in payload) {
-    // Instruction replay mode
-    const ops = (payload as InstructionPayload).ops.map(deserializeOp);
-    return replayOps(ops);
-  } else if ('f' in payload) {
-    // Diff mode
-    const diff = payload as DiffPayload;
-    const base = buildNeighborhood(diff.f);
-
-    // Filter clusters from base
-    const displayedNodeIds = new Set<string>();
-    for (const id of base) {
-      if (!id.startsWith('cluster:')) displayedNodeIds.add(id);
-    }
-
-    // Apply diff
-    if (diff.a) {
-      for (const id of diff.a) displayedNodeIds.add(id);
-    }
-    if (diff.r) {
-      for (const id of diff.r) displayedNodeIds.delete(id);
-    }
-
-    return { focusNodeId: diff.f, displayedNodeIds };
+  if (!payload.ops) {
+    throw new Error('Invalid share URL format');
   }
 
-  throw new Error('Unknown snapshot URL format');
+  const ops = payload.ops.map(deserializeOp);
+  return replayOpsToSnapshots(ops);
 }
 
 // --- URL helpers ---
 
-export function buildShareUrl(
-  ops: SnapshotOp[],
-  focusNodeId: string | null,
-  displayedNodeIds: Set<string>,
-): string {
-  const encoded = encodeSnapshot(ops, focusNodeId, displayedNodeIds);
+export function buildShareUrl(ops: SnapshotOp[]): string {
+  const encoded = encodeOps(ops);
   const url = new URL(window.location.href);
   // Clear other params, keep only `s`
   for (const key of [...url.searchParams.keys()]) url.searchParams.delete(key);

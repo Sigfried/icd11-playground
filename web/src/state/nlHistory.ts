@@ -1,8 +1,9 @@
 /**
  * Pure snapshot-based history for the Node-Link view.
  *
- * `displayedNodeIds` is the single source of truth — no manual/default distinction.
- * All functions are immutable: they return new objects, never mutate.
+ * Ops (SnapshotOp) are the source of truth. Each snapshot's displayedNodeIds
+ * is computed by replaying ops and only lives in memory — never persisted.
+ * Undo/redo moves the pointer across pre-computed snapshots.
  */
 
 export type SnapshotOp =
@@ -27,11 +28,10 @@ export interface AppHistory {
   pointer: number; // -1 when empty
 }
 
-/** Serializable form for IndexedDB storage (Set → array). */
+/** Serializable form for IndexedDB storage — ops only, no displayedNodeIds. */
 export interface SerializedHistory {
   snapshots: Array<{
     focusNodeId: string | null;
-    displayedNodeIds: string[];
     timestamp: number;
     description: string;
     searchQuery?: string;
@@ -49,6 +49,11 @@ export function pushSnapshot(history: AppHistory, snapshot: Snapshot): AppHistor
   const snapshots = history.snapshots.slice(0, history.pointer + 1);
   snapshots.push(snapshot);
   return { snapshots, pointer: snapshots.length - 1 };
+}
+
+/** Replace the entire history (used when restoring from IndexedDB or URL). */
+export function replaceHistory(snapshots: Snapshot[], pointer: number): AppHistory {
+  return { snapshots, pointer };
 }
 
 export function undo(history: AppHistory): AppHistory {
@@ -79,30 +84,16 @@ export function canRedo(history: AppHistory): boolean {
   return history.pointer < history.snapshots.length - 1;
 }
 
+/** Serialize history for IndexedDB — ops only, displayedNodeIds omitted. */
 export function serializeHistory(history: AppHistory): SerializedHistory {
   return {
     snapshots: history.snapshots.map(s => ({
       focusNodeId: s.focusNodeId,
-      displayedNodeIds: [...s.displayedNodeIds],
       timestamp: s.timestamp,
       description: s.description,
       searchQuery: s.searchQuery,
       op: s.op,
     })),
     pointer: history.pointer,
-  };
-}
-
-export function deserializeHistory(data: SerializedHistory): AppHistory {
-  return {
-    snapshots: data.snapshots.map(s => ({
-      focusNodeId: s.focusNodeId,
-      displayedNodeIds: new Set(s.displayedNodeIds),
-      timestamp: s.timestamp,
-      description: s.description,
-      searchQuery: s.searchQuery,
-      op: s.op,
-    })),
-    pointer: data.pointer,
   };
 }

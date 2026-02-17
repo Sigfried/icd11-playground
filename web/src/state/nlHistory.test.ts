@@ -9,7 +9,6 @@ import {
   canUndo,
   canRedo,
   serializeHistory,
-  deserializeHistory,
   type Snapshot,
 } from './nlHistory';
 
@@ -114,19 +113,22 @@ describe('nlHistory', () => {
     expect(currentSnapshot(h)!.focusNodeId).toBe('C');
   });
 
-  it('serialization round-trip', () => {
+  it('serialization stores ops only (no displayedNodeIds)', () => {
     let h = createHistory();
-    h = pushSnapshot(h, snap('A', ['A', '1', '2'], 'Selected A'));
-    h = pushSnapshot(h, snap('B', ['B', '3'], 'Selected B'));
+    h = pushSnapshot(h, {
+      ...snap('A', ['A', '1', '2'], 'Selected A'),
+      op: { type: 'select', nodeId: 'A' },
+    });
+    h = pushSnapshot(h, {
+      ...snap('B', ['B', '3'], 'Selected B'),
+      op: { type: 'select', nodeId: 'B' },
+    });
 
     const serialized = serializeHistory(h);
-    expect(serialized.snapshots[0].displayedNodeIds).toEqual(['A', '1', '2']);
     expect(serialized.pointer).toBe(1);
-
-    const restored = deserializeHistory(serialized);
-    expect(restored.pointer).toBe(1);
-    expect(currentSnapshot(restored)!.focusNodeId).toBe('B');
-    expect(currentSnapshot(restored)!.displayedNodeIds).toBeInstanceOf(Set);
-    expect([...currentSnapshot(restored)!.displayedNodeIds]).toEqual(['B', '3']);
+    expect(serialized.snapshots[0].op).toEqual({ type: 'select', nodeId: 'A' });
+    expect(serialized.snapshots[1].op).toEqual({ type: 'select', nodeId: 'B' });
+    // displayedNodeIds should not be in serialized form
+    expect('displayedNodeIds' in serialized.snapshots[0]).toBe(false);
   });
 });

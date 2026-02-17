@@ -5,6 +5,9 @@
  * Undo/redo is via keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z) and UI buttons
  * only — no browser history integration.
  *
+ * IndexedDB stores ops only — displayedNodeIds is recomputed by replaying ops
+ * on restore (same replay used for share URL decode).
+ *
  * When saved history exists, exposes a `pendingRestore` object so the UI can
  * show a Resume/Start Fresh modal instead of auto-restoring.
  */
@@ -16,19 +19,19 @@ import {
   type SnapshotOp,
   createHistory,
   pushSnapshot,
+  replaceHistory,
   undo as historyUndo,
   redo as historyRedo,
   currentSnapshot,
   canUndo as historyCanUndo,
   canRedo as historyCanRedo,
   serializeHistory,
-  deserializeHistory,
 } from '../state/nlHistory';
 import { foundationStore } from '../api/foundationStore';
+import { replayOpsToSnapshots } from '../state/snapshotUrl';
 
 export interface PendingRestore {
   focusNodeId: string | null;
-  displayedCount: number;
   snapshotCount: number;
   description: string;
   resume: () => void;
@@ -40,6 +43,8 @@ interface UseNlHistoryReturn {
   snapshot: Snapshot | null;
   /** Push a new snapshot (truncates forward history) */
   push: (snapshot: Snapshot) => void;
+  /** Replace the entire history (used when loading from share URL) */
+  loadSnapshots: (snapshots: Snapshot[], pointer: number) => void;
   /** Go back one step */
   back: () => void;
   /** Go forward one step */
@@ -65,33 +70,57 @@ export function useNlHistory(): UseNlHistoryReturn {
   const [restored, setRestored] = useState(false);
   const [initComplete, setInitComplete] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
-  // Stash the deserialized history until the user chooses resume
-  const pendingHistoryRef = useRef<AppHistory | null>(null);
+  // Stash pending data until user chooses resume
+  const pendingDataRef = useRef<{
+    ops: SnapshotOp[];
+    pointer: number;
+    lastDescription: string;
+    lastFocusNodeId: string | null;
+  } | null>(null);
 
-  // Check IndexedDB for saved history on mount
+  // Check IndexedDB for saved history on mount.
+  // We store ops only — replay is deferred until the user chooses "Resume"
+  // (which requires the graph to be initialized).
   useEffect(() => {
     foundationStore.getHistory()
       .then(data => {
         if (data && data.snapshots.length > 0) {
-          const restored = deserializeHistory(data);
-          const snap = currentSnapshot(restored);
-          pendingHistoryRef.current = restored;
+          const ops = data.snapshots
+            .map(s => s.op)
+            .filter((op): op is SnapshotOp => op !== undefined);
+
+          if (ops.length === 0) {
+            // Legacy history without ops — can't replay, start fresh
+            setRestored(true);
+            setInitComplete(true);
+            return;
+          }
+
+          const lastSnap = data.snapshots[data.pointer] ?? data.snapshots[data.snapshots.length - 1];
+          pendingDataRef.current = {
+            ops,
+            pointer: data.pointer,
+            lastDescription: lastSnap?.description ?? 'Previous session',
+            lastFocusNodeId: lastSnap?.focusNodeId ?? null,
+          };
 
           setPendingRestore({
-            focusNodeId: snap?.focusNodeId ?? null,
-            displayedCount: snap?.displayedNodeIds.size ?? 0,
+            focusNodeId: lastSnap?.focusNodeId ?? null,
             snapshotCount: data.snapshots.length,
-            description: snap?.description ?? 'Previous session',
+            description: lastSnap?.description ?? 'Previous session',
             resume: () => {
-              if (pendingHistoryRef.current) {
-                setHistory(pendingHistoryRef.current);
-                pendingHistoryRef.current = null;
+              const pending = pendingDataRef.current;
+              if (pending) {
+                const snapshots = replayOpsToSnapshots(pending.ops);
+                const pointer = Math.min(pending.pointer, snapshots.length - 1);
+                setHistory(replaceHistory(snapshots, pointer));
+                pendingDataRef.current = null;
               }
               setPendingRestore(null);
               setRestored(true);
             },
             startFresh: () => {
-              pendingHistoryRef.current = null;
+              pendingDataRef.current = null;
               foundationStore.clearHistory().catch(() => {});
               setPendingRestore(null);
               setRestored(true);
@@ -128,6 +157,10 @@ export function useNlHistory(): UseNlHistoryReturn {
     setHistory(prev => pushSnapshot(prev, snapshot));
   }, []);
 
+  const loadSnapshots = useCallback((snapshots: Snapshot[], pointer: number) => {
+    setHistory(replaceHistory(snapshots, pointer));
+  }, []);
+
   const back = useCallback(() => {
     setHistory(prev => historyUndo(prev));
   }, []);
@@ -153,6 +186,7 @@ export function useNlHistory(): UseNlHistoryReturn {
   return {
     snapshot,
     push,
+    loadSnapshots,
     back,
     forward,
     canUndo: historyCanUndo(history),
