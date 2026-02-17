@@ -199,11 +199,13 @@ Currently only NL view state and search query are tracked. A fuller model would 
 
 ## Help System — Remaining Work
 
-The contextual help system is implemented: `?` toggle activates help mode with capture-phase click interception, contextual popovers sourced from [help-content.md](web/public/help-content.md), native tooltip replacement showing entry names on hover, cursor differentiation (help cursor on tagged elements, not-allowed elsewhere), and keyboard shortcuts (? to toggle, Escape to dismiss/exit). Remaining:
+The contextual help system is implemented: `?` toggle activates help mode with capture-phase click interception, contextual popovers sourced from [help-content.md](web/public/help-content.md), native tooltip replacement showing entry names on hover, cursor differentiation (help cursor on tagged elements, not-allowed elsewhere), and keyboard shortcuts (? to toggle, Escape to dismiss/exit).
+
+An **About panel** auto-shows on first visit and is reopenable via the `ⓘ` header button. It renders help-content.md section articles as an overview plus a "Coming Soon" list. A "Don't show on startup" checkbox persists via localStorage. Remaining:
 
 ### First-visit guided tour
 
-On first visit, prompt a guided tour through key UI elements. Subsequent visits show `?` without prompting. Could use a lightweight tour library or custom implementation that highlights elements in sequence with step-by-step explanations.
+A step-by-step tour that highlights specific UI elements in sequence with explanations — distinct from the About panel's static overview. Could use a lightweight tour library or custom implementation.
 
 ### Stakeholder feedback mechanism
 
