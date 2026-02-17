@@ -11,6 +11,7 @@ import asyncio
 import json
 import sys
 import time
+from datetime import datetime, timezone
 
 import aiohttp
 
@@ -204,33 +205,48 @@ def main():
         action="store_true",
         help="Skip crawling; just add descendant stats to existing JSON",
     )
+    parser.add_argument(
+        "--release",
+        default="2024-01",
+        help="Graph release version tag (default: 2024-01)",
+    )
     args = parser.parse_args()
 
     if args.stats_only:
         with open(args.out) as f:
             graph = json.load(f)
+        graph.pop("_meta", None)  # exclude from stats computation
         print(f"Loaded {len(graph)} entities from {args.out}", file=sys.stderr)
     else:
         graph = asyncio.run(crawl(args.concurrency))
 
     compute_descendant_stats(graph)
 
+    # Remove old _meta if present (e.g. from --stats-only reload) before counting
+    graph.pop("_meta", None)
+    graph["_meta"] = {
+        "release": args.release,
+        "crawledAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "nodeCount": len(graph),  # _meta already excluded by pop above
+    }
+
     with open(args.out, "w") as f:
         json.dump(graph, f)
     print(f"Saved {len(graph)} entities to {args.out}", file=sys.stderr)
 
-    # Quick summary
-    multi_parent = sum(1 for v in graph.values() if len(v["parents"]) > 1)
-    leaf = sum(1 for v in graph.values() if len(v["children"]) == 0)
-    max_children = max(len(v["children"]) for v in graph.values())
-    max_parents = max(len(v["parents"]) for v in graph.values())
-    max_desc = max(v["descendantCount"] for v in graph.values())
-    max_height = max(v["height"] for v in graph.values())
-    deepest_min = max(v["depth"] for v in graph.values())
-    deepest_max = max(v["maxDepth"] for v in graph.values())
-    spread_nodes = sum(1 for v in graph.values() if v["maxDepth"] > v["depth"])
+    # Quick summary (exclude _meta from stats)
+    nodes = {k: v for k, v in graph.items() if k != "_meta"}
+    multi_parent = sum(1 for v in nodes.values() if len(v["parents"]) > 1)
+    leaf = sum(1 for v in nodes.values() if len(v["children"]) == 0)
+    max_children = max(len(v["children"]) for v in nodes.values())
+    max_parents = max(len(v["parents"]) for v in nodes.values())
+    max_desc = max(v["descendantCount"] for v in nodes.values())
+    max_height = max(v["height"] for v in nodes.values())
+    deepest_min = max(v["depth"] for v in nodes.values())
+    deepest_max = max(v["maxDepth"] for v in nodes.values())
+    spread_nodes = sum(1 for v in nodes.values() if v["maxDepth"] > v["depth"])
     print(f"\nSummary:")
-    print(f"  Total entities:       {len(graph)}")
+    print(f"  Total entities:       {len(nodes)}")
     print(f"  Multi-parent nodes:   {multi_parent}")
     print(f"  Leaf nodes:           {leaf}")
     print(f"  Max children:         {max_children}")

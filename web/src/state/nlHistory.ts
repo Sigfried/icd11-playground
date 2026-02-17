@@ -5,12 +5,21 @@
  * All functions are immutable: they return new objects, never mutate.
  */
 
+export type SnapshotOp =
+  | { type: 'select'; nodeId: string }
+  | { type: 'reselect'; nodeId: string }
+  | { type: 'add'; ids: string[] }
+  | { type: 'remove'; id: string }
+  | { type: 'removeBatch'; ids: string[] }
+  | { type: 'reset' };
+
 export interface Snapshot {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
   timestamp: number;
   description: string;
   searchQuery?: string;
+  op?: SnapshotOp;
 }
 
 export interface AppHistory {
@@ -26,6 +35,7 @@ export interface SerializedHistory {
     timestamp: number;
     description: string;
     searchQuery?: string;
+    op?: SnapshotOp;
   }>;
   pointer: number;
 }
@@ -77,6 +87,7 @@ export function serializeHistory(history: AppHistory): SerializedHistory {
       timestamp: s.timestamp,
       description: s.description,
       searchQuery: s.searchQuery,
+      op: s.op,
     })),
     pointer: history.pointer,
   };
@@ -90,6 +101,7 @@ export function deserializeHistory(data: SerializedHistory): AppHistory {
       timestamp: s.timestamp,
       description: s.description,
       searchQuery: s.searchQuery,
+      op: s.op,
     })),
     pointer: data.pointer,
   };

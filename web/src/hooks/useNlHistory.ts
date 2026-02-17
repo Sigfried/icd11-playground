@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type AppHistory,
   type Snapshot,
+  type SnapshotOp,
   createHistory,
   pushSnapshot,
   undo as historyUndo,
@@ -55,6 +56,8 @@ interface UseNlHistoryReturn {
   pendingRestore: PendingRestore | null;
   /** True once the IndexedDB check is done (before user chooses resume/fresh) */
   initComplete: boolean;
+  /** Ops from snapshots[0..pointer] for URL encoding */
+  historyOps: SnapshotOp[];
 }
 
 export function useNlHistory(): UseNlHistoryReturn {
@@ -142,6 +145,11 @@ export function useNlHistory(): UseNlHistoryReturn {
 
   const snapshot = currentSnapshot(history);
 
+  const historyOps: SnapshotOp[] = history.snapshots
+    .slice(0, history.pointer + 1)
+    .map(s => s.op)
+    .filter((op): op is SnapshotOp => op !== undefined);
+
   return {
     snapshot,
     push,
@@ -153,5 +161,6 @@ export function useNlHistory(): UseNlHistoryReturn {
     restored,
     pendingRestore,
     initComplete,
+    historyOps,
   };
 }

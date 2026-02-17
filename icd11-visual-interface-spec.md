@@ -185,7 +185,13 @@ A reviewable history panel/dropdown showing the exploration timeline:
 
 ### ~~Share button~~ (Implemented)
 
-Uses a BFS-bitmask encoding that exploits the shared DAG structure: both encoder and decoder have the full graph in memory, so only BFS expansion decisions (1 bit per candidate child) are stored. The bitstream is deflate-compressed and base64url-encoded into a `?s=` URL parameter. Typical URLs are 500 bytes–2KB for up to 4K-node subgraphs. Opening a share URL restores the exact displayed nodes and focus node, bypassing the resume modal.
+Uses an instruction-replay encoding: the share URL captures the sequence of operations (select, reselect, add, remove, removeBatch, reset) that produced the view. The decoder replays them to reconstruct the exact state. This gives recipients exploration history, not just a static snapshot, and is naturally compact for typical sessions. Falls back to diff encoding (focus node + added/removed IDs vs default neighborhood) when instruction sequence exceeds 2KB. URLs include a graph release version (`v`) for staleness detection. Opening a share URL restores the exact displayed nodes and focus node, bypassing the resume modal.
+
+### Synthetic instruction sequences
+
+Given an arbitrary `displayedNodeIds` set, compute the *shortest* instruction sequence that produces it — not the user's actual history, but a minimal recipe. E.g., "this state is `select(X)` + `add([a,b,c])` - `remove(d)`". Could enable: compact URLs independent of history length, "explain this view" feature, diffing two views as instruction sequences. Discuss further before implementing.
+
+[sg] In my value set work I often thought it would be useful to be able to generate a "most parsimonious" definition for any given value set, i.e., (using the OHDSI/ATLAS definition format) the smallest set of concept ids, includeDescendants, isExcluded, and includeMapped possible for recreating a given value/concept set. Though the current project is a different use case than generating value sets for use in electronic phenotype definitions, this algorithm might end up similar to what I would have wanted. There might be other features of this project that might also be useful in some future rewrite of TermHub/VS-Hub.
 
 ### Auto-clear old snapshots
 

@@ -1,97 +1,42 @@
 /**
  * Encode/decode node-link snapshots as compact URL parameters.
  *
- * Uses a BFS-bitmask algorithm that exploits the shared DAG structure between
- * encoder and decoder: both have the full ~69K-node graph in memory, so only
- * the BFS expansion decisions (1 bit per candidate child) need to be stored.
+ * Two encoding modes:
+ * 1. **Instruction replay** (primary) — encodes the sequence of operations that
+ *    produced the view. Decoder replays them to reconstruct exact state.
+ * 2. **Diff mode** (fallback) — encodes focus node + added/removed IDs relative
+ *    to the default neighborhood. Used when instruction sequence > 2KB.
  *
- * URL format: ?s=<base64url-encoded deflated bitstream>
+ * URL format: ?s=<base64url-encoded JSON>
  */
 
-import { deflate, inflate } from 'pako';
-import { getNodeIndex, getNodeIdByIndex, getNode, getGraph } from '../api/foundationData';
-import type { Snapshot } from './nlHistory';
+import { getNode, getGraph, getChildren, getParents, getGraphRelease } from '../api/foundationData';
+import { buildInitialNeighborhood } from './buildInitialNeighborhood';
+import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from './nlSubgraph';
+import type { SnapshotOp } from './nlHistory';
 
-const SNAPSHOT_VERSION = 1;
-const NO_FOCUS_SENTINEL = 0xFFFF;
+/** Compact serialized op: [type, ...params] */
+type SerializedOp =
+  | ['select', string]
+  | ['reselect', string]
+  | ['add', string[]]
+  | ['remove', string]
+  | ['removeBatch', string[]]
+  | ['reset'];
 
-// --- Bit I/O helpers ---
-
-export class BitWriter {
-  private bytes: number[] = [];
-  private currentByte = 0;
-  private bitPos = 0;
-
-  writeBit(bit: number): void {
-    this.currentByte |= (bit & 1) << this.bitPos;
-    this.bitPos++;
-    if (this.bitPos === 8) {
-      this.bytes.push(this.currentByte);
-      this.currentByte = 0;
-      this.bitPos = 0;
-    }
-  }
-
-  /** Write a non-negative integer as a varint (7-bit chunks, MSB continuation). */
-  writeVarint(value: number): void {
-    if (value < 0) throw new Error('Varint must be non-negative');
-    do {
-      let chunk = value & 0x7F;
-      value >>>= 7;
-      if (value > 0) chunk |= 0x80; // continuation bit
-      for (let i = 0; i < 8; i++) {
-        this.writeBit((chunk >> i) & 1);
-      }
-    } while (value > 0);
-  }
-
-  toUint8Array(): Uint8Array {
-    const result = new Uint8Array(this.bytes.length + (this.bitPos > 0 ? 1 : 0));
-    for (let i = 0; i < this.bytes.length; i++) result[i] = this.bytes[i];
-    if (this.bitPos > 0) result[this.bytes.length] = this.currentByte;
-    return result;
-  }
+interface InstructionPayload {
+  v: string;
+  ops: SerializedOp[];
 }
 
-export class BitReader {
-  private bytes: Uint8Array;
-  private bytePos = 0;
-  private bitPos = 0;
-
-  constructor(bytes: Uint8Array) {
-    this.bytes = bytes;
-  }
-
-  readBit(): number {
-    if (this.bytePos >= this.bytes.length) throw new Error('BitReader exhausted');
-    const bit = (this.bytes[this.bytePos] >> this.bitPos) & 1;
-    this.bitPos++;
-    if (this.bitPos === 8) {
-      this.bytePos++;
-      this.bitPos = 0;
-    }
-    return bit;
-  }
-
-  readVarint(): number {
-    let value = 0;
-    let shift = 0;
-    let chunk: number;
-    do {
-      chunk = 0;
-      for (let i = 0; i < 8; i++) {
-        chunk |= this.readBit() << i;
-      }
-      value |= (chunk & 0x7F) << shift;
-      shift += 7;
-    } while (chunk & 0x80);
-    return value;
-  }
-
-  get exhausted(): boolean {
-    return this.bytePos >= this.bytes.length;
-  }
+interface DiffPayload {
+  v: string;
+  f: string;
+  a?: string[];
+  r?: string[];
 }
+
+const MAX_ENCODED_LENGTH = 2000;
 
 // --- Base64url ---
 
@@ -109,103 +54,160 @@ export function fromBase64url(str: string): Uint8Array {
   return bytes;
 }
 
-// --- Encode ---
+// --- Serialize/Deserialize ops ---
 
-/**
- * Find the connected component containing `startId` within the subgraph,
- * treating edges as undirected (using the main graph's edges).
- */
-function findConnectedComponent(subgraphIds: Set<string>, startId: string): Set<string> {
-  const graph = getGraph();
-  const component = new Set<string>();
-  const queue = [startId];
-  component.add(startId);
-
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    // Check both parent and child edges in the main graph
-    for (const neighbor of [...graph.inNeighbors(nodeId), ...graph.outNeighbors(nodeId)]) {
-      if (subgraphIds.has(neighbor) && !component.has(neighbor)) {
-        component.add(neighbor);
-        queue.push(neighbor);
-      }
-    }
+function serializeOp(op: SnapshotOp): SerializedOp {
+  switch (op.type) {
+    case 'select': return ['select', op.nodeId];
+    case 'reselect': return ['reselect', op.nodeId];
+    case 'add': return ['add', op.ids];
+    case 'remove': return ['remove', op.id];
+    case 'removeBatch': return ['removeBatch', op.ids];
+    case 'reset': return ['reset'];
   }
-  return component;
 }
 
-export function encodeSnapshot(snapshot: Snapshot): string {
-  // 1. Filter cluster pseudo-nodes
-  const realIds = new Set<string>();
-  for (const id of snapshot.displayedNodeIds) {
-    if (!id.startsWith('cluster:')) realIds.add(id);
+function deserializeOp(raw: SerializedOp): SnapshotOp {
+  switch (raw[0]) {
+    case 'select': return { type: 'select', nodeId: raw[1] };
+    case 'reselect': return { type: 'reselect', nodeId: raw[1] };
+    case 'add': return { type: 'add', ids: raw[1] };
+    case 'remove': return { type: 'remove', id: raw[1] };
+    case 'removeBatch': return { type: 'removeBatch', ids: raw[1] };
+    case 'reset': return { type: 'reset' };
   }
+}
 
-  if (realIds.size === 0) {
-    throw new Error('No real nodes to encode');
-  }
+// --- Replay ---
 
-  // 2. Find connected component containing focus (or pick shallowest node)
-  const anchorId = snapshot.focusNodeId && realIds.has(snapshot.focusNodeId)
-    ? snapshot.focusNodeId
-    : findShallowest(realIds);
+function buildNeighborhood(nodeId: string): Set<string> {
+  return buildInitialNeighborhood(nodeId, getParents, getChildren, getNode);
+}
 
-  const component = findConnectedComponent(realIds, anchorId);
-  if (component.size < realIds.size) {
-    console.warn(
-      `Snapshot has ${realIds.size - component.size} disconnected nodes that will be dropped from the share URL`
-    );
-  }
+/** Replay a sequence of ops to reconstruct focus + displayed nodes. */
+export function replayOps(ops: SnapshotOp[]): {
+  focusNodeId: string | null;
+  displayedNodeIds: Set<string>;
+} {
+  let focusNodeId: string | null = null;
+  let displayedNodeIds = new Set<string>();
 
-  // 3. BFS root = shallowest node in the component
-  const bfsRoot = findShallowest(component);
-
-  // 4. Write bitstream
-  const writer = new BitWriter();
-  writer.writeVarint(SNAPSHOT_VERSION);
-  writer.writeVarint(getNodeIndex(bfsRoot));
-
-  const graph = getGraph();
-  const visited = new Set<string>();
-  const bfsOrder: string[] = [];
-  const queue: string[] = [bfsRoot];
-  visited.add(bfsRoot);
-  bfsOrder.push(bfsRoot);
-
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    // Iterate children in canonical order (childOrder from the main graph)
-    const nodeAttrs = getNode(nodeId);
-    if (!nodeAttrs) continue;
-
-    for (const childId of nodeAttrs.childOrder) {
-      if (!graph.hasNode(childId)) continue;
-      if (visited.has(childId)) continue; // DAG cross-edge: no bit emitted
-      visited.add(childId);
-
-      if (component.has(childId)) {
-        writer.writeBit(1); // child is in subgraph
-        queue.push(childId);
-        bfsOrder.push(childId);
-      } else {
-        writer.writeBit(0); // boundary node
+  for (const op of ops) {
+    switch (op.type) {
+      case 'select': {
+        focusNodeId = op.nodeId;
+        displayedNodeIds = buildNeighborhood(op.nodeId);
+        break;
+      }
+      case 'reselect': {
+        focusNodeId = op.nodeId;
+        const neighborhood = buildNeighborhood(op.nodeId);
+        for (const id of neighborhood) displayedNodeIds.add(id);
+        break;
+      }
+      case 'add': {
+        for (const id of op.ids) displayedNodeIds.add(id);
+        break;
+      }
+      case 'remove': {
+        if (!focusNodeId) break;
+        const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
+        ({ displayedNodeIds } = removeNodeWithPruning(sub, op.id, focusNodeId));
+        break;
+      }
+      case 'removeBatch': {
+        if (!focusNodeId) break;
+        const sub2 = buildNlSubgraph(getGraph(), displayedNodeIds);
+        ({ displayedNodeIds } = removeNodesWithPruning(sub2, op.ids, focusNodeId));
+        break;
+      }
+      case 'reset': {
+        if (focusNodeId) {
+          displayedNodeIds = buildNeighborhood(focusNodeId);
+        }
+        break;
       }
     }
   }
 
-  // 5. Encode focus node position
-  const focusNodeId = snapshot.focusNodeId;
-  if (focusNodeId && component.has(focusNodeId)) {
-    const focusPos = bfsOrder.indexOf(focusNodeId);
-    writer.writeVarint(focusPos);
-  } else {
-    writer.writeVarint(NO_FOCUS_SENTINEL);
+  return { focusNodeId, displayedNodeIds };
+}
+
+// --- Encode ---
+
+function encodeInstructions(ops: SnapshotOp[]): string {
+  const release = getGraphRelease();
+  const payload: InstructionPayload = {
+    v: release ?? 'unknown',
+    ops: ops.map(serializeOp),
+  };
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  return toBase64url(bytes);
+}
+
+function encodeDiff(
+  focusNodeId: string,
+  displayedNodeIds: Set<string>,
+): string {
+  // Filter clusters from displayed
+  const realDisplayed = new Set<string>();
+  for (const id of displayedNodeIds) {
+    if (!id.startsWith('cluster:')) realDisplayed.add(id);
   }
 
-  // 6. Compress and encode
-  const raw = writer.toUint8Array();
-  const compressed = deflate(raw);
-  return toBase64url(compressed);
+  // Compute base neighborhood
+  const base = buildNeighborhood(focusNodeId);
+  const realBase = new Set<string>();
+  for (const id of base) {
+    if (!id.startsWith('cluster:')) realBase.add(id);
+  }
+
+  // Compute diff
+  const added: string[] = [];
+  for (const id of realDisplayed) {
+    if (!realBase.has(id)) added.push(id);
+  }
+  const removed: string[] = [];
+  for (const id of realBase) {
+    if (!realDisplayed.has(id)) removed.push(id);
+  }
+
+  const release = getGraphRelease();
+  const payload: DiffPayload = {
+    v: release ?? 'unknown',
+    f: focusNodeId,
+  };
+  if (added.length > 0) payload.a = added;
+  if (removed.length > 0) payload.r = removed;
+
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  return toBase64url(bytes);
+}
+
+/**
+ * Encode a snapshot for sharing. Uses instruction replay by default,
+ * falls back to diff encoding if the instruction sequence is too long.
+ */
+export function encodeSnapshot(
+  ops: SnapshotOp[],
+  focusNodeId: string | null,
+  displayedNodeIds: Set<string>,
+): string {
+  // Try instruction encoding first
+  if (ops.length > 0) {
+    const encoded = encodeInstructions(ops);
+    if (encoded.length <= MAX_ENCODED_LENGTH) {
+      return encoded;
+    }
+  }
+
+  // Fall back to diff encoding
+  if (!focusNodeId) {
+    throw new Error('Cannot encode snapshot: no focus node and instruction encoding too long');
+  }
+  return encodeDiff(focusNodeId, displayedNodeIds);
 }
 
 // --- Decode ---
@@ -214,59 +216,57 @@ export function decodeSnapshot(encoded: string): {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
 } {
-  const compressed = fromBase64url(encoded);
-  const raw = inflate(compressed);
-  const reader = new BitReader(raw);
+  const bytes = fromBase64url(encoded);
+  const json = new TextDecoder().decode(bytes);
+  const payload = JSON.parse(json) as InstructionPayload | DiffPayload;
 
-  const version = reader.readVarint();
-  if (version !== SNAPSHOT_VERSION) {
-    throw new Error(`Unknown snapshot version: ${version}`);
+  // Version check
+  const currentRelease = getGraphRelease();
+  if (currentRelease && payload.v !== currentRelease) {
+    console.warn(
+      `Share URL was encoded with graph release "${payload.v}" but current graph is "${currentRelease}". ` +
+      'Results may differ.'
+    );
   }
 
-  const rootIndex = reader.readVarint();
-  const rootId = getNodeIdByIndex(rootIndex);
-  if (!rootId) throw new Error(`Invalid root index: ${rootIndex}`);
+  // Detect format by key presence
+  if ('ops' in payload) {
+    // Instruction replay mode
+    const ops = (payload as InstructionPayload).ops.map(deserializeOp);
+    return replayOps(ops);
+  } else if ('f' in payload) {
+    // Diff mode
+    const diff = payload as DiffPayload;
+    const base = buildNeighborhood(diff.f);
 
-  const graph = getGraph();
-  const visited = new Set<string>();
-  const bfsOrder: string[] = [];
-  const displayedNodeIds = new Set<string>();
-  const queue: string[] = [rootId];
-  visited.add(rootId);
-  bfsOrder.push(rootId);
-  displayedNodeIds.add(rootId);
-
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    const nodeAttrs = getNode(nodeId);
-    if (!nodeAttrs) continue;
-
-    for (const childId of nodeAttrs.childOrder) {
-      if (!graph.hasNode(childId)) continue;
-      if (visited.has(childId)) continue;
-      visited.add(childId);
-
-      const bit = reader.readBit();
-      if (bit === 1) {
-        displayedNodeIds.add(childId);
-        queue.push(childId);
-        bfsOrder.push(childId);
-      }
-      // bit === 0: boundary, skip
+    // Filter clusters from base
+    const displayedNodeIds = new Set<string>();
+    for (const id of base) {
+      if (!id.startsWith('cluster:')) displayedNodeIds.add(id);
     }
+
+    // Apply diff
+    if (diff.a) {
+      for (const id of diff.a) displayedNodeIds.add(id);
+    }
+    if (diff.r) {
+      for (const id of diff.r) displayedNodeIds.delete(id);
+    }
+
+    return { focusNodeId: diff.f, displayedNodeIds };
   }
 
-  // Read focus position
-  const focusPos = reader.readVarint();
-  const focusNodeId = focusPos === NO_FOCUS_SENTINEL ? null : (bfsOrder[focusPos] ?? null);
-
-  return { focusNodeId, displayedNodeIds };
+  throw new Error('Unknown snapshot URL format');
 }
 
 // --- URL helpers ---
 
-export function buildShareUrl(snapshot: Snapshot): string {
-  const encoded = encodeSnapshot(snapshot);
+export function buildShareUrl(
+  ops: SnapshotOp[],
+  focusNodeId: string | null,
+  displayedNodeIds: Set<string>,
+): string {
+  const encoded = encodeSnapshot(ops, focusNodeId, displayedNodeIds);
   const url = new URL(window.location.href);
   // Clear other params, keep only `s`
   for (const key of [...url.searchParams.keys()]) url.searchParams.delete(key);
@@ -283,20 +283,4 @@ export function clearSnapshotFromUrl(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('s');
   window.history.replaceState(null, '', url.toString());
-}
-
-// --- Internal helpers ---
-
-function findShallowest(nodeIds: Set<string>): string {
-  let shallowest: string | null = null;
-  let minDepth = Infinity;
-  for (const id of nodeIds) {
-    const node = getNode(id);
-    if (node && node.depth < minDepth) {
-      minDepth = node.depth;
-      shallowest = id;
-    }
-  }
-  if (!shallowest) throw new Error('No valid nodes found');
-  return shallowest;
 }

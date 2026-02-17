@@ -9,16 +9,25 @@
 import type { FoundationEntity } from './icd11';
 import type { SerializedHistory } from '../state/nlHistory';
 
+export interface GraphMeta {
+  release: string;
+  crawledAt: string;
+  nodeCount: number;
+}
+
+export interface FoundationGraphNodeEntry {
+  title: string;
+  parents: string[];
+  children: string[];
+  descendantCount: number;
+  height: number;   // longest downward path to any leaf (leaf=0)
+  depth: number;    // shortest path from root (root=0)
+  maxDepth: number; // longest path from root (root=0)
+}
+
 export interface FoundationGraphJson {
-  [id: string]: {
-    title: string;
-    parents: string[];
-    children: string[];
-    descendantCount: number;
-    height: number;   // longest downward path to any leaf (leaf=0)
-    depth: number;    // shortest path from root (root=0)
-    maxDepth: number; // longest path from root (root=0)
-  };
+  _meta?: GraphMeta;
+  [id: string]: FoundationGraphNodeEntry | GraphMeta | undefined;
 }
 
 const DB_NAME = 'icd11-foundation';

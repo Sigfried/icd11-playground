@@ -15,9 +15,10 @@ import { type FoundationGraphJson, foundationStore } from '../api/foundationStor
 import { useNlHistory, type PendingRestore } from '../hooks/useNlHistory';
 import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
-import type { Snapshot } from '../state/nlHistory';
+import type { Snapshot, SnapshotOp } from '../state/nlHistory';
 import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
 import { getSnapshotFromUrl, decodeSnapshot, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
+import type { GraphMeta } from '../api/foundationStore';
 
 export type { ConceptNode, EntityDetail, TreePath };
 
@@ -126,6 +127,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const {
     snapshot, push, back, forward, canUndo, canRedo,
     restored: historyRestored, pendingRestore, initComplete,
+    historyOps,
   } = useNlHistory();
 
   // Derive selectedNodeId from the current snapshot.
@@ -138,13 +140,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const searchQuery = snapshot?.searchQuery ?? '';
 
   /** Build a snapshot for a new focus node selection. */
-  const buildAndPushSnapshot = useCallback((focusId: string, description: string) => {
+  const buildAndPushSnapshot = useCallback((focusId: string, description: string, op?: SnapshotOp) => {
     const nodeIds = buildInitialNeighborhood(focusId, getParents, getChildren, getNode);
     const snap: Snapshot = {
       focusNodeId: focusId,
       displayedNodeIds: nodeIds,
       timestamp: Date.now(),
       description,
+      op: op ?? { type: 'select', nodeId: focusId },
     };
     push(snap);
   }, [push]);
@@ -180,6 +183,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const selectNode = useCallback((id: string | null) => {
     setHighlightedNodeIds(new Set());
     if (!id) {
+      // Deselect — no op (share button disabled when empty)
       push({
         focusNodeId: null,
         displayedNodeIds: new Set(),
@@ -201,6 +205,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
         displayedNodeIds: merged,
         timestamp: Date.now(),
         description: `Selected ${title}`,
+        op: { type: 'reselect', nodeId: id },
       });
     } else {
       buildAndPushSnapshot(id, `Selected ${title}`);
@@ -218,6 +223,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
       displayedNodeIds: next,
       timestamp: Date.now(),
       description,
+      op: { type: 'add', ids },
     });
   }, [snapshot, push]);
 
@@ -251,6 +257,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
       displayedNodeIds: newIds,
       timestamp: Date.now(),
       description: desc,
+      op: { type: 'remove', id },
     });
   }, [snapshot, push]);
 
@@ -280,6 +287,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
       displayedNodeIds: newIds,
       timestamp: Date.now(),
       description,
+      op: { type: 'removeBatch', ids },
     });
   }, [snapshot, push]);
 
@@ -287,7 +295,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const resetNeighborhood = useCallback(() => {
     if (!snapshot?.focusNodeId) return;
     const title = getNode(snapshot.focusNodeId)?.title ?? snapshot.focusNodeId;
-    buildAndPushSnapshot(snapshot.focusNodeId, `Reset neighborhood for ${title}`);
+    buildAndPushSnapshot(snapshot.focusNodeId, `Reset neighborhood for ${title}`, { type: 'reset' });
   }, [snapshot, buildAndPushSnapshot]);
 
   /** Update the search query in snapshot history. */
@@ -324,14 +332,14 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const shareCurrentView = useCallback(async (): Promise<boolean> => {
     if (!snapshot || snapshot.displayedNodeIds.size === 0) return false;
     try {
-      const url = buildShareUrl(snapshot);
+      const url = buildShareUrl(historyOps, snapshot.focusNodeId, snapshot.displayedNodeIds);
       await navigator.clipboard.writeText(url);
       return true;
     } catch (err) {
       console.warn('Failed to copy share URL:', err);
       return false;
     }
-  }, [snapshot]);
+  }, [snapshot, historyOps]);
 
   const historyBack = useCallback(() => { back(); }, [back]);
   const historyForward = useCallback(() => { forward(); }, [forward]);
@@ -414,7 +422,11 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
         if (cancelled) return;
 
-        initGraph(data);
+        // Extract _meta before passing to initGraph
+        const meta = data._meta as GraphMeta | undefined;
+        delete data._meta;
+
+        initGraph(data, meta?.release);
         setRootId('root');
         setExpandedPaths(new Set(['root']));
         setGraphLoading(false);

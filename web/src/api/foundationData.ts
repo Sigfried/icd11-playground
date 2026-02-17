@@ -7,7 +7,7 @@
  */
 
 import Graph from 'graphology';
-import { type FoundationGraphJson, foundationStore } from './foundationStore';
+import { type FoundationGraphJson, type FoundationGraphNodeEntry, foundationStore } from './foundationStore';
 import { type FoundationEntity, getFoundationEntity, getTextValue } from './icd11';
 
 export interface ConceptNode {
@@ -38,47 +38,52 @@ export type TreePath = string[];
 // Module-level graphology instance — created once in initGraph
 let graph: Graph<ConceptNode> | null = null;
 
-// Canonical sorted node IDs for compact encoding (built in initGraph)
-let sortedNodeIds: string[] = [];
-let nodeIdToIndex: Map<string, number> = new Map();
+// Graph release version from _meta (e.g. "2024-01")
+let graphRelease: string | null = null;
 
 // In-flight detail requests to avoid duplicate fetches
 const detailInflight = new Map<string, Promise<EntityDetail>>();
 
 /** Initialize the graph from the preloaded JSON data. */
-export function initGraph(data: FoundationGraphJson): void {
+export function initGraph(data: FoundationGraphJson, release?: string): void {
   graph = new Graph<ConceptNode>();
+  graphRelease = release ?? null;
 
   for (const [id, entry] of Object.entries(data)) {
+    if (id === '_meta' || !entry) continue;
+    const node = entry as FoundationGraphNodeEntry;
     graph.addNode(id, {
       id,
-      title: entry.title,
-      parentCount: entry.parents.length,
-      childCount: entry.children.length,
-      childOrder: entry.children,
-      descendantCount: entry.descendantCount,
-      height: entry.height,
-      depth: entry.depth,
-      maxDepth: entry.maxDepth,
+      title: node.title,
+      parentCount: node.parents.length,
+      childCount: node.children.length,
+      childOrder: node.children,
+      descendantCount: node.descendantCount,
+      height: node.height,
+      depth: node.depth,
+      maxDepth: node.maxDepth,
     });
   }
 
   for (const [id, entry] of Object.entries(data)) {
-    for (const childId of entry.children) {
+    if (id === '_meta' || !entry) continue;
+    const node = entry as FoundationGraphNodeEntry;
+    for (const childId of node.children) {
       if (graph.hasNode(childId) && !graph.hasEdge(id, childId)) {
         graph.addEdge(id, childId);
       }
     }
   }
 
-  // Build canonical index for snapshot URL encoding
-  sortedNodeIds = graph.nodes().sort();
-  nodeIdToIndex = new Map(sortedNodeIds.map((id, i) => [id, i]));
-
   // Expose for debugging
   (window as unknown as Record<string, unknown>).graph = graph;
 
   console.log(`Graph initialized: ${graph.order} nodes, ${graph.size} edges`);
+}
+
+/** Get the graph release version (e.g. "2024-01"), or null if not set. */
+export function getGraphRelease(): string | null {
+  return graphRelease;
 }
 
 function assertGraph(): Graph<ConceptNode> {
@@ -116,18 +121,6 @@ export function hasNode(id: string): boolean {
 /** Escape hatch — NodeLinkView needs the raw graph for ELK layout. */
 export function getGraph(): Graph<ConceptNode> {
   return assertGraph();
-}
-
-/** Get the canonical index for a node ID (for snapshot URL encoding). */
-export function getNodeIndex(id: string): number {
-  const idx = nodeIdToIndex.get(id);
-  if (idx === undefined) throw new Error(`Unknown node ID: ${id}`);
-  return idx;
-}
-
-/** Get the node ID for a canonical index (for snapshot URL decoding). */
-export function getNodeIdByIndex(index: number): string | null {
-  return sortedNodeIds[index] ?? null;
 }
 
 /**
