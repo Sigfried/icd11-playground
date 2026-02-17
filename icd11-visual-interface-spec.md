@@ -187,7 +187,7 @@ A reviewable history panel/dropdown showing the exploration timeline:
 
 ### ~~Share button~~ (Implemented)
 
-Uses an instruction-replay encoding: the share URL captures the sequence of operations (select, reselect, add, remove, removeBatch, reset) that produced the view. The decoder replays them to reconstruct the exact state. This gives recipients exploration history, not just a static snapshot, and is naturally compact for typical sessions. Falls back to diff encoding (focus node + added/removed IDs vs default neighborhood) when instruction sequence exceeds 2KB. URLs include a graph release version (`v`) for staleness detection. Opening a share URL restores the exact displayed nodes and focus node, bypassing the resume modal.
+Uses an instruction-replay encoding: the share URL captures the sequence of operations (select, reselect, add, remove, removeBatch, reset) that produced the view. The decoder replays them step-by-step, reconstructing the exact state and giving the recipient full undo/redo history. Ops are the single source of truth — `displayedNodeIds` is always computed by replaying ops, never persisted. URLs include a graph release version (`v`) for staleness detection. If the encoded URL exceeds ~2KB, the share fails with a user-facing error (server-side state storage planned for future). Opening a share URL restores the full exploration history, bypassing the resume modal.
 
 ### Synthetic instruction sequences
 

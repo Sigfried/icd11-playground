@@ -42,7 +42,7 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
   - Click to copy the share URL to clipboard
   - A checkmark appears briefly to confirm the copy
   - Disabled when the node-link view is empty (no nodes displayed)
-- **Context:** Opening the shared URL in a new tab restores the exact same set of displayed nodes and focus node, bypassing the resume modal if one would normally appear.
+- **Context:** Opening the shared URL in a new tab restores the exact same set of displayed nodes and focus node, plus the full undo/redo history of how the view was built. The resume modal is bypassed.
 
 ### polyhierarchy
 
