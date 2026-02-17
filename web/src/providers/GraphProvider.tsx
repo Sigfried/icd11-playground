@@ -62,6 +62,9 @@ interface GraphContextValue {
   activeHelpEntry: { id: string; rect: DOMRect } | null;
   showHelpEntry: (id: string, rect: DOMRect) => void;
   dismissHelpEntry: () => void;
+  // About panel
+  showAbout: boolean;
+  setShowAbout: (show: boolean) => void;
   // Re-export foundationData functions so components use context
   getNode: typeof getNode;
   getChildren: typeof getChildren;
@@ -92,6 +95,9 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const [helpMode, setHelpMode] = useState(false);
   const [helpContent, setHelpContent] = useState<HelpContent | null>(null);
   const [activeHelpEntry, setActiveHelpEntry] = useState<{ id: string; rect: DOMRect } | null>(null);
+
+  // About panel
+  const [showAbout, setShowAbout] = useState(false);
 
   const exitHelpMode = useCallback(() => {
     setHelpMode(false);
@@ -405,6 +411,15 @@ export function GraphProvider({ children }: GraphProviderProps) {
     return () => { cancelled = true; };
   }, []);
 
+  // Auto-show About panel on first visit (once graph is loaded and no resume modal)
+  useEffect(() => {
+    if (!graphReady || pendingRestore) return;
+    if (!localStorage.getItem('icd11-hide-about')) {
+      setShowAbout(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when graph becomes ready or resume resolves
+  }, [graphReady, pendingRestore]);
+
   // After graph loads + history restored: expand tree to the restored focus node
   useEffect(() => {
     if (!rootId || !historyRestored) return;
@@ -446,6 +461,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     activeHelpEntry,
     showHelpEntry,
     dismissHelpEntry,
+    showAbout, setShowAbout,
     getNode,
     getChildren,
     getParents,
@@ -460,6 +476,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
     helpMode, toggleHelpMode, exitHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
+    showAbout,
   ]);
 
   return (

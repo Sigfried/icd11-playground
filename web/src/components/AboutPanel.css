@@ -1,0 +1,118 @@
+/* About panel overlay — follows ResumeModal pattern, z-index below it */
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 30, 30, 0.7);
+  z-index: 18;
+}
+
+.about-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  max-width: 560px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.about-header {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.about-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  color: var(--accent-blue);
+}
+
+.about-header .about-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.about-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+.about-body h3 {
+  margin: 16px 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.about-body h3:first-child {
+  margin-top: 0;
+}
+
+.about-body p {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.about-coming-soon {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.about-coming-soon h3 {
+  color: var(--accent-yellow);
+}
+
+.about-coming-soon ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.about-footer {
+  padding: 12px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.about-footer label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.about-footer input[type="checkbox"] {
+  accent-color: var(--accent-blue);
+}
+
+.about-close-btn {
+  padding: 6px 16px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  background: rgba(86, 156, 214, 0.2);
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-cyan);
+  transition: background 0.15s;
+}
+
+.about-close-btn:hover {
+  background: rgba(86, 156, 214, 0.35);
+  color: var(--text-primary);
+}

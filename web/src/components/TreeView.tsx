@@ -429,7 +429,7 @@ export function TreeView() {
   return (
     <DescTooltipContext.Provider value={descCtxValue}>
       <SearchContext.Provider value={searchCtxValue}>
-        <div className="panel-header" data-help-id="about-this-tool">
+        <div className="panel-header" data-help-id="tree-view-overview">
           Tree View -- <span className="header-hint">Foundation hierarchy</span>
         </div>
         <TreeSearch

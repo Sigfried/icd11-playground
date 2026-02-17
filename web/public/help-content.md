@@ -25,15 +25,14 @@ This tool visualizes the ICD-11 Foundation — the ~69,000-concept polyhierarchy
 
 The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) linearization that assigns ICD codes. In the Foundation, a single concept can have multiple parents — for example, a disease might appear under both the body system it affects and the type of pathology it represents. This polyhierarchy is the central structural feature this tool helps you explore.
 
-### about-this-tool
+### about-button
 
-- **Title:** ICD-11 Foundation Explorer
-- **Description:** A visual interface for exploring the ICD-11 Foundation — a polyhierarchy of ~69,000 medical concepts where a single concept can have multiple parents.
+- **Title:** About this tool
+- **Description:** Opens the About panel with an overview of what this tool does, what's implemented, and what's coming soon.
 - **Interactions:**
-  - Click any concept in the tree to select it
-  - The node-link diagram shows the neighborhood around the selected concept
-  - The detail panel shows metadata fetched from the ICD-11 API
-- **Context:** The Foundation is the source layer of ICD-11. Unlike the linearized MMS classification (which assigns codes), the Foundation allows concepts to appear under multiple parents — this is called polyhierarchy. This tool helps you see and navigate that structure.
+  - Click to open the About panel
+  - The panel also appears automatically on your first visit
+  - Check "Don't show on startup" to suppress the auto-show
 
 ### polyhierarchy
 
@@ -48,6 +47,16 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
 The tree is the primary navigation interface. It renders the full Foundation hierarchy — all 69,000 concepts are loaded in memory, so expanding and collapsing is instant. Concepts with multiple parents appear at each location in the tree; selecting any instance highlights all of them and updates the other panels.
 
 The tree supports searching in two modes: **search** (highlights matches in place within the full tree) and **filter** (hides non-matches, showing only results and their ancestors). Search queries are tracked in the undo history.
+
+### tree-view-overview
+
+- **Title:** Tree View
+- **Description:** The primary navigation panel. Renders the full Foundation hierarchy with instant expand/collapse. Concepts with multiple parents appear at each location.
+- **Interactions:**
+  - Expand/collapse nodes with the chevron (▶/▼)
+  - Click a concept name to select it
+  - Use the search bar to find concepts by name
+- **Context:** All 69,000 Foundation concepts are loaded in memory — the tree is fully navigable with no network requests.
 
 ### tree-node
 

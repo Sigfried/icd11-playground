@@ -78,6 +78,24 @@ body {
   color: var(--text-primary);
 }
 
+/* About ⓘ button */
+.about-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.about-button:hover {
+  color: var(--text-primary);
+}
+
 /* Help toggle button */
 .help-toggle {
   background: none;

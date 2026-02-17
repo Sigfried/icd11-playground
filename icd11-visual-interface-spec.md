@@ -29,8 +29,7 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Auto-clear old snapshots | :white_circle: |
 | | Tree & detail state in history | :white_circle: |
 | **Search** | Advanced search field options | :white_circle: |
-| **Help System** | Help mode with contextual popovers | :white_circle: |
-| | First-visit guided tour | :white_circle: |
+| **Help System** | First-visit guided tour | :white_circle: |
 | | Stakeholder feedback mechanism | :white_circle: |
 | **Proposal Authoring** | All features | :black_circle: |
 
@@ -198,29 +197,17 @@ Currently only NL view state and search query are tracked. A fuller model would 
 
 ---
 
-## Help System
+## Help System — Remaining Work
 
-Help content source of truth: [`web/public/help-content.md`](web/public/help-content.md)
+The contextual help system is implemented: `?` toggle activates help mode with capture-phase click interception, contextual popovers sourced from [help-content.md](web/public/help-content.md), native tooltip replacement showing entry names on hover, cursor differentiation (help cursor on tagged elements, not-allowed elsewhere), and keyboard shortcuts (? to toggle, Escape to dismiss/exit). Remaining:
 
-Two levels: element-level entries (shown in popovers) and section-level articles (shown via "Learn more..." links).
+### First-visit guided tour
 
-### Help mode (not yet built)
+On first visit, prompt a guided tour through key UI elements. Subsequent visits show `?` without prompting. Could use a lightweight tour library or custom implementation that highlights elements in sequence with step-by-step explanations.
 
-A `?` toggle button activates help mode:
+### Stakeholder feedback mechanism
 
-- **Visual indicator**: button highlighted, cursor changes to `help`
-- **Hover/click override**: normal handlers replaced with help handlers showing contextual popovers
-- **Element coverage**: every interactive element — tree nodes, NL nodes, badges, cluster nodes, toolbar buttons, panel headers, detail panel sections
-- **Popovers** show: title, description, interactions, keyboard shortcut, "Learn more..." link to section article
-- **Dismissal**: click outside popover or click `?` again
-- **No side effects**: nothing changes in app state while help mode is active
-
-### Open design questions
-
-- **First-visit tour**: On first visit, prompt guided tour through key UI elements. Subsequent visits show `?` without prompting.
-- **Progressive disclosure**: Popovers link to section articles for deeper explanation.
-- **Keyboard shortcut cheat sheet**: If more shortcuts are added, consider a dedicated modal.
-- **Stakeholder feedback mechanism**: Special help entries or annotations for items needing stakeholder input (e.g., canonical/linked parents, relationship types). Could be a "feedback needed" tag on certain help entries that links to an issue tracker or feedback form.
+Special help entries or annotations for items needing stakeholder input (e.g., canonical/linked parents, relationship types). Could be a "feedback needed" tag on certain help entries that links to an issue tracker or feedback form.
 
 ---
 
