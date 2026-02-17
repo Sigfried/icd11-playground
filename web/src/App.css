@@ -66,9 +66,20 @@ body {
   color: var(--text-secondary);
 }
 
+.github-link {
+  margin-left: auto;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.github-link:hover {
+  color: var(--text-primary);
+}
+
 /* Help toggle button */
 .help-toggle {
-  margin-left: auto;
   background: none;
   border: 1px solid var(--border-color);
   border-radius: 4px;
