@@ -486,7 +486,16 @@ export function NodeLinkView() {
     svg
       .attr('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
       .attr('width', svgWidth)
-      .attr('height', svgHeight);
+      .attr('height', svgHeight)
+      .on('mousemove', (event: MouseEvent) => {
+        // Clean up stale info tooltip when mouse moves off nodes quickly
+        if (!infoTooltipRef.current && !infoTooltipTimerRef.current) return;
+        const target = event.target as Element;
+        if (!target.closest('.node-link-node')) {
+          setHoveredNodeId(null);
+          hideInfoTooltip();
+        }
+      });
 
     // Ensure top-level groups exist (create once, reuse)
     let g = svg.select<SVGGElement>('g.root-group');
