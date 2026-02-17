@@ -91,9 +91,11 @@ body {
   background: rgba(86, 156, 214, 0.12);
 }
 
-/* Help mode: cursor changes to help on everything */
-.app.help-mode,
-.app.help-mode * {
+/* Help mode: cursor changes to help on everything.
+   Applied to body (not .app) so the browser reliably repaints
+   cursor after tab switches. */
+body.help-mode,
+body.help-mode * {
   cursor: help !important;
 }
 

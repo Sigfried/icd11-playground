@@ -84,14 +84,13 @@ function HelpToggle() {
 
 function AppContent() {
   const { containerRef, mode, toggleMode, sizes, onDividerMouseDown } = useLayoutMode();
-  const { helpMode } = useGraph();
 
   return (
     <>
       <HelpModeInterceptor />
       <GlobalResumeModal />
       <GlobalHelpPopover />
-      <div className={`app${helpMode ? ' help-mode' : ''}`}>
+      <div className="app">
         <header className="app-header">
           <h1><a href={import.meta.env.BASE_URL} data-help-id="header-home-link">ICD-11 Foundation Explorer</a></h1>
           <span className="app-subtitle">Visual Maintenance Tool Prototype</span>

@@ -25,6 +25,20 @@ export function useHelpMode({
   dismissHelpEntry,
   activeHelpEntry,
 }: UseHelpModeOptions) {
+  // Toggle body class for cursor
+  useEffect(() => {
+    document.body.classList.toggle('help-mode', helpMode);
+    return () => { document.body.classList.remove('help-mode'); };
+  }, [helpMode]);
+
+  // Exit help mode when window loses focus (tab switch, alt-tab, etc.)
+  useEffect(() => {
+    if (!helpMode) return;
+    const handleBlur = () => toggleHelpMode();
+    window.addEventListener('blur', handleBlur);
+    return () => window.removeEventListener('blur', handleBlur);
+  }, [helpMode, toggleHelpMode]);
+
   // Capture-phase click interceptor (only when help mode is active)
   useEffect(() => {
     if (!helpMode) return;
