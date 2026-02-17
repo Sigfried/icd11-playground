@@ -57,6 +57,7 @@ interface GraphContextValue {
   // Help mode
   helpMode: boolean;
   toggleHelpMode: () => void;
+  exitHelpMode: () => void;
   helpContent: HelpContent | null;
   activeHelpEntry: { id: string; rect: DOMRect } | null;
   showHelpEntry: (id: string, rect: DOMRect) => void;
@@ -91,6 +92,11 @@ export function GraphProvider({ children }: GraphProviderProps) {
   const [helpMode, setHelpMode] = useState(false);
   const [helpContent, setHelpContent] = useState<HelpContent | null>(null);
   const [activeHelpEntry, setActiveHelpEntry] = useState<{ id: string; rect: DOMRect } | null>(null);
+
+  const exitHelpMode = useCallback(() => {
+    setHelpMode(false);
+    setActiveHelpEntry(null);
+  }, []);
 
   const toggleHelpMode = useCallback(() => {
     setHelpMode(prev => {
@@ -435,6 +441,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     pendingRestore,
     helpMode,
     toggleHelpMode,
+    exitHelpMode,
     helpContent,
     activeHelpEntry,
     showHelpEntry,
@@ -452,7 +459,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     historyBack, historyForward, canUndo, canRedo,
     searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
-    helpMode, toggleHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
+    helpMode, toggleHelpMode, exitHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
   ]);
 
   return (

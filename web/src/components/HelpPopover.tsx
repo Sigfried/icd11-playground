@@ -47,20 +47,7 @@ export function HelpPopover({ entry, helpId, anchorRect, onDismiss }: HelpPopove
 
   // Dismiss on click outside (deferred so the opening click doesn't dismiss)
   useEffect(() => {
-    const handle = setTimeout(() => {
-      function onMouseDown(e: MouseEvent) {
-        if (tipRef.current && !tipRef.current.contains(e.target as Node)) {
-          onDismiss();
-        }
-      }
-      document.addEventListener('mousedown', onMouseDown, true);
-      return () => document.removeEventListener('mousedown', onMouseDown, true);
-    }, 0);
-
-    // The setTimeout returns a timer id, but the inner addEventListener cleanup
-    // needs to be handled properly. Restructure:
     let cleanupFn: (() => void) | null = null;
-
     const timerId = setTimeout(() => {
       function onMouseDown(e: MouseEvent) {
         if (tipRef.current && !tipRef.current.contains(e.target as Node)) {
@@ -72,7 +59,6 @@ export function HelpPopover({ entry, helpId, anchorRect, onDismiss }: HelpPopove
     }, 0);
 
     return () => {
-      clearTimeout(handle);
       clearTimeout(timerId);
       cleanupFn?.();
     };

@@ -64,8 +64,8 @@ function GlobalHelpPopover() {
 }
 
 function HelpModeInterceptor() {
-  const { helpMode, toggleHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry } = useGraph();
-  useHelpMode({ helpMode, toggleHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry });
+  const { helpMode, toggleHelpMode, exitHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry, helpContent } = useGraph();
+  useHelpMode({ helpMode, toggleHelpMode, exitHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry, helpContent });
   return null;
 }
 

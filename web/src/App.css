@@ -91,6 +91,15 @@ body {
   background: rgba(86, 156, 214, 0.12);
 }
 
+.help-toggle:focus-visible {
+  outline: 1px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+.help-toggle:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* Help mode cursors — applied to body so browser reliably repaints after tab switches.
    Default cursor for non-help elements; help cursor for tagged elements. */
 body.help-mode,
