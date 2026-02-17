@@ -156,7 +156,7 @@ export function TreeSearch({ onFilterChange, onHighlightChange }: TreeSearchProp
     : `${results.length} result${results.length !== 1 ? 's' : ''}`;
 
   return (
-    <div className="tree-search">
+    <div className="tree-search" data-help-id="tree-search">
       <div className="tree-search-bar">
         <input
           ref={inputRef}

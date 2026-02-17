@@ -45,6 +45,12 @@ interface BadgeProps {
   onMouseLeave?: (e: React.MouseEvent) => void;
 }
 
+const HELP_IDS: Record<BadgeType, string> = {
+  parents: 'parent-badge',
+  children: 'child-badge',
+  descendants: 'descendant-badge',
+};
+
 export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: BadgeProps) {
   const weight = badgeWeight(type, count);
   const interactive = !!(onClick || onMouseEnter);
@@ -54,6 +60,7 @@ export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: Badg
       className={`count-badge count-badge-${type}${interactive ? ' count-badge-interactive' : ''}`}
       style={{ fontWeight: weight }}
       title={interactive ? undefined : `${count} ${type}`}
+      data-help-id={HELP_IDS[type]}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -70,5 +77,5 @@ export function Badge({ type, count, onClick, onMouseEnter, onMouseLeave }: Badg
 export function renderBadgeHTML(type: BadgeType, count: number, extraClass?: string): string {
   const weight = badgeWeight(type, count);
   const classes = `count-badge count-badge-${type}${extraClass ? ` ${extraClass}` : ''}`;
-  return `<span class="${classes}" style="font-weight: ${weight}">${count}${SYMBOLS[type]}</span>`;
+  return `<span class="${classes}" data-help-id="${HELP_IDS[type]}" style="font-weight: ${weight}">${count}${SYMBOLS[type]}</span>`;
 }

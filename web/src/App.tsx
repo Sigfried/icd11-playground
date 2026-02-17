@@ -3,7 +3,9 @@ import { TreeView } from './components/TreeView';
 import { NodeLinkView } from './components/NodeLinkView';
 import { DetailPanel } from './components/DetailPanel';
 import { ResumeModal } from './components/ResumeModal';
+import { HelpPopover } from './components/HelpPopover';
 import { useLayoutMode } from './hooks/useLayoutMode';
+import { useHelpMode } from './hooks/useHelpMode';
 import './App.css';
 
 /**
@@ -18,6 +20,7 @@ function LayoutToggle({ mode, onToggle }: { mode: string; onToggle: () => void }
   return (
     <button
       className="layout-toggle"
+      data-help-id="layout-toggle"
       onClick={onToggle}
       title={mode === 'two-row' ? 'Switch to column layout' : 'Switch to row layout'}
     >
@@ -46,16 +49,53 @@ function GlobalResumeModal() {
   return <ResumeModal pending={pendingRestore} />;
 }
 
-function App() {
+function GlobalHelpPopover() {
+  const { activeHelpEntry, helpContent, dismissHelpEntry } = useGraph();
+  if (!activeHelpEntry) return null;
+  const entry = helpContent?.entries.get(activeHelpEntry.id);
+  return (
+    <HelpPopover
+      entry={entry}
+      helpId={activeHelpEntry.id}
+      anchorRect={activeHelpEntry.rect}
+      onDismiss={dismissHelpEntry}
+    />
+  );
+}
+
+function HelpModeInterceptor() {
+  const { helpMode, toggleHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry } = useGraph();
+  useHelpMode({ helpMode, toggleHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry });
+  return null;
+}
+
+function HelpToggle() {
+  const { helpMode, toggleHelpMode } = useGraph();
+  return (
+    <button
+      className={`help-toggle${helpMode ? ' active' : ''}`}
+      onClick={toggleHelpMode}
+      title={helpMode ? 'Exit help mode' : 'Enter help mode — click any element for help'}
+    >
+      ?
+    </button>
+  );
+}
+
+function AppContent() {
   const { containerRef, mode, toggleMode, sizes, onDividerMouseDown } = useLayoutMode();
+  const { helpMode } = useGraph();
 
   return (
-    <GraphProvider>
+    <>
+      <HelpModeInterceptor />
       <GlobalResumeModal />
-      <div className="app">
+      <GlobalHelpPopover />
+      <div className={`app${helpMode ? ' help-mode' : ''}`}>
         <header className="app-header">
-          <h1><a href={import.meta.env.BASE_URL}>ICD-11 Foundation Explorer</a></h1>
+          <h1><a href={import.meta.env.BASE_URL} data-help-id="header-home-link">ICD-11 Foundation Explorer</a></h1>
           <span className="app-subtitle">Visual Maintenance Tool Prototype</span>
+          <HelpToggle />
           <LayoutToggle mode={mode} onToggle={toggleMode} />
         </header>
 
@@ -67,6 +107,7 @@ function App() {
               </div>
               <div
                 className="panel-divider vertical"
+                data-help-id="panel-divider"
                 onMouseDown={e => onDividerMouseDown('two-row:topCols', e)}
               />
               <div className="panel detail-panel" style={sizes ? { width: sizes.twoRow.topCols[1] } : undefined}>
@@ -75,6 +116,7 @@ function App() {
             </div>
             <div
               className="panel-divider horizontal"
+              data-help-id="panel-divider"
               onMouseDown={e => onDividerMouseDown('two-row:rows', e)}
             />
             <div className="panel node-link-panel" style={sizes ? { height: sizes.twoRow.rows[1] } : undefined}>
@@ -88,6 +130,7 @@ function App() {
             </div>
             <div
               className="panel-divider vertical"
+              data-help-id="panel-divider"
               onMouseDown={e => onDividerMouseDown('two-col:cols', e)}
             />
             <div className="layout-right" style={sizes ? { width: sizes.twoCol.cols[1] } : undefined}>
@@ -96,6 +139,7 @@ function App() {
               </div>
               <div
                 className="panel-divider horizontal"
+                data-help-id="panel-divider"
                 onMouseDown={e => onDividerMouseDown('two-col:rightRows', e)}
               />
               <div className="panel node-link-panel" style={sizes ? { height: sizes.twoCol.rightRows[1] } : undefined}>
@@ -105,6 +149,14 @@ function App() {
           </main>
         )}
       </div>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <GraphProvider>
+      <AppContent />
     </GraphProvider>
   );
 }

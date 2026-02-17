@@ -1,0 +1,64 @@
+/* Help popover — portal to body, positioned near anchor */
+.help-popover {
+  position: fixed;
+  z-index: 200;
+  max-width: 380px;
+  min-width: 240px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 6px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.help-popover-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  margin: 0 0 6px 0;
+}
+
+.help-popover-description {
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+.help-popover-interactions {
+  margin: 0 0 8px 0;
+  padding-left: 18px;
+}
+
+.help-popover-interactions li {
+  margin-bottom: 3px;
+  color: var(--text-primary);
+}
+
+.help-popover-shortcut {
+  margin: 0 0 6px 0;
+  color: var(--accent-yellow);
+  font-size: 0.8rem;
+}
+
+.help-popover-shortcut kbd {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.help-popover-context {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.help-popover-unknown {
+  color: var(--text-secondary);
+  font-style: italic;
+}

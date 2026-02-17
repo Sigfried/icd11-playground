@@ -201,7 +201,7 @@ export function DetailPanel() {
 
   return (
     <>
-      <div className="panel-header">
+      <div className="panel-header" data-help-id="detail-panel-overview">
         Details
         {isPreviewing && <span className="preview-badge">Preview</span>}
       </div>
@@ -236,6 +236,7 @@ export function DetailPanel() {
               target="_blank"
               rel="noopener noreferrer"
               className="detail-link"
+              data-help-id="detail-browser-link"
             >
               View in Foundation Browser ↗
             </a>

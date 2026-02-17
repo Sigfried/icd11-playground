@@ -626,6 +626,7 @@ export function NodeLinkView() {
   ) {
     gEl
       .attr('class', 'nl-item node-link-cluster')
+      .attr('data-help-id', 'nl-cluster')
       .style('cursor', 'pointer')
       .on('click', () => expandCluster(node.id))
       .on('mouseenter', function () {
@@ -970,6 +971,7 @@ export function NodeLinkView() {
 
     gEl
       .attr('class', classes)
+      .attr('data-help-id', isFocus ? 'nl-focus-node' : 'nl-node')
       .style('cursor', 'pointer')
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
@@ -1002,6 +1004,7 @@ export function NodeLinkView() {
     // Close button (top-right, visible on hover via CSS)
     const closeG = gEl.append('g')
       .attr('class', 'nl-close-btn')
+      .attr('data-help-id', 'nl-close-button')
       .attr('transform', `translate(${node.width - 16}, 2)`)
       .style('cursor', 'pointer')
       .on('click', (e: MouseEvent) => {
@@ -1136,7 +1139,7 @@ export function NodeLinkView() {
 
   return (
     <>
-      <div className="panel-header">
+      <div className="panel-header" data-help-id="node-link-overview">
         Node-Link View -- <span className="header-hint">
           {selectedNodeId ? `${layoutNodes.length} nodes` : 'Select a node'}
         </span>
@@ -1171,14 +1174,14 @@ export function NodeLinkView() {
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
-            <button className="zoom-btn" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
-            <button className="zoom-btn" onClick={() => { applyZoom(zoomRef.current / 1.3); scrollToFocus(zoomRef.current); }} title="Zoom out">-</button>
-            <button className="zoom-btn" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">&#8634;</button>
-            <button className="zoom-btn" onClick={zoomToFit} title="Fit to view">&#8865;</button>
-            <button className="zoom-btn" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>&#8630;</button>
-            <button className="zoom-btn" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>&#8631;</button>
+            <button className="zoom-btn" data-help-id="zoom-in" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
+            <button className="zoom-btn" data-help-id="zoom-out" onClick={() => { applyZoom(zoomRef.current / 1.3); scrollToFocus(zoomRef.current); }} title="Zoom out">-</button>
+            <button className="zoom-btn" data-help-id="zoom-reset" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">&#8634;</button>
+            <button className="zoom-btn" data-help-id="fit-to-view" onClick={zoomToFit} title="Fit to view">&#8865;</button>
+            <button className="zoom-btn" data-help-id="undo-button" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>&#8630;</button>
+            <button className="zoom-btn" data-help-id="redo-button" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>&#8631;</button>
             {canUndo && (
-              <button className="zoom-btn reset-btn" onClick={resetNeighborhood} title="Reset neighborhood">&#10005;</button>
+              <button className="zoom-btn reset-btn" data-help-id="reset-neighborhood" onClick={resetNeighborhood} title="Reset neighborhood">&#10005;</button>
             )}
           </div>
         )}

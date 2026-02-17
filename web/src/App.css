@@ -66,9 +66,40 @@ body {
   color: var(--text-secondary);
 }
 
+/* Help toggle button */
+.help-toggle {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.help-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.help-toggle.active {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background: rgba(86, 156, 214, 0.12);
+}
+
+/* Help mode: cursor changes to help on everything */
+.app.help-mode,
+.app.help-mode * {
+  cursor: help !important;
+}
+
 /* Layout toggle button */
 .layout-toggle {
-  margin-left: auto;
+  margin-left: 0;
   background: none;
   border: 1px solid var(--border-color);
   border-radius: 4px;

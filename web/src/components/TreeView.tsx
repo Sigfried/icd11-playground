@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
+import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
 import { TreeSearch } from './TreeSearch';
@@ -188,6 +189,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
       <div
         className={nodeClasses}
         data-node-id={nodeId}
+        data-help-id="tree-node"
         style={{ paddingLeft: depth * 20 }}
         onClick={handleSelectClick}
       >
@@ -423,7 +425,7 @@ export function TreeView() {
   return (
     <DescTooltipContext.Provider value={descCtxValue}>
       <SearchContext.Provider value={searchCtxValue}>
-        <div className="panel-header">
+        <div className="panel-header" data-help-id="about-this-tool">
           Tree View -- <span className="header-hint">Foundation hierarchy</span>
         </div>
         <TreeSearch
@@ -454,7 +456,3 @@ export function TreeView() {
   );
 }
 
-function isInputFocused(): boolean {
-  const el = document.activeElement;
-  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el?.getAttribute('contenteditable') === 'true');
-}

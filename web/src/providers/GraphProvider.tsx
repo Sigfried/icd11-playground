@@ -16,6 +16,7 @@ import { useNlHistory, type PendingRestore } from '../hooks/useNlHistory';
 import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot } from '../state/nlHistory';
+import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
 
 export type { ConceptNode, EntityDetail, TreePath };
 
@@ -53,6 +54,13 @@ interface GraphContextValue {
   setHighlightedNodeIds: (ids: Set<string>) => void;
   // Resume modal
   pendingRestore: PendingRestore | null;
+  // Help mode
+  helpMode: boolean;
+  toggleHelpMode: () => void;
+  helpContent: HelpContent | null;
+  activeHelpEntry: { id: string; rect: DOMRect } | null;
+  showHelpEntry: (id: string, rect: DOMRect) => void;
+  dismissHelpEntry: () => void;
   // Re-export foundationData functions so components use context
   getNode: typeof getNode;
   getChildren: typeof getChildren;
@@ -78,6 +86,26 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   // Cross-panel badge hover highlighting
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
+
+  // Help mode
+  const [helpMode, setHelpMode] = useState(false);
+  const [helpContent, setHelpContent] = useState<HelpContent | null>(null);
+  const [activeHelpEntry, setActiveHelpEntry] = useState<{ id: string; rect: DOMRect } | null>(null);
+
+  const toggleHelpMode = useCallback(() => {
+    setHelpMode(prev => {
+      if (prev) setActiveHelpEntry(null); // dismiss popover when exiting
+      return !prev;
+    });
+  }, []);
+
+  const showHelpEntry = useCallback((id: string, rect: DOMRect) => {
+    setActiveHelpEntry({ id, rect });
+  }, []);
+
+  const dismissHelpEntry = useCallback(() => {
+    setActiveHelpEntry(null);
+  }, []);
 
   // Snapshot-based NL history
   const {
@@ -356,6 +384,21 @@ export function GraphProvider({ children }: GraphProviderProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only run once
   }, []);
 
+  // Fetch help content markdown (parallel to graph loading)
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${import.meta.env.BASE_URL}help-content.md`)
+      .then(resp => {
+        if (!resp.ok) throw new Error(`Failed to fetch help content: ${resp.status}`);
+        return resp.text();
+      })
+      .then(md => {
+        if (!cancelled) setHelpContent(parseHelpContent(md));
+      })
+      .catch(err => console.warn('Failed to load help content:', err));
+    return () => { cancelled = true; };
+  }, []);
+
   // After graph loads + history restored: expand tree to the restored focus node
   useEffect(() => {
     if (!rootId || !historyRestored) return;
@@ -390,6 +433,12 @@ export function GraphProvider({ children }: GraphProviderProps) {
     highlightedNodeIds,
     setHighlightedNodeIds,
     pendingRestore,
+    helpMode,
+    toggleHelpMode,
+    helpContent,
+    activeHelpEntry,
+    showHelpEntry,
+    dismissHelpEntry,
     getNode,
     getChildren,
     getParents,
@@ -403,6 +452,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     historyBack, historyForward, canUndo, canRedo,
     searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
+    helpMode, toggleHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
   ]);
 
   return (
