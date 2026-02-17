@@ -90,7 +90,7 @@ Badges, tooltips, and hover overlays appear across multiple panels and share com
 - **Description:** Shows how many parents this concept has. Only appears when a concept has more than one parent (polyhierarchy).
 - **Interactions:**
   - **Tree:** Click to expand all parent paths, revealing every location this concept appears in the tree
-  - **Node-link:** Hover to see a list of parents not yet in the diagram; click items to add them individually, or click the badge to add all parents. When all parents are shown, the badge turns red — click again to remove them.
+  - **Node-link:** Hover to see a list of parents not yet in the diagram; click items to add them individually, or click the badge to add all parents. When all parents are visible, the badge turns red — click the red badge to remove them (with connectivity pruning). This toggle lets you expand and collapse freely.
   - **Detail panel:** Click on a parent list item's ↑ badge to expand that item's parents inline
   - **All panels:** Hover highlights parent nodes across all panels
 - **Context:** Concepts with multiple parents are the heart of polyhierarchy. The badge font weight reflects the count — bolder means more parents.
@@ -101,7 +101,7 @@ Badges, tooltips, and hover overlays appear across multiple panels and share com
 - **Description:** Shows how many children this concept has.
 - **Interactions:**
   - **Tree:** Click to expand/collapse children (same as clicking the chevron)
-  - **Node-link:** Hover to see children not yet in the diagram; click items to add individually, or click the badge to expand all. When all children are shown, the badge turns red — click again to remove them.
+  - **Node-link:** Hover to see children not yet in the diagram; click items to add individually, or click the badge to expand all. When all children are visible, the badge turns red — click the red badge to remove them (with connectivity pruning). This toggle lets you expand and collapse freely.
   - **Detail panel:** Click on a child list item's ↓ badge to expand that item's children inline
   - **All panels:** Hover highlights child nodes across all panels
 - **Context:** Badge font weight reflects the count — bolder means more children.
@@ -167,7 +167,11 @@ The node-link diagram shows a DAG (directed acyclic graph) of the neighborhood a
 
 The diagram starts with a default neighborhood: ancestors up to two levels deep (skipping the root and top-level categories) and direct children. Children beyond the first two are grouped into collapsible clusters. From there, you can expand the view by clicking badges (to add parents or children), clicking cluster nodes (to reveal hidden children), or selecting a new focus node (which merges its neighborhood into the current view).
 
-Nodes you add manually can be removed with the × close button. Removal uses connectivity pruning — removing a node also removes anything that becomes disconnected from the focus node. All changes are tracked in the undo history.
+Any node can be removed with the × close button that appears on hover. Removal uses connectivity pruning — removing a node also removes anything that becomes disconnected from the focus node. All changes are tracked in the undo history.
+
+When you add all parents or children via a badge click, that badge turns red to indicate it's fully expanded. Clicking a red badge reverses the expansion — it removes those nodes (with the same connectivity pruning). This toggle lets you experiment freely: expand to see the neighborhood, then collapse if it's too cluttered.
+
+Layout changes are animated: new nodes scale in at their target position, removed nodes scale down and fade out, and existing nodes slide smoothly to their new positions. The ELK layout engine computes positions in a web worker to keep the UI responsive.
 
 ### node-link-overview
 
@@ -194,12 +198,12 @@ Nodes you add manually can be removed with the × close button. Removal uses con
 ### nl-close-button
 
 - **Title:** Close button (×)
-- **Description:** Appears on hover over any node in the diagram. Removes the node and prunes any nodes that become disconnected from the focus.
+- **Description:** Appears on hover over any node in the diagram (including the focus node). Removes the node and prunes any nodes that become disconnected from the focus.
 - **Interactions:**
   - Click to remove this node
   - Disconnected nodes are automatically pruned (connectivity-based removal)
   - The action is recorded in undo history — Ctrl+Z to restore
-- **Context:** Removal uses connectivity pruning: the focus node anchors the graph, and anything disconnected from it is removed. This lets you simplify the view without manually removing each node.
+- **Context:** Removal uses connectivity pruning: the focus node anchors the graph, and anything disconnected from it is removed. For example, if a grandparent is only reachable through one parent, removing that parent also removes the grandparent. But if a node is reachable via two paths, removing one path's intermediary leaves it connected through the other. See also: [Interactive Overlays](#interactive-overlays) for badge-triggered removal (red toggle).
 
 ### nl-cluster
 
@@ -216,15 +220,34 @@ Nodes you add manually can be removed with the × close button. Removal uses con
 - **Title:** Focus node
 - **Description:** The currently selected concept, shown as the central node in the diagram. The neighborhood is built around this node.
 - **Interactions:**
-  - Click the focus node to reset the neighborhood to its default state (removes all manually added nodes)
-  - The reset is recorded in undo history
-- **Context:** The focus node anchors the view. All other nodes are shown because of their relationship to it.
+  - The focus node has the same interactions as other nodes (close button, badges)
+  - Use the reset button (×) in the toolbar to restore the default neighborhood for the current focus node
+- **Context:** The focus node anchors the view. All other nodes are shown because of their relationship to it. Connectivity pruning always preserves the focus node — it can only be removed via the toolbar reset.
 
 ### nl-edge
 
 - **Title:** Diagram edge
 - **Description:** A directed edge showing a parent-child relationship. Flows from parent (top) to child (bottom).
 - **Context:** Edges use orthogonal routing (right angles). In complex polyhierarchies, edges may overlap — hover over nodes to identify connections.
+
+### layout-animation
+
+- **Title:** Layout animation
+- **Description:** When nodes are added or removed, the diagram animates smoothly to the new layout.
+- **Interactions:**
+  - New nodes scale in from a dot at their target position
+  - Removed nodes scale down and fade out
+  - Existing nodes slide to their new positions
+  - Edges animate alongside their connected nodes
+- **Context:** Layout is computed by the ELK engine in a web worker to keep the UI responsive. For large neighborhoods, a progress overlay appears with a cancel button. The animation helps you track what changed — which is especially useful after badge expansions that add many nodes at once.
+
+### layout-progress
+
+- **Title:** Layout progress overlay
+- **Description:** Appears while the ELK layout engine computes positions for a large neighborhood. Shows the node count and a cancel button.
+- **Interactions:**
+  - Cancel returns to the previous state (equivalent to undo)
+- **Context:** Layout computation runs in a web worker and is typically fast for 10–50 node neighborhoods. The overlay only appears for larger graphs where computation takes noticeable time.
 
 ---
 
@@ -263,6 +286,15 @@ Controls at the bottom of the node-link diagram for zoom, fit-to-view, and explo
 
 - **Title:** Redo
 - **Description:** Steps forward through the exploration history (after an undo).
+
+### reset-neighborhood
+
+- **Title:** Reset neighborhood (×)
+- **Description:** Restores the default neighborhood for the current focus node, removing all manually expanded or added nodes.
+- **Interactions:**
+  - Click to rebuild the initial neighborhood (ancestors + direct children + clusters)
+  - The reset is recorded in undo history — Ctrl+Z to get back to the expanded state
+- **Context:** Useful when the view has become cluttered from many expansions. The focus node stays the same; only the surrounding nodes are reset to their default state.
 - **Shortcut:** Ctrl+Shift+Z (Cmd+Shift+Z on Mac)
 
 ---
@@ -344,7 +376,15 @@ All panel borders are draggable to resize. Panels have a minimum size to prevent
 
 ## Session & History
 
-Every action you take — selecting a node, expanding badges, removing nodes, searching — is recorded as a snapshot in your exploration history. You can step backward and forward through this history with Ctrl+Z / Ctrl+Shift+Z (or the toolbar undo/redo buttons), and if you take a new action after undoing, the undone steps are discarded (standard undo behavior).
+Every action you take is recorded as a snapshot in your exploration history with a human-readable description:
+
+- **Selecting a node** → "Selected Cholera" — computes the default neighborhood and records it
+- **Expanding via badge click** → "Added 3 parents of Diabetes mellitus" — adds nodes to the displayed set
+- **Removing a node** → "Removed Schizophrenia (+2 pruned)" — removes the node and any that became disconnected
+- **Searching** → "Search: diabetes" — records the search query so undo restores the previous search
+- **Resetting neighborhood** → "Reset neighborhood for Cholera" — returns to the default neighborhood
+
+You can step backward and forward through this history with Ctrl+Z / Ctrl+Shift+Z (or the toolbar undo/redo buttons). If you take a new action after undoing, the undone steps are discarded (standard undo behavior).
 
 Your session is automatically saved in your browser's IndexedDB. When you return to the app, you'll be offered the choice to resume where you left off or start fresh. No account or server is needed — everything is local to your browser.
 
