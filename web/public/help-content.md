@@ -372,6 +372,15 @@ All panel borders are draggable to resize. Panels have a minimum size to prevent
 - **Title:** Title link
 - **Description:** Clicking "ICD-11 Foundation Explorer" in the header reloads the app.
 
+### help-toggle
+
+- **Title:** Help mode toggle
+- **Description:** Toggles contextual help mode on and off.
+- **Interactions:**
+  - Click to enter help mode — then click any highlighted element for details
+  - Click again (or press Escape) to exit
+- **Shortcut:** ?
+
 ---
 
 ## Session & History

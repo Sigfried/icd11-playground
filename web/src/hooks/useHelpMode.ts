@@ -75,18 +75,31 @@ export function useHelpMode({
   useEffect(() => {
     if (!helpMode || !helpContent) return;
 
+    const isSvg = (el: Element) => el instanceof SVGElement;
+    const svgTitleEls: SVGTitleElement[] = [];
+
     // Set help entry titles on all [data-help-id] elements
-    const helpEls = document.querySelectorAll<HTMLElement>('[data-help-id]');
+    const helpEls = document.querySelectorAll('[data-help-id]');
     helpEls.forEach(el => {
       const existing = el.getAttribute('title');
-      if (existing) el.dataset.origTitle = existing;
+      if (existing) (el as HTMLElement).dataset.origTitle = existing;
       const id = el.getAttribute('data-help-id')!;
       const entry = helpContent.entries.get(id);
-      el.setAttribute('title', `? ${entry?.title ?? id}`);
+      const helpTitle = `? ${entry?.title ?? id}`;
+
+      if (isSvg(el)) {
+        // SVG elements need a <title> child for browser tooltips
+        const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        titleEl.textContent = helpTitle;
+        el.prepend(titleEl);
+        svgTitleEls.push(titleEl);
+      } else {
+        (el as HTMLElement).setAttribute('title', helpTitle);
+      }
     });
 
     // Suppress native titles on all other [title] elements.
-    // Remove (not blank) titles inside help elements so the parent's help title inherits.
+    // Remove (not blank) so child elements inherit the parent's help title.
     const titledEls = document.querySelectorAll<HTMLElement>('[title]');
     titledEls.forEach(el => {
       if (el.hasAttribute('data-help-id')) return;
@@ -98,14 +111,24 @@ export function useHelpMode({
     });
 
     return () => {
-      // Restore all stashed titles
+      // Remove SVG <title> elements we injected
+      svgTitleEls.forEach(el => el.remove());
+      // Restore stashed titles — but only if React hasn't already set a new value.
+      // Our synthetic titles start with "? " or are empty; if the current value is
+      // something else, React already updated it, so leave it alone.
       document.querySelectorAll<HTMLElement>('[data-orig-title]').forEach(el => {
-        el.setAttribute('title', el.dataset.origTitle!);
+        const current = el.getAttribute('title') ?? '';
+        if (!current || current.startsWith('? ')) {
+          el.setAttribute('title', el.dataset.origTitle!);
+        }
         delete el.dataset.origTitle;
       });
-      // Remove synthetic help titles from elements that had none originally
+      // Remove synthetic help titles from HTML elements that had none originally
       helpEls.forEach(el => {
-        if (!el.dataset.origTitle) el.removeAttribute('title');
+        if (!isSvg(el) && !(el as HTMLElement).dataset.origTitle) {
+          const current = el.getAttribute('title') ?? '';
+          if (current.startsWith('? ')) el.removeAttribute('title');
+        }
       });
     };
   }, [helpMode, helpContent]);

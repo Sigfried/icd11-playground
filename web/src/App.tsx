@@ -74,6 +74,7 @@ function HelpToggle() {
   return (
     <button
       className={`help-toggle${helpMode ? ' active' : ''}`}
+      data-help-id="help-toggle"
       onClick={toggleHelpMode}
       title={helpMode ? 'Exit help mode' : 'Enter help mode — click any element for help'}
     >
