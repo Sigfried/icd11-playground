@@ -82,11 +82,39 @@ function edgePath(edge: LayoutEdge): string {
     .y(d => d.y)(points) ?? '';
 }
 
-/** Build a curved arc path between two points (force-directed mode) */
-function forceEdgePath(sx: number, sy: number, tx: number, ty: number): string {
-  const dx = tx - sx, dy = ty - sy;
-  const dr = Math.sqrt(dx * dx + dy * dy);
-  return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+/** Attachment points: center of each side of a rectangle (top-left coords + dims) */
+function rectAttachPoints(x: number, y: number, w: number, h: number) {
+  const cx = x + w / 2, cy = y + h / 2;
+  return [
+    { x: cx,      y },          // top
+    { x: cx,      y: y + h },   // bottom
+    { x,          y: cy },      // left
+    { x: x + w,   y: cy },      // right
+  ];
+}
+
+/**
+ * Build a curved arc path for force-directed mode.
+ * Picks the pair of attachment points (center of each rect side) on
+ * source and target that gives the shortest straight-line distance,
+ * then draws a gentle arc between them.
+ */
+function forceEdgePath(src: LayoutNode, tgt: LayoutNode): string {
+  const sPoints = rectAttachPoints(src.x, src.y, src.width, src.height);
+  const tPoints = rectAttachPoints(tgt.x, tgt.y, tgt.width, tgt.height);
+
+  let bestDist = Infinity;
+  let bestS = sPoints[0], bestT = tPoints[0];
+  for (const sp of sPoints) {
+    for (const tp of tPoints) {
+      const d = (sp.x - tp.x) ** 2 + (sp.y - tp.y) ** 2;
+      if (d < bestDist) { bestDist = d; bestS = sp; bestT = tp; }
+    }
+  }
+
+  const dist = Math.sqrt(bestDist);
+  if (dist === 0) return '';
+  return `M${bestS.x},${bestS.y}A${dist},${dist} 0 0,1 ${bestT.x},${bestT.y}`;
 }
 
 /** Simulation node type for D3 force layout */
@@ -630,10 +658,7 @@ export function NodeLinkView() {
         const src = nodePos.get(edge.source);
         const tgt = nodePos.get(edge.target);
         if (!src || !tgt) return '';
-        return forceEdgePath(
-          src.x + src.width / 2, src.y + src.height / 2,
-          tgt.x + tgt.width / 2, tgt.y + tgt.height / 2,
-        );
+        return forceEdgePath(src, tgt);
       }
       return edgePath(edge);
     }
@@ -765,10 +790,7 @@ export function NodeLinkView() {
             const src = nodePos.get(d.source);
             const tgt = nodePos.get(d.target);
             if (!src || !tgt) return '';
-            return forceEdgePath(
-              src.x + src.width / 2, src.y + src.height / 2,
-              tgt.x + tgt.width / 2, tgt.y + tgt.height / 2,
-            );
+            return forceEdgePath(src, tgt);
           });
       });
     }
