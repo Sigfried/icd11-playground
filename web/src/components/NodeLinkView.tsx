@@ -9,6 +9,8 @@ import { renderBadgeHTML } from './Badge';
 import './Badge.css';
 import './NodeLinkView.css';
 
+type LayoutMode = 'hierarchical' | 'force';
+
 /**
  * Node-Link Diagram (Secondary View)
  *
@@ -68,7 +70,7 @@ const CLUSTER_HEIGHT = 36;
 const SVG_PADDING = 30;
 const TRANSITION_DURATION = 400;
 
-/** Build an SVG path string from ELK edge sections */
+/** Build an SVG path string from ELK edge sections (hierarchical mode) */
 function edgePath(edge: LayoutEdge): string {
   if (!edge.sections?.length) return '';
   const section = edge.sections[0];
@@ -78,6 +80,20 @@ function edgePath(edge: LayoutEdge): string {
   return d3.line<{ x: number; y: number }>()
     .x(d => d.x)
     .y(d => d.y)(points) ?? '';
+}
+
+/** Build a curved arc path between two points (force-directed mode) */
+function forceEdgePath(sx: number, sy: number, tx: number, ty: number): string {
+  const dx = tx - sx, dy = ty - sy;
+  const dr = Math.sqrt(dx * dx + dy * dy);
+  return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+}
+
+/** Simulation node type for D3 force layout */
+interface SimNode extends d3.SimulationNodeDatum {
+  id: string;
+  width: number;
+  height: number;
 }
 
 /**
@@ -145,6 +161,10 @@ export function NodeLinkView() {
   const zoomRafRef = useRef<number | null>(null);
   // Debounced spacer resize (triggers layout reflow — keep infrequent)
   const spacerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Layout mode: hierarchical (ELK) or force-directed (D3-force)
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('hierarchical');
+  // D3 force simulation ref (alive during force mode for drag interaction)
+  const simulationRef = useRef<d3.Simulation<SimNode, d3.SimulationLinkDatum<SimNode>> | null>(null);
 
   /** Apply zoom level directly to DOM — bypasses React to avoid re-render storms during pinch */
   const applyZoom = useCallback((level: number) => {
@@ -304,7 +324,95 @@ export function NodeLinkView() {
     );
   }, [displayedNodeIds, getChildren, getNode, expandNodes]);
 
-  // Compute layout from displayedNodeIds (runs ELK in Web Worker)
+  /** Shared: collect cluster infos and build node/edge lists from displayedNodeIds */
+  function prepareLayoutData() {
+    const graph = getGraph();
+    const nlSubgraph = buildNlSubgraph(graph, displayedNodeIds);
+
+    const clusterInfos: Array<{
+      id: string; parentId: string;
+      count: number; childIds: string[]; totalDescendants: number;
+    }> = [];
+
+    for (const id of displayedNodeIds) {
+      if (!id.startsWith('cluster:')) continue;
+      const parentId = id.slice('cluster:'.length);
+      const info = computeClusterInfo(parentId, getChildren, displayedNodeIds);
+      if (info.count === 0) continue;
+      clusterInfos.push({ id, parentId, ...info });
+    }
+
+    const realNodeIds = [...displayedNodeIds].filter(id => !id.startsWith('cluster:'));
+    realNodeIds.sort((a, b) => {
+      const nodeA = getNode(a);
+      const nodeB = getNode(b);
+      const depthDiff = (nodeA?.depth ?? 0) - (nodeB?.depth ?? 0);
+      if (depthDiff !== 0) return depthDiff;
+      return a.localeCompare(b);
+    });
+
+    const allNodeDefs = [
+      ...realNodeIds.map(id => ({
+        id, width: NODE_WIDTH, height: NODE_HEIGHT,
+      })),
+      ...clusterInfos.map(c => ({
+        id: c.id, width: CLUSTER_WIDTH, height: CLUSTER_HEIGHT,
+      })),
+    ];
+
+    const edgeDefs: Array<{ id: string; source: string; target: string }> = [];
+
+    nlSubgraph.forEachEdge((_edge, _attrs, source, target) => {
+      if (source.startsWith('cluster:') || target.startsWith('cluster:')) return;
+      edgeDefs.push({ id: `${source}->${target}`, source, target });
+    });
+
+    for (const c of clusterInfos) {
+      edgeDefs.push({ id: `${c.parentId}->${c.id}`, source: c.parentId, target: c.id });
+    }
+
+    return { clusterInfos, allNodeDefs, edgeDefs };
+  }
+
+  /** Convert raw positioned nodes + edges into LayoutNode[] and LayoutEdge[] */
+  function buildLayoutResult(
+    positionedNodes: Array<{ id: string; x: number; y: number; width: number; height: number }>,
+    edgeDefs: Array<{ id: string; source: string; target: string }>,
+    clusterInfos: Array<{ id: string; parentId: string; count: number; childIds: string[]; totalDescendants: number }>,
+    edgeSections?: Map<string, LayoutEdge['sections']>,
+  ): { nodes: LayoutNode[]; edges: LayoutEdge[] } {
+    const clusterMap = new Map(clusterInfos.map(c => [c.id, c]));
+
+    const nodes: LayoutNode[] = positionedNodes.map(n => {
+      const cluster = clusterMap.get(n.id);
+      if (cluster) {
+        return {
+          kind: 'cluster' as const,
+          id: n.id, parentId: cluster.parentId,
+          x: n.x, y: n.y,
+          width: n.width, height: n.height,
+          count: cluster.count,
+          childIds: cluster.childIds,
+          totalDescendants: cluster.totalDescendants,
+        };
+      }
+      return {
+        kind: 'node' as const,
+        id: n.id, x: n.x, y: n.y,
+        width: n.width, height: n.height,
+        data: getNode(n.id)!,
+      };
+    });
+
+    const edges: LayoutEdge[] = edgeDefs.map(e => ({
+      id: e.id, source: e.source, target: e.target,
+      sections: edgeSections?.get(e.id),
+    }));
+
+    return { nodes, edges };
+  }
+
+  // Compute layout from displayedNodeIds (ELK or D3-force)
   useEffect(() => {
     if (!selectedNodeId || displayedNodeIds.size === 0) {
       setLayoutNodes([]);
@@ -321,140 +429,122 @@ export function NodeLinkView() {
       return;
     }
 
+    // Stop any previous force simulation
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+      simulationRef.current = null;
+    }
+
     let cancelled = false;
     setLayoutInProgress(true);
 
-    async function computeLayout() {
-      const graph = getGraph();
-      const nlSubgraph = buildNlSubgraph(graph, displayedNodeIds);
+    const { clusterInfos, allNodeDefs, edgeDefs } = prepareLayoutData();
 
-      // Collect cluster info for cluster pseudo-nodes in displayedNodeIds
-      const clusterInfos: Array<{
-        id: string; parentId: string;
-        count: number; childIds: string[]; totalDescendants: number;
-      }> = [];
+    if (layoutMode === 'force') {
+      // --- D3-force layout (synchronous settle) ---
+      const simNodes: SimNode[] = allNodeDefs.map(n => ({ id: n.id, width: n.width, height: n.height }));
+      const nodeById = new Map(simNodes.map(n => [n.id, n]));
 
-      for (const id of displayedNodeIds) {
-        if (!id.startsWith('cluster:')) continue;
-        const parentId = id.slice('cluster:'.length);
-        const info = computeClusterInfo(parentId, getChildren, displayedNodeIds);
-        if (info.count === 0) continue;
-        clusterInfos.push({ id, parentId, ...info });
-      }
+      const simLinks = edgeDefs
+        .filter(e => nodeById.has(e.source) && nodeById.has(e.target))
+        .map(e => ({ source: e.source, target: e.target }));
 
-      // Build ordered list of real node IDs (sorted by depth for stable ELK ordering)
-      const realNodeIds = [...displayedNodeIds].filter(id => !id.startsWith('cluster:'));
-      realNodeIds.sort((a, b) => {
-        const nodeA = getNode(a);
-        const nodeB = getNode(b);
-        const depthDiff = (nodeA?.depth ?? 0) - (nodeB?.depth ?? 0);
-        if (depthDiff !== 0) return depthDiff;
-        return a.localeCompare(b);
-      });
+      const simulation = d3.forceSimulation(simNodes)
+        .force('link', d3.forceLink(simLinks).id((d) => (d as SimNode).id).distance(120))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(0, 0))
+        .force('collide', d3.forceCollide<SimNode>().radius(d => Math.max(d.width, d.height) / 2 + 15))
+        .stop();
 
-      const elkNodes = [
-        ...realNodeIds.map(id => ({
-          id, width: NODE_WIDTH, height: NODE_HEIGHT,
-        })),
-        ...clusterInfos.map(c => ({
-          id: c.id, width: CLUSTER_WIDTH, height: CLUSTER_HEIGHT,
-        })),
-      ];
+      // Run simulation to settle
+      for (let i = 0; i < 300; i++) simulation.tick();
 
-      const elkEdges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
+      if (cancelled) return;
 
-      nlSubgraph.forEachEdge((_edge, _attrs, source, target) => {
-        if (source.startsWith('cluster:') || target.startsWith('cluster:')) return;
-        elkEdges.push({
-          id: `${source}->${target}`,
-          sources: [source],
-          targets: [target],
-        });
-      });
+      const positioned = simNodes.map(n => ({
+        id: n.id,
+        x: (n.x ?? 0) - n.width / 2,  // center -> top-left
+        y: (n.y ?? 0) - n.height / 2,
+        width: n.width,
+        height: n.height,
+      }));
 
-      for (const c of clusterInfos) {
-        elkEdges.push({
-          id: `${c.parentId}->${c.id}`,
-          sources: [c.parentId],
-          targets: [c.id],
-        });
-      }
+      const { nodes, edges } = buildLayoutResult(positioned, edgeDefs, clusterInfos);
+      setLayoutNodes(nodes);
+      setLayoutEdges(edges);
+      setLayoutInProgress(false);
 
-      try {
-        const elkGraph = await elkRef.current.layout({
-          id: 'root',
-          layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '40',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-            'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-          },
-          children: elkNodes,
-          edges: elkEdges,
-        });
+      // Keep simulation alive for drag interaction
+      simulationRef.current = simulation;
 
-        if (cancelled) return;
+    } else {
+      // --- ELK hierarchical layout (async Web Worker) ---
+      async function computeElkLayout() {
+        const elkNodes = allNodeDefs.map(n => ({ id: n.id, width: n.width, height: n.height }));
+        const elkEdges = edgeDefs.map(e => ({
+          id: e.id, sources: [e.source], targets: [e.target],
+        }));
 
-        const clusterMap = new Map(clusterInfos.map(c => [c.id, c]));
+        try {
+          const elkGraph = await elkRef.current.layout({
+            id: 'root',
+            layoutOptions: {
+              'elk.algorithm': 'layered',
+              'elk.direction': 'RIGHT',
+              'elk.spacing.nodeNode': '40',
+              'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+              'elk.edgeRouting': 'ORTHOGONAL',
+              'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+            },
+            children: elkNodes,
+            edges: elkEdges,
+          });
 
-        const nodes: LayoutNode[] = (elkGraph.children ?? []).map(elkNode => {
-          const cluster = clusterMap.get(elkNode.id);
-          if (cluster) {
-            return {
-              kind: 'cluster' as const,
-              id: elkNode.id,
-              parentId: cluster.parentId,
-              x: elkNode.x ?? 0,
-              y: elkNode.y ?? 0,
-              width: elkNode.width ?? CLUSTER_WIDTH,
-              height: elkNode.height ?? CLUSTER_HEIGHT,
-              count: cluster.count,
-              childIds: cluster.childIds,
-              totalDescendants: cluster.totalDescendants,
-            };
+          if (cancelled) return;
+
+          const positioned = (elkGraph.children ?? []).map(n => ({
+            id: n.id,
+            x: n.x ?? 0,
+            y: n.y ?? 0,
+            width: n.width ?? NODE_WIDTH,
+            height: n.height ?? NODE_HEIGHT,
+          }));
+
+          const sectionMap = new Map<string, LayoutEdge['sections']>();
+          for (const elkEdge of elkGraph.edges ?? []) {
+            const sections = (elkEdge as { sections?: LayoutEdge['sections'] }).sections;
+            const edgeId = `${elkEdge.sources[0]}->${elkEdge.targets[0]}`;
+            sectionMap.set(edgeId, sections);
           }
-          return {
-            kind: 'node' as const,
-            id: elkNode.id,
-            x: elkNode.x ?? 0,
-            y: elkNode.y ?? 0,
-            width: elkNode.width ?? NODE_WIDTH,
-            height: elkNode.height ?? NODE_HEIGHT,
-            data: getNode(elkNode.id)!,
-          };
-        });
 
-        const edges: LayoutEdge[] = (elkGraph.edges ?? []).map(elkEdge => {
-          const sections = (elkEdge as { sections?: LayoutEdge['sections'] }).sections;
-          return {
-            id: `${elkEdge.sources[0]}->${elkEdge.targets[0]}`,
-            source: elkEdge.sources[0],
-            target: elkEdge.targets[0],
-            sections,
-          };
-        });
-
-        setLayoutNodes(nodes);
-        setLayoutEdges(edges);
-        setLayoutInProgress(false);
-      } catch (error) {
-        if (cancelled) return;
-        console.error('ELK layout error:', error);
-        setLayoutInProgress(false);
+          const { nodes, edges } = buildLayoutResult(positioned, edgeDefs, clusterInfos, sectionMap);
+          setLayoutNodes(nodes);
+          setLayoutEdges(edges);
+          setLayoutInProgress(false);
+        } catch (error) {
+          if (cancelled) return;
+          console.error('ELK layout error:', error);
+          setLayoutInProgress(false);
+        }
       }
-    }
 
-    computeLayout();
+      computeElkLayout();
+    }
 
     return () => {
       cancelled = true;
-      // Kill the worker and replace with a fresh instance
-      elkRef.current.terminateWorker();
-      elkRef.current = createElk();
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+        simulationRef.current = null;
+      }
+      if (layoutMode === 'hierarchical') {
+        // Kill the worker and replace with a fresh instance
+        elkRef.current.terminateWorker();
+        elkRef.current = createElk();
+      }
     };
-  }, [selectedNodeId, displayedNodeIds, getNode, getChildren, getGraph]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prepareLayoutData/buildLayoutResult are stable
+  }, [selectedNodeId, displayedNodeIds, getNode, getChildren, getGraph, layoutMode]);
 
   // D3 rendering with data-join (enter/update/exit animation)
   useEffect(() => {
@@ -497,6 +587,25 @@ export function NodeLinkView() {
         }
       });
 
+    // Ensure defs + arrowhead marker exist
+    let defs = svg.select<SVGDefsElement>('defs');
+    if (defs.empty()) defs = svg.append('defs');
+    if (defs.select('#arrowhead').empty()) {
+      defs.append('marker')
+        .attr('id', 'arrowhead')
+        .attr('viewBox', '0 0 10 6')
+        .attr('refX', 10)
+        .attr('refY', 3)
+        .attr('markerWidth', 8)
+        .attr('markerHeight', 5)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M0,0L10,3L0,6Z')
+        .attr('fill', 'var(--border-color)');
+    }
+
+    const isForce = layoutMode === 'force';
+
     // Ensure top-level groups exist (create once, reuse)
     let g = svg.select<SVGGElement>('g.root-group');
     if (g.empty()) {
@@ -512,6 +621,23 @@ export function NodeLinkView() {
     const posCache = positionCacheRef.current;
     const dur = isInitial ? 0 : TRANSITION_DURATION;
 
+    // Node position lookup for force-directed edge paths
+    const nodePos = new Map(layoutNodes.map(n => [n.id, n]));
+
+    /** Compute edge path: ELK sections in hierarchical mode, curved arc in force mode */
+    function computeEdgePath(edge: LayoutEdge): string {
+      if (isForce) {
+        const src = nodePos.get(edge.source);
+        const tgt = nodePos.get(edge.target);
+        if (!src || !tgt) return '';
+        return forceEdgePath(
+          src.x + src.width / 2, src.y + src.height / 2,
+          tgt.x + tgt.width / 2, tgt.y + tgt.height / 2,
+        );
+      }
+      return edgePath(edge);
+    }
+
     // --- EDGE DATA-JOIN ---
     const edgeSelection = edgesG
       .selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge')
@@ -525,12 +651,13 @@ export function NodeLinkView() {
     const edgeEnter = edgeSelection.enter()
       .append('path')
       .attr('class', d => `node-link-edge${d.target.startsWith('cluster:') ? ' cluster-edge' : ''}`)
-      .attr('d', d => edgePath(d))
+      .attr('d', d => computeEdgePath(d))
       .attr('opacity', isInitial ? 1 : 0);
 
     edgeEnter.merge(edgeSelection)
+      .attr('marker-end', isForce ? 'url(#arrowhead)' : null)
       .transition().duration(dur).ease(d3.easeCubicOut)
-      .attr('d', d => edgePath(d))
+      .attr('d', d => computeEdgePath(d))
       .attr('opacity', 1);
 
     // --- NODE DATA-JOIN ---
@@ -589,6 +716,63 @@ export function NodeLinkView() {
       posCache.set(node.id, { x: node.x, y: node.y });
     }
 
+    // --- DRAG BEHAVIOR (force mode only) ---
+    if (isForce && simulationRef.current) {
+      const sim = simulationRef.current;
+      const simNodeById = new Map(sim.nodes().map(n => [n.id, n]));
+
+      const drag = d3.drag<SVGGElement, LayoutNode>()
+        .on('start', (_event, d) => {
+          const simNode = simNodeById.get(d.id);
+          if (!simNode) return;
+          sim.alphaTarget(0.3).restart();
+          simNode.fx = simNode.x;
+          simNode.fy = simNode.y;
+        })
+        .on('drag', (event, d) => {
+          const simNode = simNodeById.get(d.id);
+          if (!simNode) return;
+          // event.x/y are in root-group space (top-left), sim uses center coords
+          simNode.fx = event.x + d.width / 2;
+          simNode.fy = event.y + d.height / 2;
+        })
+        .on('end', (_event, d) => {
+          const simNode = simNodeById.get(d.id);
+          if (!simNode) return;
+          sim.alphaTarget(0);
+          simNode.fx = null;
+          simNode.fy = null;
+        });
+
+      allNodes.call(drag);
+
+      // On simulation tick, update node + edge positions directly in the DOM
+      sim.on('tick', () => {
+        allNodes.attr('transform', d => {
+          const simNode = simNodeById.get(d.id);
+          if (!simNode) return `translate(${d.x}, ${d.y})`;
+          const nx = (simNode.x ?? 0) - d.width / 2;
+          const ny = (simNode.y ?? 0) - d.height / 2;
+          // Update the layout node data in place so edge paths use current positions
+          d.x = nx;
+          d.y = ny;
+          posCache.set(d.id, { x: nx, y: ny });
+          return `translate(${nx}, ${ny})`;
+        });
+
+        edgesG.selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge')
+          .attr('d', d => {
+            const src = nodePos.get(d.source);
+            const tgt = nodePos.get(d.target);
+            if (!src || !tgt) return '';
+            return forceEdgePath(
+              src.x + src.width / 2, src.y + src.height / 2,
+              tgt.x + tgt.width / 2, tgt.y + tgt.height / 2,
+            );
+          });
+      });
+    }
+
     svgDimsRef.current = { width: svgWidth, height: svgHeight };
 
     // Set zoom wrapper dimensions and scroll area
@@ -621,7 +805,7 @@ export function NodeLinkView() {
     isInitialRenderRef.current = false;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId, setHighlightedNodeIds are stable useState setters
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, expandCluster]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, expandCluster, layoutMode]);
 
   // Lightweight highlight effect — toggles CSS class without re-rendering
   useEffect(() => {
@@ -1163,7 +1347,7 @@ export function NodeLinkView() {
             layoutNodes.length > 0 ? (
               <div className="node-link-zoom-spacer">
                 <div className="node-link-zoom-wrapper" ref={zoomWrapperRef}>
-                  <svg ref={svgRef} className="node-link-svg" />
+                  <svg ref={svgRef} className={`node-link-svg${layoutMode === 'force' ? ' force-mode' : ''}`} />
                 </div>
               </div>
             ) : !layoutInProgress ? (
@@ -1187,6 +1371,34 @@ export function NodeLinkView() {
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
+            <button
+              className={`zoom-btn layout-toggle-btn${layoutMode === 'force' ? ' active' : ''}`}
+              data-help-id="layout-toggle"
+              onClick={() => setLayoutMode(m => m === 'hierarchical' ? 'force' : 'hierarchical')}
+              title={layoutMode === 'hierarchical' ? 'Switch to force-directed layout' : 'Switch to hierarchical layout'}
+            >
+              {layoutMode === 'hierarchical' ? (
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                  <circle cx="4" cy="4" r="2" /><circle cx="12" cy="4" r="2" />
+                  <circle cx="4" cy="12" r="2" /><circle cx="12" cy="12" r="2" />
+                  <circle cx="8" cy="8" r="1.5" />
+                  <line x1="4" y1="4" x2="8" y2="8" stroke="currentColor" strokeWidth="1" />
+                  <line x1="12" y1="4" x2="8" y2="8" stroke="currentColor" strokeWidth="1" />
+                  <line x1="4" y1="12" x2="8" y2="8" stroke="currentColor" strokeWidth="1" />
+                  <line x1="12" y1="12" x2="8" y2="8" stroke="currentColor" strokeWidth="1" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                  <rect x="3" y="1" width="4" height="3" rx="1" />
+                  <rect x="1" y="7" width="4" height="3" rx="1" />
+                  <rect x="11" y="7" width="4" height="3" rx="1" />
+                  <rect x="6" y="12" width="4" height="3" rx="1" />
+                  <line x1="5" y1="4" x2="3" y2="7" stroke="currentColor" strokeWidth="1" />
+                  <line x1="5" y1="4" x2="13" y2="7" stroke="currentColor" strokeWidth="1" />
+                  <line x1="3" y1="10" x2="8" y2="12" stroke="currentColor" strokeWidth="1" />
+                </svg>
+              )}
+            </button>
             <button className="zoom-btn" data-help-id="zoom-in" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
             <button className="zoom-btn" data-help-id="zoom-out" onClick={() => { applyZoom(zoomRef.current / 1.3); scrollToFocus(zoomRef.current); }} title="Zoom out">-</button>
             <button className="zoom-btn" data-help-id="zoom-reset" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">&#8634;</button>

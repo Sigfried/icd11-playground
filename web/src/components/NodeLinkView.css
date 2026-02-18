@@ -198,6 +198,24 @@
   color: var(--text-primary);
 }
 
+/* Layout toggle button */
+.layout-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layout-toggle-btn.active {
+  background: rgba(86, 156, 214, 0.2);
+  border-color: var(--accent-blue);
+  color: var(--accent-cyan);
+  opacity: 1;
+}
+
+.layout-toggle-btn.active:hover {
+  background: rgba(86, 156, 214, 0.3);
+}
+
 .reset-btn {
   color: var(--accent-orange);
 }
@@ -205,6 +223,15 @@
 .reset-btn:hover {
   color: var(--text-primary);
   background: rgba(206, 145, 120, 0.15);
+}
+
+/* Force-directed mode: grab cursor on nodes */
+.node-link-svg.force-mode .node-link-node {
+  cursor: grab;
+}
+
+.node-link-svg.force-mode .node-link-node:active {
+  cursor: grabbing;
 }
 
 /* Layout progress overlay */
