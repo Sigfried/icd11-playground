@@ -18,11 +18,12 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Pop-out NL window | :white_circle: |
 | **NL Diagram** | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
+| | Force-directed layout toggle | :white_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
 | | Advanced search options | :white_circle: |
 | **Detail Panel** | Paths to root | :yellow_circle: |
 | | Detail panel differentiation from tree | :yellow_circle: |
-| **Data Model** | Relationship types beyond is-a | :white_circle: |
+| **Data Model** | Foundation cross-references (maternal, perinatal, impairment) | :white_circle: |
 | | Canonical vs linked parents | :white_circle: Investigation |
 | **State & History** | History review UI (timeline panel) | :white_circle: |
 | | Share button (encode snapshot in URL) | :white_check_mark: |
@@ -140,24 +141,57 @@ Extend tree search with field-specific options, similar to the ICD-11 Maintenanc
 
 ---
 
-## Relationship Types Beyond Is-A
+## Foundation Cross-References (Non-Is-A Relationships)
 
-The ICD-11 Foundation is a rich ontology with several relationship types beyond parent-child (is-a/subsumes):
+### Investigation results
 
-- **Has causative agent** — linking conditions to etiological entities (e.g., infectious agents)
-- **Has manifestation** — connecting underlying diseases to their clinical presentations
-- **Has associated with** — general associative relationships
-- **Has severity** — linking conditions to severity scales
-- **Temporally related to** — for sequencing or temporal associations
-- **Anatomy links** (has site, has specific anatomy) — connecting conditions to body structures
-- **Has causing condition** — for causal chains between conditions
+The Foundation API exposes only 3 non-is-a relationship fields (surveyed 1,000 entities):
 
-The Foundation also supports **extension codes** (the X-axis) that encode dimensions like laterality, severity, temporality, anatomy, histopathology, and others — formalized relationship slots in the post-coordination system.
+| Field | Prevalence | Estimated total |
+|-------|-----------|-----------------|
+| `relatedEntitiesInPerinatalChapter` | 4.0% | ~2,800 entities |
+| `relatedEntitiesInMaternalChapter` | 2.6% | ~1,800 entities |
+| `relatedImpairment` | 0.2% | ~140 entities |
 
-**Design questions:**
-- How to visualize non-is-a relationships in the NL diagram (edge types? colors? separate layers?)
-- How to show extension code slots and their values
-- Whether to group neighboring nodes by relationship type
+All three are arrays of Foundation entity URIs referencing concepts already in our graph (verified). Example: Cholera → "Infections of the fetus or newborn" (perinatal), Tuberculous meningitis → "Tuberculosis complicating pregnancy..." (maternal) and "Congenital tuberculosis" (perinatal).
+
+### Postcoordination is NOT a relationship type
+
+MMS postcoordination axes (infectiousAgent, specificAnatomy, hasSeverity, laterality, hasManifestation, etc.) define which extension code dimensions are *allowed* when coding — they're coding affordances, not ontological relationships. A coder could postcoordinate pneumonia with "left lower lobe" but equally with "right foot." There's no inherent link between a disease and a body site in the Foundation.
+
+### Plan
+
+Crawl the 3 cross-reference fields into `foundation_graph.json` as typed edges. Visualize as dashed/colored edges in the NL diagram, distinct from is-a edges. Low priority — the ~4,700 cross-references are modest in scope and only relevant when viewing entities that have them
+
+---
+
+## Force-Directed Layout Toggle
+
+Add a toolbar button to the NL view to toggle between the current hierarchical (ELK) layout and a force-directed layout.
+
+### Motivation
+
+Hierarchical layout (top-down DAG) is ideal for understanding parent-child structure, but force-directed layout better reveals clusters, communities, and non-tree connectivity patterns — useful for understanding the neighborhood around a concept at a glance.
+
+### Design
+
+- **Toggle button** in the NL toolbar, next to the existing layout controls
+- **Two modes**: Hierarchical (current, default) and Force-directed
+- **Same subgraph** — the displayed nodes and edges don't change, only the layout algorithm
+- **Same interactions** — zoom, pan, hover, click, expand/collapse badges all work in both modes
+- **Animated transition** between layouts (nodes interpolate to new positions)
+- **Force-directed specifics**:
+  - Use D3-force (`d3-force` or `d3-force-3d`) since D3 is already a dependency
+  - Directed edges: arrowheads still indicate parent→child direction
+  - Focus node visually distinguished (same styling as hierarchical mode)
+  - Collision avoidance to prevent node overlap
+  - Link distance could vary by relationship (shorter for parent-child, longer for cross-refs if added later)
+
+### Open questions
+
+- Should the force simulation run continuously (interactive/springy) or settle to a static layout?
+- Should the toggle state persist across node selections, or reset to hierarchical on reselect?
+- Edge rendering: curved edges (better for force-directed) vs orthogonal routing (current hierarchical)?
 
 ---
 
@@ -248,7 +282,7 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 1. **Canonical/linked distinction**: Does the WHO API expose this or only iCAT? (See [dedicated section](#canonical-vs-linked-parents))
 2. **Integration path**: How will this embed into the .NET maintenance platform?
 3. **Depth spread as maintenance signal**: Each node has `depth` (shortest from root) and `maxDepth` (longest from root). For polyhierarchy nodes these differ — 11,345 nodes (16%) have spread. Large spread may flag structural anomalies. Consider surfacing depth range in detail panel and/or using it as a filter/highlight for maintenance review.
-4. **Relationship types**: How to surface non-is-a relationships and extension codes. (See [dedicated section](#relationship-types-beyond-is-a))
+4. **Foundation cross-references**: Low priority — 3 cross-ref fields (~4,700 entities) could be crawled and visualized as typed edges. (See [dedicated section](#foundation-cross-references-non-is-a-relationships))
 
 ---
 
