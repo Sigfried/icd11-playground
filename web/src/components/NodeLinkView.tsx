@@ -470,7 +470,16 @@ export function NodeLinkView() {
 
     if (layoutMode === 'force') {
       // --- D3-force layout (synchronous settle) ---
-      const simNodes: SimNode[] = allNodeDefs.map(n => ({ id: n.id, width: n.width, height: n.height }));
+      // Seed positions from cache so the simulation settles near previous positions
+      const posCache = positionCacheRef.current;
+      const simNodes: SimNode[] = allNodeDefs.map(n => {
+        const cached = posCache.get(n.id);
+        return {
+          id: n.id, width: n.width, height: n.height,
+          // Convert from top-left (layout coords) to center (simulation coords)
+          ...(cached ? { x: cached.x + n.width / 2, y: cached.y + n.height / 2 } : {}),
+        };
+      });
       const nodeById = new Map(simNodes.map(n => [n.id, n]));
 
       const simLinks = edgeDefs
