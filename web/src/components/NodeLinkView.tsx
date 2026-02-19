@@ -144,7 +144,7 @@ function computeClusterInfo(
 
 export function NodeLinkView() {
   const {
-    selectedNodeId, selectNode, setHoveredNodeId,
+    selectedNodeId, selectNode, hoveredNodeId, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
@@ -846,6 +846,32 @@ export function NodeLinkView() {
       d3.select(this).classed('highlighted', highlightedNodeIds.has(d.id));
     });
   }, [highlightedNodeIds]);
+
+  // Hover emphasis — highlight edges connected to hovered node, dim the rest
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    const hovered = hoveredNodeId;
+
+    // Collect neighbors of hovered node so we can keep them visible
+    const connectedNodes = new Set<string>();
+    if (hovered) connectedNodes.add(hovered);
+
+    svg.selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge').each(function (d) {
+      const connected = hovered !== null && (d.source === hovered || d.target === hovered);
+      if (connected) {
+        connectedNodes.add(d.source);
+        connectedNodes.add(d.target);
+      }
+      d3.select(this)
+        .classed('edge-connected', connected)
+        .classed('edge-dimmed', hovered !== null && !connected);
+    });
+
+    svg.selectAll<SVGGElement, LayoutNode>('g.node-link-node').each(function (d) {
+      d3.select(this).classed('node-dimmed', hovered !== null && !connectedNodes.has(d.id));
+    });
+  }, [hoveredNodeId]);
 
   /** Render cluster pseudo-node inner contents */
   function renderClusterContents(
