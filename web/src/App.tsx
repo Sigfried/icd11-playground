@@ -6,6 +6,7 @@ import { DetailPanel } from './components/DetailPanel';
 import { ResumeModal } from './components/ResumeModal';
 import { AboutPanel } from './components/AboutPanel';
 import { HelpPopover } from './components/HelpPopover';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import { useHelpMode } from './hooks/useHelpMode';
 import './App.css';
@@ -207,18 +208,18 @@ function AppContent() {
         </header>
 
         {mode === 'two-row' ? (
-          <main className="app-main two-row">
-            <div className="layout-top" style={{ height: `calc(${horz * 100}% - 4px)` }}>
-              <div className="panel tree-panel" style={{ width: `calc(${vert * 100}% - 4px)` }}>
-                <TreeView />
+          <main className="app-main two-row" style={{ '--vert': vert, '--horz': horz } as React.CSSProperties}>
+            <div className="layout-top">
+              <div className="panel tree-panel panel-vert">
+                <ErrorBoundary panel="tree"><TreeView /></ErrorBoundary>
               </div>
               <div
                 className={dividerClass('vertical', collapsed.vertBefore, collapsed.vertAfter)}
                 data-help-id="panel-divider"
                 onMouseDown={e => onDividerMouseDown('vert', e)}
               />
-              <div className="panel detail-panel" style={{ width: `calc(${(1 - vert) * 100}% - 4px)` }}>
-                <DetailPanel />
+              <div className="panel detail-panel panel-vert-complement">
+                <ErrorBoundary panel="detail"><DetailPanel /></ErrorBoundary>
               </div>
             </div>
             <div
@@ -226,31 +227,31 @@ function AppContent() {
               data-help-id="panel-divider"
               onMouseDown={e => onDividerMouseDown('horz', e)}
             />
-            <div className="panel node-link-panel" style={{ height: `calc(${(1 - horz) * 100}% - 4px)` }}>
-              <NodeLinkView />
+            <div className="panel node-link-panel panel-horz-complement">
+              <ErrorBoundary panel="node-link"><NodeLinkView /></ErrorBoundary>
             </div>
           </main>
         ) : (
-          <main className="app-main two-col">
-            <div className="panel tree-panel" style={{ width: `calc(${vert * 100}% - 4px)` }}>
-              <TreeView />
+          <main className="app-main two-col" style={{ '--vert': vert, '--horz': horz } as React.CSSProperties}>
+            <div className="panel tree-panel panel-vert">
+              <ErrorBoundary panel="tree"><TreeView /></ErrorBoundary>
             </div>
             <div
               className={dividerClass('vertical', collapsed.vertBefore, collapsed.vertAfter)}
               data-help-id="panel-divider"
               onMouseDown={e => onDividerMouseDown('vert', e)}
             />
-            <div className="layout-right" style={{ width: `calc(${(1 - vert) * 100}% - 4px)` }}>
-              <div className="panel detail-panel" style={{ height: `calc(${horz * 100}% - 4px)` }}>
-                <DetailPanel />
+            <div className="layout-right panel-vert-complement">
+              <div className="panel detail-panel panel-horz">
+                <ErrorBoundary panel="detail"><DetailPanel /></ErrorBoundary>
               </div>
               <div
                 className={dividerClass('horizontal', collapsed.horzBefore, collapsed.horzAfter)}
                 data-help-id="panel-divider"
                 onMouseDown={e => onDividerMouseDown('horz', e)}
               />
-              <div className="panel node-link-panel" style={{ height: `calc(${(1 - horz) * 100}% - 4px)` }}>
-                <NodeLinkView />
+              <div className="panel node-link-panel panel-horz-complement">
+                <ErrorBoundary panel="node-link"><NodeLinkView /></ErrorBoundary>
               </div>
             </div>
           </main>

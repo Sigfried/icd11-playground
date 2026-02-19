@@ -205,6 +205,7 @@ body.help-mode [data-help-id] * {
   display: flex;
   flex-shrink: 0;
   min-height: 0;
+  height: calc(var(--horz) * 100% - 4px);
 }
 
 /* Two-col: left (tree) / right (detail + node-link) */
@@ -218,6 +219,23 @@ body.help-mode [data-help-id] * {
   min-height: 0;
   flex-shrink: 0;
 }
+
+/*
+ * Panel sizing via CSS custom properties (--vert, --horz set on <main>).
+ * During divider drag, the hook updates these properties directly on the DOM
+ * element, bypassing React entirely. React state only commits on mouseup.
+ */
+
+/* Panels sized by --vert (vertical divider position) */
+.two-row .panel-vert { width: calc(var(--vert) * 100% - 4px); }
+.two-row .panel-vert-complement { width: calc((1 - var(--vert)) * 100% - 4px); }
+.two-col .panel-vert { width: calc(var(--vert) * 100% - 4px); }
+.two-col .panel-vert-complement { width: calc((1 - var(--vert)) * 100% - 4px); }
+
+/* Panels sized by --horz (horizontal divider position) */
+.two-row .panel-horz-complement { height: calc((1 - var(--horz)) * 100% - 4px); }
+.two-col .panel-horz { height: calc(var(--horz) * 100% - 4px); }
+.two-col .panel-horz-complement { height: calc((1 - var(--horz)) * 100% - 4px); }
 
 /* Panel base */
 .panel {
@@ -363,4 +381,29 @@ body.help-mode [data-help-id] * {
   height: 100%;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+/* Error boundary fallback */
+.error-boundary-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.error-boundary-fallback button {
+  padding: 6px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.error-boundary-fallback button:hover {
+  background: var(--accent-blue);
+  color: #fff;
 }

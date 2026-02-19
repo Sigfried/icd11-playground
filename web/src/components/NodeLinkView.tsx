@@ -155,7 +155,7 @@ function computeClusterInfo(
 
 export function NodeLinkView() {
   const {
-    selectedNodeId, selectNode, hoveredNodeId, setHoveredNodeId,
+    selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
@@ -176,6 +176,8 @@ export function NodeLinkView() {
   // Non-interactive info tooltip for node body hover
   const infoTooltipRef = useRef<HTMLDivElement | null>(null);
   const infoTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce timer for setHoveredNodeId (DetailPanel preview)
+  const hoverDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Suppress tooltip re-creation after ESC (cleared on next mouseleave)
   const tooltipSuppressedRef = useRef(false);
   const zoomRef = useRef(1);
@@ -607,6 +609,11 @@ export function NodeLinkView() {
       return;
     }
 
+    // Clear hover state on layout change
+    if (hoverDebounceRef.current) {
+      clearTimeout(hoverDebounceRef.current);
+      hoverDebounceRef.current = null;
+    }
     setHoveredNodeId(null);
 
     const svg = d3.select(svgRef.current);
@@ -635,6 +642,11 @@ export function NodeLinkView() {
         if (!infoTooltipRef.current && !infoTooltipTimerRef.current) return;
         const target = event.target as Element;
         if (!target.closest('.node-link-node')) {
+          applyHoverEmphasis(null);
+          if (hoverDebounceRef.current) {
+            clearTimeout(hoverDebounceRef.current);
+            hoverDebounceRef.current = null;
+          }
           setHoveredNodeId(null);
           hideInfoTooltip();
         }
@@ -869,31 +881,32 @@ export function NodeLinkView() {
     });
   }, [highlightedNodeIds]);
 
-  // Hover emphasis — highlight edges connected to hovered node, dim the rest
-  useEffect(() => {
+  /**
+   * Apply hover emphasis directly via D3 (no React state involved).
+   * Highlights edges connected to the hovered node and dims the rest.
+   */
+  function applyHoverEmphasis(hoveredId: string | null) {
     if (!svgRef.current) return;
     const svg = d3.select(svgRef.current);
-    const hovered = hoveredNodeId;
 
-    // Collect neighbors of hovered node so we can keep them visible
     const connectedNodes = new Set<string>();
-    if (hovered) connectedNodes.add(hovered);
+    if (hoveredId) connectedNodes.add(hoveredId);
 
     svg.selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge').each(function (d) {
-      const connected = hovered !== null && (d.source === hovered || d.target === hovered);
+      const connected = hoveredId !== null && (d.source === hoveredId || d.target === hoveredId);
       if (connected) {
         connectedNodes.add(d.source);
         connectedNodes.add(d.target);
       }
       d3.select(this)
         .classed('edge-connected', connected)
-        .classed('edge-dimmed', hovered !== null && !connected);
+        .classed('edge-dimmed', hoveredId !== null && !connected);
     });
 
     svg.selectAll<SVGGElement, LayoutNode>('g.node-link-node').each(function (d) {
-      d3.select(this).classed('node-dimmed', hovered !== null && !connectedNodes.has(d.id));
+      d3.select(this).classed('node-dimmed', hoveredId !== null && !connectedNodes.has(d.id));
     });
-  }, [hoveredNodeId]);
+  }
 
   /** Render cluster pseudo-node inner contents */
   function renderClusterContents(
@@ -1253,7 +1266,11 @@ export function NodeLinkView() {
       .on('mouseenter', function () {
         if (zoomingRef.current || helpModeRef.current) return;
         d3.select(this).raise();
-        setHoveredNodeId(node.id);
+        // Instant D3-only visual emphasis (no React state)
+        applyHoverEmphasis(node.id);
+        // Debounced context update for DetailPanel preview
+        if (hoverDebounceRef.current) clearTimeout(hoverDebounceRef.current);
+        hoverDebounceRef.current = setTimeout(() => setHoveredNodeId(node.id), 150);
         if (!tooltipSuppressedRef.current) {
           infoTooltipTimerRef.current = setTimeout(() => {
             if (!zoomingRef.current) showInfoTooltip(this as SVGGElement, node.id);
@@ -1262,6 +1279,13 @@ export function NodeLinkView() {
       })
       .on('mouseleave', function () {
         if (zoomingRef.current) return;
+        // Instant D3-only clear
+        applyHoverEmphasis(null);
+        // Cancel pending debounce and clear context
+        if (hoverDebounceRef.current) {
+          clearTimeout(hoverDebounceRef.current);
+          hoverDebounceRef.current = null;
+        }
         setHoveredNodeId(null);
         hideInfoTooltip();
       });

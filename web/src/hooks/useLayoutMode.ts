@@ -10,7 +10,9 @@ import { useCallback, useRef, useState } from 'react';
  *   vert — where the vertical divider sits as a fraction of its container width
  *   horz — where the horizontal divider sits as a fraction of its container height
  *
- * Panels use CSS calc() so resize is free — no ResizeObserver needed.
+ * Panels use CSS calc() with custom properties (--vert, --horz) so resize is
+ * free during drag — DOM updates bypass React entirely via RAF, and React state
+ * is only committed on mouseup.
  */
 export type LayoutMode = 'two-row' | 'two-col';
 
@@ -44,11 +46,17 @@ export function useLayoutMode() {
   const [mode, setMode] = useState<LayoutMode>(loadMode);
   const [vert, setVert] = useState(() => loadRatio(LS_VERT_KEY, DEFAULT_VERT));
   const [horz, setHorz] = useState(() => loadRatio(LS_HORZ_KEY, DEFAULT_HORZ));
+
+  // Ref to the <main> element for direct DOM updates during drag
+  const mainRef = useRef<HTMLElement | null>(null);
+
   const dragging = useRef<{
     which: 'vert' | 'horz';
     startRatio: number;
     startPos: number;
   } | null>(null);
+  const pendingRatio = useRef(0);
+  const rafId = useRef<number | null>(null);
 
   const toggleMode = useCallback(() => {
     setMode(prev => {
@@ -62,30 +70,46 @@ export function useLayoutMode() {
     e.preventDefault();
     const isHorizontal = which === 'horz';
     const startPos = isHorizontal ? e.clientY : e.clientX;
+    // Read current ratio from the CSS custom property (source of truth during drag)
+    const mainEl = (e.currentTarget as HTMLElement).closest('main');
+    mainRef.current = mainEl;
     const startRatio = which === 'vert' ? vert : horz;
 
     dragging.current = { which, startRatio, startPos };
-
-    const setRatio = which === 'vert' ? setVert : setHorz;
-    const lsKey = which === 'vert' ? LS_VERT_KEY : LS_HORZ_KEY;
+    const prop = which === 'vert' ? '--vert' : '--horz';
 
     const onMouseMove = (ev: MouseEvent) => {
       if (!dragging.current) return;
       const { startRatio: sr, startPos: sp } = dragging.current;
       const currentPos = isHorizontal ? ev.clientY : ev.clientX;
       const viewportDim = isHorizontal ? window.innerHeight : window.innerWidth;
-      const newRatio = Math.max(0, Math.min(1, sr + (currentPos - sp) / viewportDim));
-      setRatio(newRatio);
+      pendingRatio.current = Math.max(0, Math.min(1, sr + (currentPos - sp) / viewportDim));
+      // Coalesce into one DOM update per frame — no React involved
+      if (rafId.current === null) {
+        rafId.current = requestAnimationFrame(() => {
+          rafId.current = null;
+          mainRef.current?.style.setProperty(prop, String(pendingRatio.current));
+        });
+      }
     };
 
     const onMouseUp = () => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
       dragging.current = null;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      // Persist final ratio
-      setRatio(prev => { saveRatio(lsKey, prev); return prev; });
+
+      // Commit final value to React state (single re-render) + persist
+      const final = pendingRatio.current;
+      const setRatio = which === 'vert' ? setVert : setHorz;
+      const lsKey = which === 'vert' ? LS_VERT_KEY : LS_HORZ_KEY;
+      setRatio(final);
+      saveRatio(lsKey, final);
     };
 
     document.addEventListener('mousemove', onMouseMove);
