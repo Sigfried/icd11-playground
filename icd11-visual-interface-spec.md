@@ -75,24 +75,22 @@ Nodes with the most parents in the Foundation — worst cases for layout readabi
 
 | Parents | Depth | Node | ID |
 |---------|-------|------|----|
-| 9 | 4 | Injury or harm arising from surgical or medical care, NEC | 383104340 |
-| 9 | 5 | Dyskeratosis congenita | 1531033936 |
-| 7 | 9 | DPT-HepB-MenAC vaccines | 10241378 |
-| 7 | 6 | Kearns-Sayre syndrome | 399100745 |
-| 7 | 9 | DPT-IPV-Hib-HepB vaccines | 1234470901 |
-| 7 | 5 | Ataxia-telangiectasia | 2129036552 |
-| 6 | 6 | Zellweger syndrome | 226023718 |
-| 6 | 5 | Bannayan-Riley-Ruvalcaba syndrome | 357383447 |
-| 6 | 9 | DPT-IPV-Hib vaccines | 675122679 |
-| 6 | 6 | Hereditary haemorrhagic telangiectasia | 714406192 |
+| 9 | 4 | [Injury or harm arising from surgical or medical care, NEC](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMzgzMTA0MzQwIl1dfQ) | 383104340 |
+| 9 | 5 | [Dyskeratosis congenita](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMTUzMTAzMzkzNiJdXX0) | 1531033936 |
+| 7 | 9 | [DPT-HepB-MenAC vaccines](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMTAyNDEzNzgiXV19) | 10241378 |
+| 7 | 6 | [Kearns-Sayre syndrome](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMzk5MTAwNzQ1Il1dfQ) | 399100745 |
+| 7 | 9 | [DPT-IPV-Hib-HepB vaccines](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMTIzNDQ3MDkwMSJdXX0) | 1234470901 |
+| 7 | 5 | [Ataxia-telangiectasia](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMjEyOTAzNjU1MiJdXX0) | 2129036552 |
+| 6 | 6 | [Zellweger syndrome](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMjI2MDIzNzE4Il1dfQ) | 226023718 |
+| 6 | 5 | [Bannayan-Riley-Ruvalcaba syndrome](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiMzU3MzgzNDQ3Il1dfQ) | 357383447 |
+| 6 | 9 | [DPT-IPV-Hib vaccines](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiNjc1MTIyNjc5Il1dfQ) | 675122679 |
+| 6 | 6 | [Hereditary haemorrhagic telangiectasia](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiNzE0NDA2MTkyIl1dfQ) | 714406192 |
 
 **Observations:**
 - Even single-hop (just direct parents) would be wide and messy for 9-parent nodes — this isn't just a DAG depth problem
 - Truncated titles (all "Postprocedural disor...") make the middle layer indistinguishable — tooltip helps but doesn't solve layout density
 - Orthogonal edge routing creates a dense tangle when many edges converge on one node
 - Multi-system syndromes and combination vaccines are natural stress cases
-
-**Note:** Links to these nodes will work once URL sharing is implemented.
 
 ### Open UX question
 
@@ -303,3 +301,9 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 - igraph: https://igraph.org/
 
 Wireframes and screenshots: `design-stuff/spec-assets/`
+
+[sg] -- add to tasks somewhere. low priority for now
+Foundation has released version that changes infrequently. The backoffice version
+changes frequently.  We will probably want ability to switch versions in app
+
+
