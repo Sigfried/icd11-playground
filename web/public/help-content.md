@@ -365,7 +365,7 @@ Parent and child lists are interactive — click any item to navigate to it, or 
 
 The interface has three panels — tree, detail, and node-link diagram — arranged in one of two switchable layouts. In **two-row layout**, the tree and detail panel sit side by side on top with the diagram full-width below; this works well on wide screens and when the diagram is your focus. In **two-col layout**, the tree takes the left side with the detail panel and diagram stacked on the right; this is better for deep tree exploration.
 
-All panel borders are draggable to resize. Panels have a minimum size to prevent them from being crushed.
+All panel borders are draggable to resize. Panels can be collapsed completely by dragging a divider to the edge — a grab zone remains so you can drag it back. Panel proportions scale automatically with window size.
 
 ### layout-toggle
 
@@ -383,8 +383,10 @@ All panel borders are draggable to resize. Panels have a minimum size to prevent
 - **Description:** Drag to resize adjacent panels.
 - **Interactions:**
   - Drag horizontally (vertical divider) or vertically (horizontal divider)
-  - Panels have a minimum size of 150px
-- **Context:** Panel sizes are preserved as you work. The layout adapts to your screen and workflow.
+  - Drag all the way to the edge to collapse a panel completely
+  - When a panel is collapsed, a wider grab zone lets you drag it back open
+  - Dragging the horizontal divider near the top hides the header bar to maximize space
+- **Context:** Panel proportions are stored as viewport-relative ratios, so they scale automatically when you resize your browser window. Your layout is preserved across sessions.
 
 ### header-home-link
 

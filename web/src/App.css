@@ -35,6 +35,7 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .app-header {
@@ -192,6 +193,7 @@ body.help-mode [data-help-id] * {
   padding: var(--panel-gap);
   gap: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* Two-row: top row (tree+detail) / bottom row (node-link) */
@@ -225,8 +227,8 @@ body.help-mode [data-help-id] * {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-width: 150px;
-  min-height: 100px;
+  min-width: 0;
+  min-height: 0;
   flex-shrink: 0;
 }
 
@@ -280,6 +282,61 @@ body.help-mode [data-help-id] * {
 
 .panel-divider.horizontal:hover::after {
   opacity: 1;
+}
+
+/* Expanded grab zone when an adjacent panel is collapsed to zero.
+   ::before extends the hit area INWARD (into the surviving panel) so the
+   divider is grabbable even when flush against the viewport edge. */
+.panel-divider.collapsed-before,
+.panel-divider.collapsed-after {
+  overflow: visible;
+  z-index: 10;
+}
+
+/* Always show the divider indicator when a panel is collapsed */
+.panel-divider.collapsed-before::after,
+.panel-divider.collapsed-after::after {
+  opacity: 1;
+}
+
+.panel-divider.vertical.collapsed-before::before,
+.panel-divider.vertical.collapsed-after::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 24px;
+  cursor: col-resize;
+}
+
+/* Panel BEFORE divider collapsed → divider at left edge → extend RIGHT into surviving panel */
+.panel-divider.vertical.collapsed-before::before {
+  left: 0;
+}
+
+/* Panel AFTER divider collapsed → divider at right edge → extend LEFT into surviving panel */
+.panel-divider.vertical.collapsed-after::before {
+  right: 0;
+}
+
+.panel-divider.horizontal.collapsed-before::before,
+.panel-divider.horizontal.collapsed-after::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 24px;
+  cursor: row-resize;
+}
+
+/* Panel BEFORE divider collapsed → divider at top edge → extend DOWN into surviving panel */
+.panel-divider.horizontal.collapsed-before::before {
+  top: 0;
+}
+
+/* Panel AFTER divider collapsed → divider at bottom edge → extend UP into surviving panel */
+.panel-divider.horizontal.collapsed-after::before {
+  bottom: 0;
 }
 
 /* Panel headers */

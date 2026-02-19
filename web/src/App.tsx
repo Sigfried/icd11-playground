@@ -167,7 +167,17 @@ function HelpToggle() {
 }
 
 function AppContent() {
-  const { containerRef, mode, toggleMode, sizes, onDividerMouseDown } = useLayoutMode();
+  const { mode, toggleMode, vert, horz, onDividerMouseDown, collapsed } = useLayoutMode();
+
+  /** Build divider className with collapse-direction hints */
+  const dividerClass = (orientation: 'vertical' | 'horizontal', before: boolean, after: boolean) => {
+    const classes = ['panel-divider', orientation];
+    if (before) classes.push('collapsed-before');
+    if (after) classes.push('collapsed-after');
+    return classes.join(' ');
+  };
+
+  const headerHidden = horz < 0.05;
 
   return (
     <>
@@ -176,7 +186,7 @@ function AppContent() {
       <GlobalAboutPanel />
       <GlobalHelpPopover />
       <div className="app">
-        <header className="app-header">
+        <header className="app-header" style={headerHidden ? { display: 'none' } : undefined}>
           <h1><a href={import.meta.env.BASE_URL} data-help-id="header-home-link">ICD-11 Foundation Explorer</a></h1>
           <span className="app-subtitle">Visual Maintenance Tool Prototype</span>
           <a
@@ -197,49 +207,49 @@ function AppContent() {
         </header>
 
         {mode === 'two-row' ? (
-          <main className="app-main two-row" ref={containerRef}>
-            <div className="layout-top" style={sizes ? { height: sizes.twoRow.rows[0] } : undefined}>
-              <div className="panel tree-panel" style={sizes ? { width: sizes.twoRow.topCols[0] } : undefined}>
+          <main className="app-main two-row">
+            <div className="layout-top" style={{ height: `calc(${horz * 100}% - 4px)` }}>
+              <div className="panel tree-panel" style={{ width: `calc(${vert * 100}% - 4px)` }}>
                 <TreeView />
               </div>
               <div
-                className="panel-divider vertical"
+                className={dividerClass('vertical', collapsed.vertBefore, collapsed.vertAfter)}
                 data-help-id="panel-divider"
-                onMouseDown={e => onDividerMouseDown('two-row:topCols', e)}
+                onMouseDown={e => onDividerMouseDown('vert', e)}
               />
-              <div className="panel detail-panel" style={sizes ? { width: sizes.twoRow.topCols[1] } : undefined}>
+              <div className="panel detail-panel" style={{ width: `calc(${(1 - vert) * 100}% - 4px)` }}>
                 <DetailPanel />
               </div>
             </div>
             <div
-              className="panel-divider horizontal"
+              className={dividerClass('horizontal', collapsed.horzBefore, collapsed.horzAfter)}
               data-help-id="panel-divider"
-              onMouseDown={e => onDividerMouseDown('two-row:rows', e)}
+              onMouseDown={e => onDividerMouseDown('horz', e)}
             />
-            <div className="panel node-link-panel" style={sizes ? { height: sizes.twoRow.rows[1] } : undefined}>
+            <div className="panel node-link-panel" style={{ height: `calc(${(1 - horz) * 100}% - 4px)` }}>
               <NodeLinkView />
             </div>
           </main>
         ) : (
-          <main className="app-main two-col" ref={containerRef}>
-            <div className="panel tree-panel" style={sizes ? { width: sizes.twoCol.cols[0] } : undefined}>
+          <main className="app-main two-col">
+            <div className="panel tree-panel" style={{ width: `calc(${vert * 100}% - 4px)` }}>
               <TreeView />
             </div>
             <div
-              className="panel-divider vertical"
+              className={dividerClass('vertical', collapsed.vertBefore, collapsed.vertAfter)}
               data-help-id="panel-divider"
-              onMouseDown={e => onDividerMouseDown('two-col:cols', e)}
+              onMouseDown={e => onDividerMouseDown('vert', e)}
             />
-            <div className="layout-right" style={sizes ? { width: sizes.twoCol.cols[1] } : undefined}>
-              <div className="panel detail-panel" style={sizes ? { height: sizes.twoCol.rightRows[0] } : undefined}>
+            <div className="layout-right" style={{ width: `calc(${(1 - vert) * 100}% - 4px)` }}>
+              <div className="panel detail-panel" style={{ height: `calc(${horz * 100}% - 4px)` }}>
                 <DetailPanel />
               </div>
               <div
-                className="panel-divider horizontal"
+                className={dividerClass('horizontal', collapsed.horzBefore, collapsed.horzAfter)}
                 data-help-id="panel-divider"
-                onMouseDown={e => onDividerMouseDown('two-col:rightRows', e)}
+                onMouseDown={e => onDividerMouseDown('horz', e)}
               />
-              <div className="panel node-link-panel" style={sizes ? { height: sizes.twoCol.rightRows[1] } : undefined}>
+              <div className="panel node-link-panel" style={{ height: `calc(${(1 - horz) * 100}% - 4px)` }}>
                 <NodeLinkView />
               </div>
             </div>
