@@ -198,31 +198,75 @@
   color: var(--text-primary);
 }
 
-/* Layout toggle button */
+/* Toolbar separator */
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+  background: var(--border-color);
+  opacity: 0.5;
+  margin: 0 2px;
+}
+
+/* Reset neighborhood button */
+.reset-neighborhood-btn {
+  color: var(--accent-orange);
+}
+
+.reset-neighborhood-btn:hover {
+  color: var(--text-primary);
+  background: rgba(206, 145, 120, 0.15);
+}
+
+/* Undo/redo buttons */
+.undo-btn, .redo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoom-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.zoom-btn:disabled:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.3;
+}
+
+/* Layout toggle button (de-emphasized) */
 .layout-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.5;
+  width: 24px;
+  height: 24px;
+}
+
+.layout-toggle-btn:hover {
+  opacity: 0.8;
 }
 
 .layout-toggle-btn.active {
   background: rgba(86, 156, 214, 0.2);
   border-color: var(--accent-blue);
   color: var(--accent-cyan);
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .layout-toggle-btn.active:hover {
   background: rgba(86, 156, 214, 0.3);
+  opacity: 1;
 }
 
-.reset-btn {
-  color: var(--accent-orange);
-}
-
-.reset-btn:hover {
-  color: var(--text-primary);
-  background: rgba(206, 145, 120, 0.15);
+/* Zoom reset text label */
+.zoom-reset-btn {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 /* Force-directed mode: grab cursor on nodes */

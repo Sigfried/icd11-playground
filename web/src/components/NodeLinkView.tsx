@@ -1402,6 +1402,26 @@ export function NodeLinkView() {
         </div>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
+            {/* --- History group --- */}
+            {canUndo && (
+              <button className="zoom-btn reset-neighborhood-btn" data-help-id="reset-neighborhood" onClick={resetNeighborhood} title="Reset to default neighborhood">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6.5L8 2L13 6.5" /><path d="M4 6v6.5a.5.5 0 00.5.5h7a.5.5 0 00.5-.5V6" />
+                </svg>
+              </button>
+            )}
+            <button className="zoom-btn undo-btn" data-help-id="undo-button" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7h6.5a3.5 3.5 0 010 7H8" /><path d="M6 4L3 7l3 3" />
+              </svg>
+            </button>
+            <button className="zoom-btn redo-btn" data-help-id="redo-button" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 7H6.5a3.5 3.5 0 000 7H8" /><path d="M10 4l3 3-3 3" />
+              </svg>
+            </button>
+            <span className="toolbar-separator" />
+            {/* --- Layout toggle (de-emphasized) --- */}
             <button
               className={`zoom-btn layout-toggle-btn${layoutMode === 'force' ? ' active' : ''}`}
               data-help-id="layout-toggle"
@@ -1409,7 +1429,7 @@ export function NodeLinkView() {
               title={layoutMode === 'hierarchical' ? 'Switch to force-directed layout' : 'Switch to hierarchical layout'}
             >
               {layoutMode === 'hierarchical' ? (
-                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                   <circle cx="4" cy="4" r="2" /><circle cx="12" cy="4" r="2" />
                   <circle cx="4" cy="12" r="2" /><circle cx="12" cy="12" r="2" />
                   <circle cx="8" cy="8" r="1.5" />
@@ -1419,7 +1439,7 @@ export function NodeLinkView() {
                   <line x1="12" y1="12" x2="8" y2="8" stroke="currentColor" strokeWidth="1" />
                 </svg>
               ) : (
-                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                   <rect x="3" y="1" width="4" height="3" rx="1" />
                   <rect x="1" y="7" width="4" height="3" rx="1" />
                   <rect x="11" y="7" width="4" height="3" rx="1" />
@@ -1430,15 +1450,12 @@ export function NodeLinkView() {
                 </svg>
               )}
             </button>
+            <span className="toolbar-separator" />
+            {/* --- Zoom group --- */}
             <button className="zoom-btn" data-help-id="zoom-in" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
             <button className="zoom-btn" data-help-id="zoom-out" onClick={() => { applyZoom(zoomRef.current / 1.3); scrollToFocus(zoomRef.current); }} title="Zoom out">-</button>
-            <button className="zoom-btn" data-help-id="zoom-reset" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">&#8634;</button>
+            <button className="zoom-btn zoom-reset-btn" data-help-id="zoom-reset" onClick={() => { applyZoom(1); scrollToFocus(1); }} title="Reset zoom">1:1</button>
             <button className="zoom-btn" data-help-id="fit-to-view" onClick={zoomToFit} title="Fit to view">&#8865;</button>
-            <button className="zoom-btn" data-help-id="undo-button" onClick={historyBack} disabled={!canUndo} title={`Undo (${isMac ? '⌘' : 'Ctrl'}+Z)`}>&#8630;</button>
-            <button className="zoom-btn" data-help-id="redo-button" onClick={historyForward} disabled={!canRedo} title={`Redo (${isMac ? '⌘' : 'Ctrl'}+Shift+Z)`}>&#8631;</button>
-            {canUndo && (
-              <button className="zoom-btn reset-btn" data-help-id="reset-neighborhood" onClick={resetNeighborhood} title="Reset neighborhood">&#10005;</button>
-            )}
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import Markdown from 'react-markdown';
 import type { HelpEntry } from '../utils/parseHelpContent';
 import './HelpPopover.css';
 
@@ -67,10 +68,10 @@ export function HelpPopover({ entry, helpId, anchorRect, onDismiss }: HelpPopove
   const content = entry ? (
     <>
       <h4 className="help-popover-title">{entry.title}</h4>
-      {entry.description && <p className="help-popover-description">{entry.description}</p>}
+      {entry.description && <div className="help-popover-description"><Markdown>{entry.description}</Markdown></div>}
       {entry.interactions.length > 0 && (
         <ul className="help-popover-interactions">
-          {entry.interactions.map((item, i) => <li key={i}>{item}</li>)}
+          {entry.interactions.map((item, i) => <li key={i}><Markdown>{item}</Markdown></li>)}
         </ul>
       )}
       {entry.shortcut && (
@@ -78,7 +79,7 @@ export function HelpPopover({ entry, helpId, anchorRect, onDismiss }: HelpPopove
           Shortcut: <kbd>{entry.shortcut}</kbd>
         </p>
       )}
-      {entry.context && <p className="help-popover-context">{entry.context}</p>}
+      {entry.context && <div className="help-popover-context"><Markdown>{entry.context}</Markdown></div>}
     </>
   ) : (
     <p className="help-popover-unknown">No help available for "{helpId}"</p>

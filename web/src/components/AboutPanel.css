@@ -71,11 +71,19 @@
   color: var(--accent-yellow);
 }
 
-.about-coming-soon ul {
-  margin: 0;
+.about-body ul {
+  margin: 0 0 8px;
   padding-left: 20px;
   font-size: 0.82rem;
   line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.about-body li p {
+  margin: 0;
+}
+
+.about-coming-soon ul {
   color: var(--text-secondary);
 }
 

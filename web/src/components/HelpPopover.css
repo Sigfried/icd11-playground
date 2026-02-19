@@ -12,6 +12,11 @@
   color: var(--text-primary);
   font-size: 0.85rem;
   line-height: 1.45;
+  cursor: default !important;
+}
+
+.help-popover * {
+  cursor: default !important;
 }
 
 .help-popover-title {
@@ -26,6 +31,10 @@
   color: var(--text-primary);
 }
 
+.help-popover-description p {
+  margin: 0;
+}
+
 .help-popover-interactions {
   margin: 0 0 8px 0;
   padding-left: 18px;
@@ -34,6 +43,10 @@
 .help-popover-interactions li {
   margin-bottom: 3px;
   color: var(--text-primary);
+}
+
+.help-popover-interactions li p {
+  margin: 0;
 }
 
 .help-popover-shortcut {
@@ -56,6 +69,10 @@
   color: var(--text-secondary);
   font-size: 0.8rem;
   font-style: italic;
+}
+
+.help-popover-context p {
+  margin: 0;
 }
 
 .help-popover-unknown {

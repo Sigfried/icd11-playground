@@ -4,6 +4,7 @@
  */
 
 import { useEffect } from 'react';
+import Markdown from 'react-markdown';
 import type { HelpContent } from '../utils/parseHelpContent';
 import './AboutPanel.css';
 
@@ -43,9 +44,7 @@ export function AboutPanel({ helpContent, onDismiss, onHideOnStartup, hideOnStar
           {helpContent.sections.map(section => (
             <div key={section.id}>
               <h3>{section.title}</h3>
-              {section.body.split(/\n\n+/).map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
+              <Markdown>{section.body}</Markdown>
             </div>
           ))}
 
