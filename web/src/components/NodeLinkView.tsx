@@ -10,6 +10,7 @@ import './Badge.css';
 import './NodeLinkView.css';
 
 type LayoutMode = 'hierarchical' | 'force';
+type EdgeStyle = 'orthogonal' | 'curved';
 
 /**
  * Node-Link Diagram (Secondary View)
@@ -70,7 +71,7 @@ const CLUSTER_HEIGHT = 36;
 const SVG_PADDING = 30;
 const TRANSITION_DURATION = 400;
 
-/** Build an SVG path string from ELK edge sections (hierarchical mode) */
+/** Build an SVG path string from ELK edge sections (orthogonal mode) */
 function edgePath(edge: LayoutEdge): string {
   if (!edge.sections?.length) return '';
   const section = edge.sections[0];
@@ -80,6 +81,16 @@ function edgePath(edge: LayoutEdge): string {
   return d3.line<{ x: number; y: number }>()
     .x(d => d.x)
     .y(d => d.y)(points) ?? '';
+}
+
+/** Build a curved cubic bezier from source right-center to target left-center */
+function curvedEdgePath(src: LayoutNode, tgt: LayoutNode): string {
+  const x0 = src.x + src.width;
+  const y0 = src.y + src.height / 2;
+  const x1 = tgt.x;
+  const y1 = tgt.y + tgt.height / 2;
+  const mx = (x0 + x1) / 2;
+  return `M${x0},${y0}C${mx},${y0} ${mx},${y1} ${x1},${y1}`;
 }
 
 /** Attachment points: center of each side of a rectangle (top-left coords + dims) */
@@ -191,6 +202,7 @@ export function NodeLinkView() {
   const spacerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Layout mode: hierarchical (ELK) or force-directed (D3-force)
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('hierarchical');
+  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>('orthogonal');
   // D3 force simulation ref (alive during force mode for drag interaction)
   const simulationRef = useRef<d3.Simulation<SimNode, d3.SimulationLinkDatum<SimNode>> | null>(null);
 
@@ -661,13 +673,19 @@ export function NodeLinkView() {
     // Node position lookup for force-directed edge paths
     const nodePos = new Map(layoutNodes.map(n => [n.id, n]));
 
-    /** Compute edge path: ELK sections in hierarchical mode, curved arc in force mode */
+    /** Compute edge path based on layout mode and edge style */
     function computeEdgePath(edge: LayoutEdge): string {
       if (isForce) {
         const src = nodePos.get(edge.source);
         const tgt = nodePos.get(edge.target);
         if (!src || !tgt) return '';
         return forceEdgePath(src, tgt);
+      }
+      if (edgeStyle === 'curved') {
+        const src = nodePos.get(edge.source);
+        const tgt = nodePos.get(edge.target);
+        if (!src || !tgt) return '';
+        return curvedEdgePath(src, tgt);
       }
       return edgePath(edge);
     }
@@ -836,7 +854,7 @@ export function NodeLinkView() {
     isInitialRenderRef.current = false;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- setHoveredNodeId, setHighlightedNodeIds are stable useState setters
-  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, expandCluster, layoutMode]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, selectNode, expandCluster, layoutMode, edgeStyle]);
 
   // Lightweight highlight effect — toggles CSS class without re-rendering
   useEffect(() => {
@@ -1476,6 +1494,23 @@ export function NodeLinkView() {
                 </svg>
               )}
             </button>
+            {layoutMode === 'hierarchical' && (
+              <button
+                className={`zoom-btn${edgeStyle === 'curved' ? ' active' : ''}`}
+                onClick={() => setEdgeStyle(s => s === 'orthogonal' ? 'curved' : 'orthogonal')}
+                title={edgeStyle === 'orthogonal' ? 'Switch to curved edges' : 'Switch to orthogonal edges'}
+              >
+                {edgeStyle === 'orthogonal' ? (
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2,8 C8,8 8,3 14,3" /><path d="M2,8 C8,8 8,13 14,13" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2,3 L8,3 L8,8 L14,8" /><path d="M2,13 L8,13 L8,8" />
+                  </svg>
+                )}
+              </button>
+            )}
             <span className="toolbar-separator" />
             {/* --- Zoom group --- */}
             <button className="zoom-btn" data-help-id="zoom-in" onClick={() => { applyZoom(zoomRef.current * 1.3); scrollToFocus(zoomRef.current); }} title="Zoom in">+</button>
