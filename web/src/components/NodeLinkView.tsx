@@ -201,8 +201,12 @@ export function NodeLinkView() {
   // Debounced spacer resize (triggers layout reflow — keep infrequent)
   const spacerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Layout mode: hierarchical (ELK) or force-directed (D3-force)
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('hierarchical');
-  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>('orthogonal');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(
+    () => (localStorage.getItem('icd11-nl-layout') as LayoutMode) || 'hierarchical',
+  );
+  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
+    () => (localStorage.getItem('icd11-nl-edges') as EdgeStyle) || 'orthogonal',
+  );
   // D3 force simulation ref (alive during force mode for drag interaction)
   const simulationRef = useRef<d3.Simulation<SimNode, d3.SimulationLinkDatum<SimNode>> | null>(null);
 
@@ -1469,7 +1473,11 @@ export function NodeLinkView() {
             <button
               className={`zoom-btn layout-toggle-btn${layoutMode === 'force' ? ' active' : ''}`}
               data-help-id="layout-toggle"
-              onClick={() => setLayoutMode(m => m === 'hierarchical' ? 'force' : 'hierarchical')}
+              onClick={() => setLayoutMode(m => {
+                const next = m === 'hierarchical' ? 'force' : 'hierarchical';
+                localStorage.setItem('icd11-nl-layout', next);
+                return next;
+              })}
               title={layoutMode === 'hierarchical' ? 'Switch to force-directed layout' : 'Switch to hierarchical layout'}
             >
               {layoutMode === 'hierarchical' ? (
@@ -1497,12 +1505,16 @@ export function NodeLinkView() {
             {layoutMode === 'hierarchical' && (
               <button
                 className={`zoom-btn${edgeStyle === 'curved' ? ' active' : ''}`}
-                onClick={() => setEdgeStyle(s => s === 'orthogonal' ? 'curved' : 'orthogonal')}
+                onClick={() => setEdgeStyle(s => {
+                  const next = s === 'orthogonal' ? 'curved' : 'orthogonal';
+                  localStorage.setItem('icd11-nl-edges', next);
+                  return next;
+                })}
                 title={edgeStyle === 'orthogonal' ? 'Switch to curved edges' : 'Switch to orthogonal edges'}
               >
                 {edgeStyle === 'orthogonal' ? (
                   <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M2,8 C8,8 8,3 14,3" /><path d="M2,8 C8,8 8,13 14,13" />
+                    <path d="M2,3 C10,3 6,8 14,8" /><path d="M2,13 C10,13 6,8 14,8" />
                   </svg>
                 ) : (
                   <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
