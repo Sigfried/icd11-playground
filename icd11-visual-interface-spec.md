@@ -1,6 +1,6 @@
 # ICD-11 Visual Maintenance Interface — Design Specification
 
-**Remaining work only.** For implemented feature documentation, see [help-content.md](web/public/help-content.md). For architecture and setup, see [CLAUDE.md](CLAUDE.md).
+**Remaining work only.** For implemented feature documentation, see [help-content.md](web/src/assets/help-content.md). For architecture and setup, see [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -10,28 +10,31 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 
 | Area | Feature | Status |
 |------|---------|--------|
-| **Scalability** | Collapse heuristics for tree + NL | :white_circle: |
+| **Scalability** | Collapse heuristics for tree | :white_circle: |
+| | Adaptive NL node sizing | :white_circle: |
+| | L-shape ancestor layout | :white_circle: |
 | | Staggered levels (Labella.js-style) | :white_circle: |
 | | Layout engine evaluation (elkjs vs igraph) | :white_circle: |
+| | ELK partitioning experiments | :white_circle: |
+| | Alternative ELK algorithms | :white_circle: |
+| | Layout comparison infrastructure | :white_circle: |
 | | Focus node vertical positioning | :white_circle: |
 | | Fit-to-view cycling (fit all / fit width / fit height) | :white_circle: |
-| | Pop-out NL window | :white_circle: |
 | **NL Diagram** | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
-| | Force-directed layout toggle | :white_circle: |
+| | Descendant overlay: show all levels with scrolling | :white_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
 | | Advanced search options | :white_circle: |
-| **Detail Panel** | Paths to root | :yellow_circle: |
+| **Detail Panel** | Display `fullySpecifiedName` | :white_circle: |
+| | Paths to root | :yellow_circle: |
 | | Detail panel differentiation from tree | :yellow_circle: |
 | **Data Model** | Foundation cross-references (maternal, perinatal, impairment) | :white_circle: |
 | | Canonical vs linked parents | :white_circle: Investigation |
 | **State & History** | History review UI (timeline panel) | :white_circle: |
-| | Share button (encode snapshot in URL) | :white_check_mark: |
 | | Auto-clear old snapshots | :white_circle: |
 | | Tree & detail state in history | :white_circle: |
-| **Infrastructure** | Cloudflare Worker proxy 500 errors on entity detail fetch | :white_circle: Bug |
-| | Multi-tab IndexedDB history conflict (last-write-wins overwrites other tabs) | :white_circle: Bug |
-| **Search** | Advanced search field options | :white_circle: |
+| **Infrastructure** | Multi-tab IndexedDB history conflict (last-write-wins overwrites other tabs) | :white_circle: Bug |
+| | Foundation version switching | :white_circle: |
 | **Help System** | First-visit guided tour | :white_circle: |
 | | Stakeholder feedback mechanism | :white_circle: |
 | **Proposal Authoring** | All features | :black_circle: |
@@ -42,20 +45,40 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 
 The core ongoing design challenge. High-degree nodes (up to 331 children) and complex polyhierarchies (up to 9 parents) make views unreadable.
 
+### Graph stats reference
+
+- **Nodes:** 69,478 | **Edges:** 77,510
+- **Max children:** 331 ("Syndromic conditions with disorders of intellectual development as a relevant clinical feature")
+- **Max parents:** 9
+- **Longest path:** 13 edges (e.g., root → ... → Proximal interphalangeal joint of index finger)
+- **Polyhierarchy nodes:** 11,345 (16%) have depth ≠ maxDepth
+
 ### What's been done
 
-Ancestors to depth 2, collapsible clusters (threshold: 2), font-weight badges, interactive overlays (hover to preview, click to expand), connectivity-based node removal, merge-on-reselect. These are all documented in [help-content.md](web/public/help-content.md).
+Ancestors to depth 2, collapsible clusters (threshold: 2), font-weight badges, interactive overlays (hover to preview, click to expand), connectivity-based node removal, merge-on-reselect. These are all documented in [help-content.md](web/src/assets/help-content.md). NL collapse heuristics are currently handled by cluster nodes, but other approaches should be explored.
 
 ### Remaining approaches
 
-- **Collapse heuristics**: Auto-collapse deep/large subtrees in both tree and NL view based on depth, subtree size, or user preference. Tree side: when expanding a node with hundreds of children, consider paginating or progressive expansion. NL side: smarter default neighborhoods that show fewer nodes for high-degree cases.
+- **Tree collapse heuristics**: When expanding a node with hundreds of children, consider paginating or progressive expansion. Auto-collapse deep/large subtrees based on depth, subtree size, or user preference.
+
+- **Adaptive NL node sizing**: Reduce node heights and vertical spacing between nodes when the layout exceeds the NL view height. Could be automatic (measure total layout height vs viewport) or manual (density slider).
+
+- **L-shape ancestor layout**: When more than ~2 ancestor nodes are shown, arrange ancestors in a top-to-bottom group (vertical stack) while descendants continue cascading to the right. This keeps ancestor clutter from widening the layout horizontally.
 
 - **Staggered levels**: [Labella.js](https://twitter.github.io/labella.js/)-style overlap avoidance for node labels. Try both simple and overlap algorithms. Horizontal flow variant: https://twitter.github.io/labella.js/with_text.html. May require replacing elkjs.
 
-- **Layout engine**: Evaluate elkjs vs igraph vs manual layout. Current issues:
-  - Edge crossing minimization is poor for complex DAGs
-  - igraph supports forced vertical layering (nodes assigned to specific layers)
-  - Better control over complex polyhierarchy layouts
+- **Layout engine**: Evaluate elkjs vs igraph vs manual layout. See [dedicated section](#layout-engine-evaluation--igraph-vs-elk).
+
+- **ELK partitioning**: Experiment with [ELK partitioning](https://rtsys.informatik.uni-kiel.de/elklive/examples.html?e=user-hints%2Flayered%2Fpartitioning) to group nodes by depth or distance from focus node. This could visually separate "upstream ancestors" from "downstream descendants" without changing the algorithm.
+
+- **Alternative ELK algorithms**: The current layout uses `elk.layered`. Other ELK algorithms worth trying:
+  - `org.eclipse.elk.graphviz.dot` — Graphviz dot integration (if available)
+  - `org.eclipse.elk.mrtree` — Mr. Tree algorithm, designed for trees
+  - `org.eclipse.elk.force` — ELK's own force-directed
+  - `org.eclipse.elk.stress` — Stress-based layout
+  - See [ELK algorithm reference](https://eclipse.dev/elk/reference/algorithms.html)
+
+- **Layout comparison infrastructure**: Need a way to experiment with layout approaches and compare them side by side. Could be as simple as a dropdown/toggle that switches algorithms and preserves the same subgraph, or a split view showing two layouts simultaneously. Essential for evaluating all the above experiments.
 
 - **Focus node vertical positioning**: Place focus node near top or aligned with tree selection, rather than wherever ELK puts it.
 
@@ -64,8 +87,6 @@ Ancestors to depth 2, collapsible clusters (threshold: 2), font-weight badges, i
   2. **Fit width** — horizontal extent fills viewport, vertical scrolls
   3. **Fit height** — vertical extent fills viewport, horizontal scrolls
   Visual indicator: cycle icon `⊡` → `↔` → `↕` → `⊡`.
-
-- **Pop-out window**: Full-screen NL in a separate window. No sync with tree/details — just allow exploring and selecting a new focal node in the pop-out.
 
 - **Fisheye**: Defer unless the above approaches don't suffice.
 
@@ -86,6 +107,16 @@ Nodes with the most parents in the Foundation — worst cases for layout readabi
 | 6 | 9 | [DPT-IPV-Hib vaccines](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiNjc1MTIyNjc5Il1dfQ) | 675122679 |
 | 6 | 6 | [Hereditary haemorrhagic telangiectasia](https://sigfried.github.io/icd11-playground/?s=eyJ2IjoiMjAyNC0wMSIsIm9wcyI6W1sic2VsZWN0IiwiNzE0NDA2MTkyIl1dfQ) | 714406192 |
 
+Nodes with the most children — worst cases for vertical space:
+
+| Children | Node | ID |
+|----------|------|----|
+| 331 | Syndromic conditions with disorders of intellectual development... | 426937915 |
+| 300 | Other local antifungal, anti-infective and anti-inflammatory drugs | 2063870164 |
+| 199 | Nerve | 519578830 |
+| 193 | Adenomas and adenocarcinomas- ICD-O3 view | 2063258813 |
+| 182 | Syndromes with multiple structural anomalies, not of environmental origin | 1106405864 |
+
 **Observations:**
 - Even single-hop (just direct parents) would be wide and messy for 9-parent nodes — this isn't just a DAG depth problem
 - Truncated titles (all "Postprocedural disor...") make the middle layer indistinguishable — tooltip helps but doesn't solve layout density
@@ -102,9 +133,61 @@ Nodes with the most parents in the Foundation — worst cases for layout readabi
 
 ---
 
+## Layout Engine Evaluation — igraph vs ELK
+
+### Current state
+
+ELK (elkjs) runs in-browser via a Web Worker. The `elk.layered` (Sugiyama-family) algorithm handles DAG layout with configurable crossing minimization, edge routing, and model order preservation. It has 130+ options and supports compound/nested graphs, port-aware layout, and multiple edge routing styles (orthogonal, splines, straight).
+
+### What igraph offers
+
+igraph (Python, C core) provides `layout_sugiyama` — a Sugiyama hierarchical layout with one key advantage: a **first-class `layers` parameter** where you pass a list assigning each vertex to a specific layer. This is simpler than ELK's equivalent (`layerChoiceConstraint`, which requires enabling interactive mode).
+
+Other igraph layouts relevant to DAGs:
+- `layout_reingold_tilford` — tree layout (converts DAGs to spanning trees, losing polyhierarchy edges)
+- `layout_fruchterman_reingold`, `layout_kamada_kawai` — force-directed (already have D3-force in-browser)
+- `layout_umap` — good for clustered graphs, probabilistic nonlinear dimensionality reduction
+- `layout_davidson_harel` — simulated annealing with multi-component energy function including edge crossing minimization
+
+igraph also excels at **graph analysis** (centrality, community detection, paths) which could inform layout decisions even if ELK does the actual layout.
+
+### Comparison
+
+| Dimension | igraph | ELK |
+|-----------|--------|-----|
+| Forced layer assignment | First-class `layers` param | `layerChoiceConstraint` (advanced/interactive mode) |
+| Crossing minimization | Barycenter heuristic only | Multiple strategies, fine-grained tuning |
+| Edge routing | Returns coordinates only | Orthogonal, spline, straight routing built in |
+| Compound/nested graphs | No | Yes |
+| Constraint system | Layers only | Layers, positions, ordering, ports, routing |
+| Graph analysis | Exceptional | None (layout only) |
+| Runtime | Needs Python backend or pre-computation | Already runs in-browser via Web Worker |
+| Interactivity | Batch only | Supports incremental updates |
+
+### Other Python layout libraries
+
+- **Graphviz `dot`** — The original Sugiyama implementation. High-quality hierarchical layout, but requires system binary. Could pre-compute layouts offline.
+- **graph-tool** — Fast C++ core, but no built-in Sugiyama (delegates to Graphviz).
+- **grandalf** — Pure Python, lightweight Sugiyama implementation. Good for prototyping.
+- **NetworkX** — Too slow for 69k nodes. No Sugiyama.
+
+### Recommended approach
+
+A **hybrid** strategy: use igraph/Python offline (in `analysis/`) to pre-compute layer assignments, community groupings, or other structural analysis, then feed those as constraints into ELK's in-browser layout. This gets igraph's analysis strengths without needing a live Python backend.
+
+For forced layering specifically, try ELK's `layerChoiceConstraint` first — if it's too cumbersome, the hybrid approach is the fallback.
+
+---
+
 ## NL Hover → Tree Highlight
 
 Cross-panel: hovering a node in the NL diagram should highlight and scroll to that node in the tree view (all instances if polyhierarchy). This is the remaining piece of hover behavior — tooltip and detail preview are done.
+
+---
+
+## Descendant Overlay — Show All Levels
+
+The descendant overlay currently caps at 5 levels. Since the maximum path depth is 13, this can cut off significant subtree structure. Change to show **all descendant levels** with scrolling in the overlay when the content exceeds the available height. No need for a hard level cap.
 
 ---
 
@@ -125,7 +208,13 @@ For concepts with multiple parents, users need ways to find and navigate between
 
 ### Detail panel differentiation
 
-The parents/children lists in the detail panel largely duplicate what's visible in the tree. The detail panel should show information *not* available in the tree — paths to root, relationship types, and cross-references would address this.
+The parents/children lists in the detail panel largely duplicate what's visible in the tree. The detail panel should show information *not* available in the tree — paths to root, relationship types, cross-references, and `fullySpecifiedName` would address this.
+
+---
+
+## Detail Panel — `fullySpecifiedName`
+
+The API returns a `fullySpecifiedName` field that is fetched but not displayed. This is a longer, unambiguous name that can help distinguish concepts with similar short titles. Display it in the detail panel, probably below the main title in a smaller/muted style.
 
 ---
 
@@ -163,36 +252,6 @@ Crawl the 3 cross-reference fields into `foundation_graph.json` as typed edges. 
 
 ---
 
-## Force-Directed Layout Toggle
-
-Add a toolbar button to the NL view to toggle between the current hierarchical (ELK) layout and a force-directed layout.
-
-### Motivation
-
-Hierarchical layout (top-down DAG) is ideal for understanding parent-child structure, but force-directed layout better reveals clusters, communities, and non-tree connectivity patterns — useful for understanding the neighborhood around a concept at a glance.
-
-### Design
-
-- **Toggle button** in the NL toolbar, next to the existing layout controls
-- **Two modes**: Hierarchical (current, default) and Force-directed
-- **Same subgraph** — the displayed nodes and edges don't change, only the layout algorithm
-- **Same interactions** — zoom, pan, hover, click, expand/collapse badges all work in both modes
-- **Animated transition** between layouts (nodes interpolate to new positions)
-- **Force-directed specifics**:
-  - Use D3-force (`d3-force` or `d3-force-3d`) since D3 is already a dependency
-  - Directed edges: arrowheads still indicate parent→child direction
-  - Focus node visually distinguished (same styling as hierarchical mode)
-  - Collision avoidance to prevent node overlap
-  - Link distance could vary by relationship (shorter for parent-child, longer for cross-refs if added later)
-
-### Open questions
-
-- Should the force simulation run continuously (interactive/springy) or settle to a static layout?
-- Should the toggle state persist across node selections, or reset to hierarchical on reselect?
-- Edge rendering: curved edges (better for force-directed) vs orthogonal routing (current hierarchical)?
-
----
-
 ## Canonical vs Linked Parents
 
 > **Investigation needed:** The maintenance platform distinguishes between regular and "linked" parent relationships. Some children appear grayed out in the maintenance platform, suggesting a different relationship type.
@@ -207,7 +266,7 @@ If confirmed, this affects tree rendering (muted style for linked children) and 
 
 ## History & State — Remaining Work
 
-The snapshot-based history system is implemented (see [help-content.md](web/public/help-content.md#session--history)). Remaining:
+The snapshot-based history system is implemented (see [help-content.md](web/src/assets/help-content.md#session--history)). Remaining:
 
 ### History review UI
 
@@ -239,7 +298,7 @@ Currently only NL view state and search query are tracked. A fuller model would 
 
 ## Help System — Remaining Work
 
-The contextual help system is implemented: `?` toggle activates help mode with capture-phase click interception, contextual popovers sourced from [help-content.md](web/public/help-content.md), native tooltip replacement showing entry names on hover, cursor differentiation (help cursor on tagged elements, not-allowed elsewhere), and keyboard shortcuts (? to toggle, Escape to dismiss/exit).
+The contextual help system is implemented: `?` toggle activates help mode with capture-phase click interception, contextual popovers sourced from [help-content.md](web/src/assets/help-content.md), native tooltip replacement showing entry names on hover, cursor differentiation (help cursor on tagged elements, not-allowed elsewhere), and keyboard shortcuts (? to toggle, Escape to dismiss/exit).
 
 An **About panel** auto-shows on first visit and is reopenable via the `ⓘ` header button. It renders help-content.md section articles as an overview plus a "Coming Soon" list. A "Don't show on startup" checkbox persists via localStorage. Remaining:
 
@@ -281,6 +340,7 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 2. **Integration path**: How will this embed into the .NET maintenance platform?
 3. **Depth spread as maintenance signal**: Each node has `depth` (shortest from root) and `maxDepth` (longest from root). For polyhierarchy nodes these differ — 11,345 nodes (16%) have spread. Large spread may flag structural anomalies. Consider surfacing depth range in detail panel and/or using it as a filter/highlight for maintenance review.
 4. **Foundation cross-references**: Low priority — 3 cross-ref fields (~4,700 entities) could be crawled and visualized as typed edges. (See [dedicated section](#foundation-cross-references-non-is-a-relationships))
+5. **Foundation version switching**: The released Foundation version changes infrequently; the backoffice version changes frequently. Will want ability to switch versions in the app. Low priority for now.
 
 ---
 
@@ -300,12 +360,9 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 - ICD-11 API Documentation: https://icd.who.int/icdapi
 - Labella.js: https://twitter.github.io/labella.js/
 - elkjs: https://github.com/kieler/elkjs
+- ELK algorithm reference: https://eclipse.dev/elk/reference/algorithms.html
+- ELK partitioning example: https://rtsys.informatik.uni-kiel.de/elklive/examples.html?e=user-hints%2Flayered%2Fpartitioning
 - igraph: https://igraph.org/
+- igraph layout docs: https://python.igraph.org/en/main/visualisation.html
 
 Wireframes and screenshots: `design-stuff/spec-assets/`
-
-[sg] -- add to tasks somewhere. low priority for now
-Foundation has released version that changes infrequently. The backoffice version
-changes frequently.  We will probably want ability to switch versions in app
-
-
