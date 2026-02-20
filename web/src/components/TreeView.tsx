@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
 import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
 import { TreeSearch } from './TreeSearch';
+import { trackRender } from '../utils/renderStormDetector';
 import './TreeView.css';
 
 /**
@@ -297,7 +298,8 @@ function computeFilterAncestors(
   return ancestors;
 }
 
-export function TreeView() {
+export const TreeView = memo(function TreeView() {
+  trackRender('TreeView');
   const { rootId, selectedNodeId, graphLoading, setExpandedPaths, getParents } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
@@ -458,5 +460,5 @@ export function TreeView() {
       </SearchContext.Provider>
     </DescTooltipContext.Provider>
   );
-}
+});
 

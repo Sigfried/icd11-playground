@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { memo, useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk-api';
 import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url';
@@ -6,6 +6,7 @@ import { type ConceptNode, useGraph } from '../providers/GraphProvider';
 import { buildNlSubgraph } from '../state/nlSubgraph';
 import { computeDescendantLevels } from '../utils/descendantLevels';
 import { renderBadgeHTML } from './Badge';
+import { trackRender } from '../utils/renderStormDetector';
 import './Badge.css';
 import './NodeLinkView.css';
 
@@ -153,7 +154,8 @@ function computeClusterInfo(
   };
 }
 
-export function NodeLinkView() {
+export const NodeLinkView = memo(function NodeLinkView() {
+  trackRender('NodeLinkView');
   const {
     selectedNodeId, selectNode, setHoveredNodeId,
     getNode, getParents, getChildren, getGraph,
@@ -1558,4 +1560,4 @@ export function NodeLinkView() {
       </div>
     </>
   );
-}
+});
