@@ -286,6 +286,8 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 
 ## Known Bugs / Tech Debt
 
+- **Divider drag stops at header**: Dragging a panel divider upward stops at the bottom edge of the app header instead of continuing past it. The header does disappear on mouseup (horz < 0.05 threshold), but the drag itself is clipped during the gesture.
+- **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
 - **Escape tooltip suppress**: The suppress-on-Escape mechanism (prevents tooltip re-creation while cursor hovers) may not be working correctly. Needs investigation and possibly a test.
 - **Foundation ordering**: Sibling order in NL diagram only partially matches Foundation order (uses model order hint). Full ordering would require changes to the layout engine or manual node positioning.
 
