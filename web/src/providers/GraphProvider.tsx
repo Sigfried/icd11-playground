@@ -19,6 +19,10 @@ import type { Snapshot, SnapshotOp } from '../state/nlHistory';
 import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
 import { getSnapshotFromUrl, decodeSnapshots, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
 import type { GraphMeta } from '../api/foundationStore';
+import { startHeartbeat, stopHeartbeat } from '../utils/heartbeatMonitor';
+import { type CrashCheckpointData, saveCrashCheckpoint, loadCrashCheckpoint, clearCrashCheckpoint, resetCrashCount, incrementCrashCount } from '../utils/crashCheckpoint';
+import { registerStateGetter, triggerRecovery } from '../utils/crashRecovery';
+import { trackRender } from '../utils/renderStormDetector';
 
 export type { ConceptNode, EntityDetail, TreePath };
 
@@ -66,6 +70,11 @@ interface GraphContextValue {
   dismissHelpEntry: () => void;
   // Share
   shareCurrentView: () => Promise<boolean>;
+  // Crash recovery
+  crashCheckpoint: CrashCheckpointData | null;
+  crashLoop: boolean;
+  restoreCrashCheckpoint: () => void;
+  dismissCrashCheckpoint: () => void;
   // About panel
   showAbout: boolean;
   setShowAbout: (show: boolean) => void;
@@ -87,6 +96,7 @@ interface GraphProviderProps {
 }
 
 export function GraphProvider({ children }: GraphProviderProps) {
+  trackRender('GraphProvider');
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [rootId, setRootId] = useState<string | null>(null);
@@ -102,6 +112,22 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   // About panel
   const [showAbout, setShowAbout] = useState(false);
+
+  // Crash recovery — load checkpoint from sessionStorage on mount
+  const [crashCheckpoint, setCrashCheckpoint] = useState<CrashCheckpointData | null>(() => loadCrashCheckpoint());
+  const [crashLoop] = useState(() => {
+    // If there's a checkpoint, check if we're in a crash loop
+    if (loadCrashCheckpoint()) return incrementCrashCount();
+    return false;
+  });
+
+  // Ref that always holds the latest state for emergency saves (avoids stale closures)
+  const stateRef = useRef({
+    selectedNodeId: null as string | null,
+    displayedNodeIds: [] as string[],
+    expandedPaths: [] as string[],
+    searchQuery: '',
+  });
 
   const exitHelpMode = useCallback(() => {
     setHelpMode(false);
@@ -311,6 +337,68 @@ export function GraphProvider({ children }: GraphProviderProps) {
     });
   }, [snapshot, push]);
 
+  // --- Crash recovery callbacks ---
+  const restoreCrashCheckpoint = useCallback(() => {
+    if (!crashCheckpoint) return;
+    // Push a snapshot with the checkpoint's state
+    const nodeIds = new Set(crashCheckpoint.displayedNodeIds);
+    push({
+      focusNodeId: crashCheckpoint.selectedNodeId,
+      displayedNodeIds: nodeIds,
+      timestamp: Date.now(),
+      description: 'Restored from crash',
+      searchQuery: crashCheckpoint.searchQuery || undefined,
+    });
+    // Restore expanded paths
+    setExpandedPaths(new Set(crashCheckpoint.expandedPaths));
+    // Navigate tree to the focus node
+    if (crashCheckpoint.selectedNodeId && hasNode(crashCheckpoint.selectedNodeId)) {
+      navigateTreeToNode(crashCheckpoint.selectedNodeId);
+    }
+    clearCrashCheckpoint();
+    setCrashCheckpoint(null);
+  }, [crashCheckpoint, push, navigateTreeToNode]);
+
+  const dismissCrashCheckpoint = useCallback(() => {
+    clearCrashCheckpoint();
+    setCrashCheckpoint(null);
+  }, []);
+
+  // Keep stateRef in sync with current state
+  useEffect(() => {
+    stateRef.current = {
+      selectedNodeId: selectedNodeId,
+      displayedNodeIds: [...displayedNodeIds],
+      expandedPaths: [...expandedPaths],
+      searchQuery,
+    };
+  }, [selectedNodeId, displayedNodeIds, expandedPaths, searchQuery]);
+
+  // Debounced periodic checkpoint save (2s after state changes)
+  useEffect(() => {
+    if (!graphReady || crashCheckpoint) return; // don't save while showing recovery modal
+    const timer = setTimeout(() => {
+      saveCrashCheckpoint(stateRef.current);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [selectedNodeId, displayedNodeIds, expandedPaths, searchQuery, graphReady, crashCheckpoint]);
+
+  // Start heartbeat + register state getter when graph is ready
+  useEffect(() => {
+    if (!graphReady) return;
+
+    registerStateGetter(() => stateRef.current);
+    startHeartbeat(triggerRecovery);
+
+    // If no crash checkpoint, this is a normal startup — reset crash counters
+    if (!crashCheckpoint) {
+      resetCrashCount();
+    }
+
+    return () => { stopHeartbeat(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when graph becomes ready
+  }, [graphReady]);
+
   // --- URL snapshot decode on init ---
   const [urlParam] = useState(() => getSnapshotFromUrl());
   const urlAppliedRef = useRef(false);
@@ -512,6 +600,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     showHelpEntry,
     dismissHelpEntry,
     shareCurrentView,
+    crashCheckpoint, crashLoop, restoreCrashCheckpoint, dismissCrashCheckpoint,
     showAbout, setShowAbout,
     getNode,
     getChildren,
@@ -527,7 +616,9 @@ export function GraphProvider({ children }: GraphProviderProps) {
     searchQuery, setSearchQuery,
     highlightedNodeIds, pendingRestore,
     helpMode, toggleHelpMode, exitHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
-    shareCurrentView, showAbout,
+    shareCurrentView,
+    crashCheckpoint, crashLoop, restoreCrashCheckpoint, dismissCrashCheckpoint,
+    showAbout,
   ]);
 
   return (

@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { memo, useState, useCallback, useEffect } from 'react';
 import { type ConceptNode, type EntityDetail, useGraph } from '../providers/GraphProvider';
 import { Badge, type BadgeType } from './Badge';
+import { trackRender } from '../utils/renderStormDetector';
 import './DetailPanel.css';
 
 /**
@@ -141,7 +142,8 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
   );
 }
 
-export function DetailPanel() {
+export const DetailPanel = memo(function DetailPanel() {
+  trackRender('DetailPanel');
   const {
     selectedNodeId,
     hoveredNodeId,
@@ -266,4 +268,4 @@ export function DetailPanel() {
       </div>
     </>
   );
-}
+});
