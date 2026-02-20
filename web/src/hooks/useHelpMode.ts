@@ -19,7 +19,7 @@ interface UseHelpModeOptions {
   showHelpEntry: (id: string, rect: DOMRect) => void;
   dismissHelpEntry: () => void;
   activeHelpEntry: { id: string; rect: DOMRect } | null;
-  helpContent: HelpContent | null;
+  helpContent: HelpContent;
 }
 
 export function useHelpMode({
@@ -73,7 +73,7 @@ export function useHelpMode({
   // On entering help mode: replace titles on help elements, suppress all others.
   // On exiting: restore everything.
   useEffect(() => {
-    if (!helpMode || !helpContent) return;
+    if (!helpMode) return;
 
     const isSvg = (el: Element) => el instanceof SVGElement;
     const svgTitleEls: SVGTitleElement[] = [];

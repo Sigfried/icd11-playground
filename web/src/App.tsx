@@ -71,7 +71,7 @@ function GlobalResumeModal() {
 function GlobalHelpPopover() {
   const { activeHelpEntry, helpContent, dismissHelpEntry } = useGraph();
   if (!activeHelpEntry) return null;
-  const entry = helpContent?.entries.get(activeHelpEntry.id);
+  const entry = helpContent.entries.get(activeHelpEntry.id);
   return (
     <HelpPopover
       entry={entry}
@@ -99,7 +99,7 @@ function GlobalAboutPanel() {
 
   const handleDismiss = useCallback(() => setShowAbout(false), [setShowAbout]);
 
-  if (!showAbout || !helpContent || pendingRestore || crashCheckpoint) return null;
+  if (!showAbout || pendingRestore || crashCheckpoint) return null;
   return (
     <AboutPanel
       helpContent={helpContent}

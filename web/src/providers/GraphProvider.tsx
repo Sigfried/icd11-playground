@@ -17,6 +17,7 @@ import { buildInitialNeighborhood } from '../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../state/nlSubgraph';
 import type { Snapshot, SnapshotOp } from '../state/nlHistory';
 import { type HelpContent, parseHelpContent } from '../utils/parseHelpContent';
+import helpMarkdownRaw from '../assets/help-content.md?raw';
 import { getSnapshotFromUrl, decodeSnapshots, clearSnapshotFromUrl, buildShareUrl } from '../state/snapshotUrl';
 import type { GraphMeta } from '../api/foundationStore';
 import { startHeartbeat, stopHeartbeat } from '../utils/heartbeatMonitor';
@@ -64,7 +65,7 @@ interface GraphContextValue {
   helpMode: boolean;
   toggleHelpMode: () => void;
   exitHelpMode: () => void;
-  helpContent: HelpContent | null;
+  helpContent: HelpContent;
   activeHelpEntry: { id: string; rect: DOMRect } | null;
   showHelpEntry: (id: string, rect: DOMRect) => void;
   dismissHelpEntry: () => void;
@@ -107,7 +108,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
 
   // Help mode
   const [helpMode, setHelpMode] = useState(false);
-  const [helpContent, setHelpContent] = useState<HelpContent | null>(null);
+  const helpContent = useMemo(() => parseHelpContent(helpMarkdownRaw), []);
   const [activeHelpEntry, setActiveHelpEntry] = useState<{ id: string; rect: DOMRect } | null>(null);
 
   // About panel
@@ -532,21 +533,6 @@ export function GraphProvider({ children }: GraphProviderProps) {
     init();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only run once
-  }, []);
-
-  // Fetch help content markdown (parallel to graph loading)
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${import.meta.env.BASE_URL}help-content.md`)
-      .then(resp => {
-        if (!resp.ok) throw new Error(`Failed to fetch help content: ${resp.status}`);
-        return resp.text();
-      })
-      .then(md => {
-        if (!cancelled) setHelpContent(parseHelpContent(md));
-      })
-      .catch(err => console.warn('Failed to load help content:', err));
-    return () => { cancelled = true; };
   }, []);
 
   // Auto-show About panel on first visit (once graph is loaded and no resume modal)
