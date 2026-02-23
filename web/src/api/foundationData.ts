@@ -143,6 +143,41 @@ export function searchNodes(query: string, limit = 200): ConceptNode[] {
   return [...startsWith.slice(0, limit), ...contains.slice(0, limit - startsWith.length)].slice(0, limit);
 }
 
+// --- Path computation ---
+
+/**
+ * Compute all distinct root-to-node paths via DFS upward through parents.
+ * Each path: [root, ..., grandparent, parent, id].
+ * Guards: maxDepth=30, cycle detection via path membership.
+ */
+export function getPathsToRoot(id: string): TreePath[] {
+  const g = assertGraph();
+  if (!g.hasNode(id)) return [];
+
+  const results: TreePath[] = [];
+  const MAX_DEPTH = 30;
+
+  function dfs(current: string, pathSoFar: string[]): void {
+    const parents = g.inNeighbors(current);
+    if (parents.length === 0) {
+      // Reached root — pathSoFar is already root-first
+      results.push(pathSoFar);
+      return;
+    }
+    for (const parentId of parents) {
+      if (pathSoFar.includes(parentId)) continue; // cycle guard
+      if (pathSoFar.length >= MAX_DEPTH) {
+        results.push(pathSoFar);
+        continue;
+      }
+      dfs(parentId, [parentId, ...pathSoFar]);
+    }
+  }
+
+  dfs(id, [id]);
+  return results;
+}
+
 // --- Async detail fetch (IndexedDB-cached) ---
 
 function entityToDetail(entity: FoundationEntity): EntityDetail {

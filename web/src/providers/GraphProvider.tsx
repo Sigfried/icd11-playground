@@ -10,6 +10,7 @@ import {
   hasNode,
   getDetail,
   getGraph,
+  getPathsToRoot,
 } from '../api/foundationData';
 import { type FoundationGraphJson, foundationStore } from '../api/foundationStore';
 import { useNlHistory, type PendingRestore } from '../hooks/useNlHistory';
@@ -76,6 +77,11 @@ interface GraphContextValue {
   crashLoop: boolean;
   restoreCrashCheckpoint: () => void;
   dismissCrashCheckpoint: () => void;
+  // Tree navigation
+  navigateTreeToNode: (targetId: string) => void;
+  targetTreePath: TreePath | null;
+  navigateToTreePath: (path: TreePath) => void;
+  clearTargetTreePath: () => void;
   // About panel
   showAbout: boolean;
   setShowAbout: (show: boolean) => void;
@@ -86,6 +92,7 @@ interface GraphContextValue {
   hasNode: typeof hasNode;
   getDetail: typeof getDetail;
   getGraph: typeof getGraph;
+  getPathsToRoot: typeof getPathsToRoot;
 }
 
 const GraphContext = createContext<GraphContextValue | null>(null);
@@ -179,33 +186,45 @@ export function GraphProvider({ children }: GraphProviderProps) {
     push(snap);
   }, [push]);
 
-  /**
-   * Navigate to a node in the tree: walk up ancestors (all in-memory), expand all path prefixes.
-   */
-  const navigateTreeToNode = useCallback((targetId: string): void => {
-    if (!hasNode(targetId)) return;
+  // --- Tree path navigation (targeted scroll) ---
+  const [targetTreePath, setTargetTreePath] = useState<TreePath | null>(null);
 
-    // Walk up first parent chain to root
-    const ancestorPath: string[] = [targetId];
-    let currentId = targetId;
-    const maxDepth = 30;
+  const clearTargetTreePath = useCallback(() => {
+    setTargetTreePath(null);
+  }, []);
 
-    for (let i = 0; i < maxDepth; i++) {
-      const parents = getParents(currentId);
-      if (parents.length === 0) break;
-      ancestorPath.unshift(parents[0].id);
-      currentId = parents[0].id;
-    }
-
-    // Batch-expand all path prefixes
+  /** Expand all prefixes of a path and set it as the scroll target. */
+  const expandAndScrollToPath = useCallback((path: TreePath): void => {
     setExpandedPaths(prev => {
       const next = new Set(prev);
-      for (let i = 1; i <= ancestorPath.length; i++) {
-        next.add(pathKey(ancestorPath.slice(0, i)));
+      for (let i = 1; i <= path.length; i++) {
+        next.add(pathKey(path.slice(0, i)));
       }
       return next;
     });
+    setTargetTreePath(path);
   }, []);
+
+  /** Navigate to a specific tree path: expand all prefixes, set scroll target. */
+  const navigateToTreePath = expandAndScrollToPath;
+
+  /**
+   * Navigate to a node in the tree: walk up first-parent chain, expand all
+   * path prefixes, and set scroll target.
+   */
+  const navigateTreeToNode = useCallback((targetId: string): void => {
+    if (!hasNode(targetId)) return;
+    // Build first-parent path: [root, ..., parent, targetId]
+    const path: string[] = [targetId];
+    let currentId = targetId;
+    for (let i = 0; i < 30; i++) {
+      const parents = getParents(currentId);
+      if (parents.length === 0) break;
+      path.unshift(parents[0].id);
+      currentId = parents[0].id;
+    }
+    expandAndScrollToPath(path);
+  }, [expandAndScrollToPath]);
 
   const selectNode = useCallback((id: string | null) => {
     setHighlightedNodeIds(new Set());
@@ -587,6 +606,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     dismissHelpEntry,
     shareCurrentView,
     crashCheckpoint, crashLoop, restoreCrashCheckpoint, dismissCrashCheckpoint,
+    navigateTreeToNode, targetTreePath, navigateToTreePath, clearTargetTreePath,
     showAbout, setShowAbout,
     getNode,
     getChildren,
@@ -594,9 +614,10 @@ export function GraphProvider({ children }: GraphProviderProps) {
     hasNode,
     getDetail,
     getGraph,
+    getPathsToRoot,
   }), [
     selectedNodeId, hoveredNodeId, expandedPaths, rootId, graphLoading,
-    selectNode, toggleExpand, expandParentPaths,
+    selectNode, navigateTreeToNode, toggleExpand, expandParentPaths,
     displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
     historyBack, historyForward, canUndo, canRedo,
     searchQuery, setSearchQuery,
@@ -604,6 +625,7 @@ export function GraphProvider({ children }: GraphProviderProps) {
     helpMode, toggleHelpMode, exitHelpMode, helpContent, activeHelpEntry, showHelpEntry, dismissHelpEntry,
     shareCurrentView,
     crashCheckpoint, crashLoop, restoreCrashCheckpoint, dismissCrashCheckpoint,
+    targetTreePath, navigateToTreePath, clearTargetTreePath,
     showAbout,
   ]);
 

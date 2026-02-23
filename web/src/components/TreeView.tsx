@@ -194,6 +194,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
       <div
         className={nodeClasses}
         data-node-id={nodeId}
+        data-path-key={pk}
         data-help-id="tree-node"
         style={{ paddingLeft: depth * 20 }}
         onClick={handleSelectClick}
@@ -300,7 +301,11 @@ function computeFilterAncestors(
 
 export const TreeView = memo(function TreeView() {
   trackRender('TreeView');
-  const { rootId, selectedNodeId, graphLoading, setExpandedPaths, getParents } = useGraph();
+  const {
+    rootId, selectedNodeId, hoveredNodeId, graphLoading,
+    setExpandedPaths, getParents,
+    targetTreePath, clearTargetTreePath, navigateTreeToNode,
+  } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -372,6 +377,30 @@ export const TreeView = memo(function TreeView() {
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   }, [selectedNodeId]);
+
+  // Scroll to hovered node (from NL diagram hover)
+  useEffect(() => {
+    if (!hoveredNodeId || !contentRef.current) return;
+    // Check if already visible in the DOM
+    const existing = contentRef.current.querySelector(`[data-node-id="${CSS.escape(hoveredNodeId)}"]`);
+    if (existing) {
+      existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else {
+      // Not visible — expand first-parent chain so it appears
+      navigateTreeToNode(hoveredNodeId);
+    }
+  }, [hoveredNodeId, navigateTreeToNode]);
+
+  // Scroll to targetTreePath when it changes (set by navigateToTreePath)
+  useEffect(() => {
+    if (!targetTreePath || !contentRef.current) return;
+    const pk = pathKey(targetTreePath);
+    requestAnimationFrame(() => {
+      const el = contentRef.current?.querySelector(`[data-path-key="${CSS.escape(pk)}"]`);
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      clearTargetTreePath();
+    });
+  }, [targetTreePath, clearTargetTreePath]);
 
   const cancelHide = useCallback(() => {
     if (hideTimerRef.current) {
