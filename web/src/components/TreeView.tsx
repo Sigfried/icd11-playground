@@ -70,6 +70,7 @@ interface TreeNodeProps {
 function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const {
     selectedNodeId,
+    hoveredNodeId,
     expandedPaths,
     selectNode,
     toggleExpand,
@@ -87,6 +88,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const pk = pathKey(path);
   const isExpanded = expandedPaths.has(pk);
   const isSelected = selectedNodeId === nodeId;
+  const isHovered = hoveredNodeId === nodeId;
   const isHighlighted = highlightedNodeIds.has(nodeId);
 
   // Search state
@@ -179,6 +181,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const nodeClasses = [
     'tree-node',
     isSelected && 'selected',
+    isHovered && 'hovered',
     isHighlighted && 'highlighted',
     isSearchMatch && 'search-match',
     isFilterActive && !isFilterMatch && isFilterAncestor && 'filter-ancestor',

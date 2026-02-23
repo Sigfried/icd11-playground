@@ -1,0 +1,30 @@
+/* Design tokens — single source of truth for colors.
+   Imported by App.css; consumed by all component CSS via var(). */
+
+:root {
+  /* Background layers (dark → light) */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d30;
+
+  /* Text */
+  --text-primary: #d4d4d4;
+  --text-secondary: #808080;
+
+  /* Accent palette */
+  --accent-blue: #569cd6;
+  --accent-cyan: #4fc1ff;
+  --accent-yellow: #dcdcaa;
+  --accent-orange: #ce9178;
+  --accent-green: #6a9955;
+
+  --border-color: #3c3c3c;
+
+  /* Semantic: selection (persistent focus — "this is my target") */
+  --color-selected: var(--accent-yellow);
+  --color-selected-bg: rgba(220, 220, 170, 0.18);
+
+  /* Semantic: hover/preview/highlight (transient attention — "I'm looking at this") */
+  --color-hover: var(--accent-blue);
+  --color-hover-bg: rgba(86, 156, 214, 0.15);
+}

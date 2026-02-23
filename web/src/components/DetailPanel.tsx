@@ -209,7 +209,7 @@ export const DetailPanel = memo(function DetailPanel() {
       </div>
       <div className="panel-content">
         <div className="detail-section">
-          <h2 className="detail-title">
+          <h2 className={`detail-title${isPreviewing ? ' preview' : ''}`}>
             {nodeData?.title ?? `Entity ${displayNodeId}`}
           </h2>
 

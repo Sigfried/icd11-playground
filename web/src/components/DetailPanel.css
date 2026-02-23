@@ -8,7 +8,11 @@
   margin: 0 0 8px 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--accent-yellow);
+  color: var(--color-selected);
+}
+
+.detail-title.preview {
+  color: var(--color-hover);
 }
 
 .detail-definition {

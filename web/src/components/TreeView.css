@@ -23,7 +23,19 @@
 }
 
 .tree-node.selected {
-  background: rgba(86, 156, 214, 0.2);
+  background: var(--color-selected-bg);
+}
+
+.tree-node.selected .tree-node-title {
+  color: var(--color-selected);
+}
+
+.tree-node.hovered {
+  background: var(--color-hover-bg);
+}
+
+.tree-node.hovered .tree-node-title {
+  color: var(--color-hover);
 }
 
 .tree-node.loading {
@@ -31,11 +43,11 @@
 }
 
 .tree-node.highlighted {
-  background: rgba(86, 156, 214, 0.15);
+  background: var(--color-hover-bg);
 }
 
 .tree-node.highlighted .tree-node-title {
-  color: var(--accent-cyan);
+  color: var(--color-hover);
 }
 
 .tree-node-expand {

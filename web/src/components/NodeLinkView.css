@@ -160,12 +160,11 @@
   fill: var(--accent-orange);
 }
 
-/* Hover emphasis — connected edges glow, rest fade */
+/* Hover emphasis — connected edges highlighted, rest fade */
 .node-link-edge.edge-connected {
   stroke: var(--accent-cyan);
-  stroke-width: 2.5px;
+  stroke-width: 2px;
   opacity: 1;
-  filter: drop-shadow(0 0 3px var(--accent-cyan));
 }
 
 .node-link-edge.edge-dimmed {
@@ -178,9 +177,8 @@
 
 /* Cross-panel highlighted nodes */
 .node-link-node.highlighted rect {
-  stroke: var(--accent-cyan);
+  stroke: var(--color-hover);
   stroke-width: 2px;
-  filter: drop-shadow(0 0 4px var(--accent-cyan));
 }
 
 /* Zoom controls */

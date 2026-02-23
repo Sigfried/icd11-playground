@@ -1,21 +1,11 @@
 /* ICD-11 Foundation Visual Maintenance Tool */
+@import './styles/tokens.css';
 
 * {
   box-sizing: border-box;
 }
 
 :root {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d30;
-  --text-primary: #d4d4d4;
-  --text-secondary: #808080;
-  --accent-blue: #569cd6;
-  --accent-cyan: #4fc1ff;
-  --accent-yellow: #dcdcaa;
-  --accent-orange: #ce9178;
-  --accent-green: #6a9955;
-  --border-color: #3c3c3c;
   --panel-gap: 8px;
 }
 
