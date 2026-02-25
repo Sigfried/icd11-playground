@@ -1,5 +1,5 @@
-import { memo, useState, useCallback, useEffect } from 'react';
-import { type ConceptNode, type EntityDetail, useGraph } from '../providers/GraphProvider';
+import { memo, useState, useCallback, useEffect, useMemo } from 'react';
+import { type ConceptNode, type EntityDetail, type TreePath, useGraph } from '../providers/GraphProvider';
 import { Badge, type BadgeType } from './Badge';
 import { trackRender } from '../utils/renderStormDetector';
 import './DetailPanel.css';
@@ -142,6 +142,75 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
   );
 }
 
+/** Render a single path as a truncated breadcrumb: … > C > D > [node] */
+function PathBreadcrumb({ path, getNode: getNodeFn }: { path: TreePath; getNode: (id: string) => ConceptNode | null }) {
+  // Show last 3 ancestors before the target node (which is the last element)
+  const VISIBLE_ANCESTORS = 3;
+  const targetIdx = path.length - 1;
+  const startIdx = Math.max(0, targetIdx - VISIBLE_ANCESTORS);
+  const truncated = startIdx > 0;
+  const visibleSegments = path.slice(startIdx, targetIdx);
+
+  return (
+    <>
+      {truncated && <span className="path-ellipsis">…</span>}
+      {visibleSegments.map((id, i) => (
+        <span key={id}>
+          {(i > 0 || truncated) && <span className="path-separator">&gt;</span>}
+          <span className="path-breadcrumb-segment">{getNodeFn(id)?.title ?? id}</span>
+        </span>
+      ))}
+      <span className="path-separator">&gt;</span>
+      <span className="path-target">{getNodeFn(path[targetIdx])?.title ?? path[targetIdx]}</span>
+    </>
+  );
+}
+
+interface PathsToRootProps {
+  paths: TreePath[];
+  activePathIndex: number;
+  onCycle: (delta: number) => void;
+  onSelectPath: (index: number) => void;
+  getNode: (id: string) => ConceptNode | null;
+}
+
+function PathsToRoot({ paths, activePathIndex, onCycle, onSelectPath, getNode: getNodeFn }: PathsToRootProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded(prev => !prev);
+  }, []);
+
+  return (
+    <div className={`detail-section ${isExpanded ? '' : 'collapsed'}`}>
+      <h3 className="section-header" onClick={toggleExpanded}>
+        <span className="section-toggle">{isExpanded ? '▼' : '▶'}</span>
+        Paths to Root
+        <span className="section-count">{paths.length}</span>
+        <span className="path-cycle-controls" onClick={e => e.stopPropagation()}>
+          <button className="path-cycle-btn" onClick={() => onCycle(-1)} title="Previous path">◁</button>
+          <button className="path-cycle-btn" onClick={() => onCycle(1)} title="Next path">▷</button>
+        </span>
+      </h3>
+      {isExpanded && (
+        <div className="section-content">
+          <ul className="paths-to-root-list">
+            {paths.map((path, i) => (
+              <li
+                key={path.join('/')}
+                className={`paths-to-root-item${i === activePathIndex ? ' active' : ''}`}
+                onClick={() => onSelectPath(i)}
+              >
+                <PathBreadcrumb path={path} getNode={getNodeFn} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const DetailPanel = memo(function DetailPanel() {
   trackRender('DetailPanel');
   const {
@@ -152,6 +221,8 @@ export const DetailPanel = memo(function DetailPanel() {
     getParents,
     getChildren,
     getDetail,
+    getPathsToRoot,
+    navigateToTreePath,
   } = useGraph();
 
   const displayNodeId = hoveredNodeId ?? selectedNodeId;
@@ -182,6 +253,32 @@ export const DetailPanel = memo(function DetailPanel() {
 
     return () => { cancelled = true; };
   }, [displayNodeId, getDetail]);
+
+  // Paths to root for polyhierarchy nodes
+  const paths = useMemo(
+    () => displayNodeId ? getPathsToRoot(displayNodeId) : [],
+    [displayNodeId, getPathsToRoot]
+  );
+  const [activePathIndex, setActivePathIndex] = useState(0);
+
+  // Reset active path index when displayed node changes
+  useEffect(() => {
+    setActivePathIndex(0);
+  }, [displayNodeId]);
+
+  const handleCyclePath = useCallback((delta: number) => {
+    if (paths.length === 0) return;
+    setActivePathIndex(prev => {
+      const next = ((prev + delta) % paths.length + paths.length) % paths.length;
+      navigateToTreePath(paths[next]);
+      return next;
+    });
+  }, [paths, navigateToTreePath]);
+
+  const handleSelectPath = useCallback((index: number) => {
+    setActivePathIndex(index);
+    navigateToTreePath(paths[index]);
+  }, [paths, navigateToTreePath]);
 
   if (!displayNodeId) {
     return (
@@ -244,6 +341,16 @@ export const DetailPanel = memo(function DetailPanel() {
             </a>
           </div>
         </div>
+
+        {paths.length > 1 && (
+          <PathsToRoot
+            paths={paths}
+            activePathIndex={activePathIndex}
+            onCycle={handleCyclePath}
+            onSelectPath={handleSelectPath}
+            getNode={getNode}
+          />
+        )}
 
         <RelationList
           title="Parents"
