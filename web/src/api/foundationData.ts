@@ -178,6 +178,37 @@ export function getPathsToRoot(id: string): TreePath[] {
   return results;
 }
 
+/**
+ * Sort paths lexicographically by each node's position in its parent's childOrder.
+ * Walks from root, finds first divergence point, compares childOrder.indexOf().
+ * Shorter path wins on tie (prefix is "earlier").
+ */
+export function sortPathsInTreeOrder(paths: TreePath[]): TreePath[] {
+  const g = assertGraph();
+  // Cache childOrder index lookups: parentId -> childId -> index
+  const indexCache = new Map<string, Map<string, number>>();
+  function childIndex(parentId: string, childId: string): number {
+    let parentMap = indexCache.get(parentId);
+    if (!parentMap) {
+      parentMap = new Map<string, number>();
+      const order = g.getNodeAttributes(parentId).childOrder;
+      for (let i = 0; i < order.length; i++) parentMap.set(order[i], i);
+      indexCache.set(parentId, parentMap);
+    }
+    return parentMap.get(childId) ?? Infinity;
+  }
+
+  return [...paths].sort((a, b) => {
+    const len = Math.min(a.length, b.length);
+    for (let i = 1; i < len; i++) {
+      if (a[i] === b[i]) continue;
+      // Parent is a[i-1] (same for both since they haven't diverged yet)
+      return childIndex(a[i - 1], a[i]) - childIndex(b[i - 1], b[i]);
+    }
+    return a.length - b.length;
+  });
+}
+
 // --- Async detail fetch (IndexedDB-cached) ---
 
 function entityToDetail(entity: FoundationEntity): EntityDetail {

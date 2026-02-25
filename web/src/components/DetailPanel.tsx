@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import { type ConceptNode, type EntityDetail, type TreePath, useGraph } from '../providers/GraphProvider';
+import { sortPathsInTreeOrder } from '../api/foundationData';
 import { Badge, type BadgeType } from './Badge';
 import { trackRender } from '../utils/renderStormDetector';
 import './DetailPanel.css';
@@ -10,7 +11,7 @@ import './DetailPanel.css';
  * Shows metadata for the selected concept:
  * - Title and definition (async-loaded)
  * - Link to Foundation browser
- * - Collapsible parents list (all in memory)
+ * - Ancestor paths (sorted in tree order, with NL highlight on hover)
  * - Collapsible children list (all in memory)
  * - Existing proposals summary (future)
  * - Link to create new proposal (future)
@@ -142,50 +143,73 @@ function RelationList({ title, nodes, onSelect }: RelationListProps) {
   );
 }
 
-/** Render a single path as a truncated breadcrumb: … > C > D > [node] */
-function PathBreadcrumb({ path, getNode: getNodeFn }: { path: TreePath; getNode: (id: string) => ConceptNode | null }) {
-  // Show last 3 ancestors before the target node (which is the last element)
-  const VISIBLE_ANCESTORS = 3;
+/** Collapse first ELLIPSIS_DEPTH levels into … with title tooltip, show rest as full text */
+const ELLIPSIS_DEPTH = 3;
+
+function AncestorPath({ path, getNode: getNodeFn, isPreviewing }: {
+  path: TreePath;
+  getNode: (id: string) => ConceptNode | null;
+  isPreviewing: boolean;
+}) {
   const targetIdx = path.length - 1;
-  const startIdx = Math.max(0, targetIdx - VISIBLE_ANCESTORS);
-  const truncated = startIdx > 0;
-  const visibleSegments = path.slice(startIdx, targetIdx);
+  const collapsedIds = path.slice(0, Math.min(ELLIPSIS_DEPTH, targetIdx));
+  const visibleIds = path.slice(collapsedIds.length, targetIdx);
+  const ellipsisTitle = collapsedIds.map(id => getNodeFn(id)?.title ?? id).join(' \u203A ');
 
   return (
     <>
-      {truncated && <span className="path-ellipsis">…</span>}
-      {visibleSegments.map((id, i) => (
-        <span key={id}>
-          {(i > 0 || truncated) && <span className="path-separator">&gt;</span>}
-          <span className="path-breadcrumb-segment">{getNodeFn(id)?.title ?? id}</span>
-        </span>
-      ))}
-      <span className="path-separator">&gt;</span>
-      <span className="path-target">{getNodeFn(path[targetIdx])?.title ?? path[targetIdx]}</span>
+      {collapsedIds.length > 0 && (
+        <span className="path-ellipsis" title={ellipsisTitle}>…</span>
+      )}
+      {visibleIds.map((id, i) => {
+        const name = getNodeFn(id)?.title ?? id;
+        return (
+          <span key={id}>
+            {(i > 0 || collapsedIds.length > 0) && <span className="path-separator"> → </span>}
+            <span className="path-segment" title={name}>{name}</span>
+          </span>
+        );
+      })}
+      {(collapsedIds.length > 0 || visibleIds.length > 0) && (
+        <span className="path-separator"> → </span>
+      )}
+      <span className={`path-target${isPreviewing ? ' preview' : ''}`} title={getNodeFn(path[targetIdx])?.title ?? path[targetIdx]}>
+        {getNodeFn(path[targetIdx])?.title ?? path[targetIdx]}
+      </span>
     </>
   );
 }
 
-interface PathsToRootProps {
+interface AncestorsProps {
   paths: TreePath[];
   activePathIndex: number;
   onCycle: (delta: number) => void;
   onSelectPath: (index: number) => void;
   getNode: (id: string) => ConceptNode | null;
+  isPreviewing: boolean;
+  setHighlightedNodeIds: (ids: Set<string>) => void;
 }
 
-function PathsToRoot({ paths, activePathIndex, onCycle, onSelectPath, getNode: getNodeFn }: PathsToRootProps) {
+function Ancestors({ paths, activePathIndex, onCycle, onSelectPath, getNode: getNodeFn, isPreviewing, setHighlightedNodeIds }: AncestorsProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);
   }, []);
 
+  const handleMouseEnter = useCallback((path: TreePath) => {
+    setHighlightedNodeIds(new Set(path));
+  }, [setHighlightedNodeIds]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHighlightedNodeIds(new Set());
+  }, [setHighlightedNodeIds]);
+
   return (
     <div className={`detail-section ${isExpanded ? '' : 'collapsed'}`}>
       <h3 className="section-header" onClick={toggleExpanded}>
         <span className="section-toggle">{isExpanded ? '▼' : '▶'}</span>
-        Paths to Root
+        Ancestors
         <span className="section-count">{paths.length}</span>
         <span className="path-cycle-controls" onClick={e => e.stopPropagation()}>
           <button className="path-cycle-btn" onClick={() => onCycle(-1)} title="Previous path">◁</button>
@@ -194,14 +218,16 @@ function PathsToRoot({ paths, activePathIndex, onCycle, onSelectPath, getNode: g
       </h3>
       {isExpanded && (
         <div className="section-content">
-          <ul className="paths-to-root-list">
+          <ul className="ancestor-path-list">
             {paths.map((path, i) => (
               <li
                 key={path.join('/')}
-                className={`paths-to-root-item${i === activePathIndex ? ' active' : ''}`}
+                className={`ancestor-path-item${i === activePathIndex ? ' active' : ''}`}
                 onClick={() => onSelectPath(i)}
+                onMouseEnter={() => handleMouseEnter(path)}
+                onMouseLeave={handleMouseLeave}
               >
-                <PathBreadcrumb path={path} getNode={getNodeFn} />
+                <AncestorPath path={path} getNode={getNodeFn} isPreviewing={isPreviewing} />
               </li>
             ))}
           </ul>
@@ -218,11 +244,11 @@ export const DetailPanel = memo(function DetailPanel() {
     hoveredNodeId,
     selectNode,
     getNode,
-    getParents,
     getChildren,
     getDetail,
     getPathsToRoot,
     navigateToTreePath,
+    setHighlightedNodeIds,
   } = useGraph();
 
   const displayNodeId = hoveredNodeId ?? selectedNodeId;
@@ -256,7 +282,7 @@ export const DetailPanel = memo(function DetailPanel() {
 
   // Paths to root for polyhierarchy nodes
   const paths = useMemo(
-    () => displayNodeId ? getPathsToRoot(displayNodeId) : [],
+    () => displayNodeId ? sortPathsInTreeOrder(getPathsToRoot(displayNodeId)) : [],
     [displayNodeId, getPathsToRoot]
   );
   const [activePathIndex, setActivePathIndex] = useState(0);
@@ -294,7 +320,6 @@ export const DetailPanel = memo(function DetailPanel() {
   }
 
   const nodeData: ConceptNode | null = getNode(displayNodeId);
-  const parentNodes = getParents(displayNodeId);
   const childNodes = getChildren(displayNodeId);
   const definition = detail?.definition || detail?.longDefinition;
 
@@ -343,20 +368,16 @@ export const DetailPanel = memo(function DetailPanel() {
         </div>
 
         {paths.length > 1 && (
-          <PathsToRoot
+          <Ancestors
             paths={paths}
             activePathIndex={activePathIndex}
             onCycle={handleCyclePath}
             onSelectPath={handleSelectPath}
             getNode={getNode}
+            isPreviewing={isPreviewing}
+            setHighlightedNodeIds={setHighlightedNodeIds}
           />
         )}
-
-        <RelationList
-          title="Parents"
-          nodes={parentNodes}
-          onSelect={selectNode}
-        />
 
         <RelationList
           title="Children"
