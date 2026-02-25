@@ -1441,39 +1441,12 @@ export const NodeLinkView = memo(function NodeLinkView() {
 
   return (
     <>
-      <div className="panel-header" data-help-id="node-link-overview">
-        Node-Link View -- <span className="header-hint">
-          {selectedNodeId ? `${layoutNodes.length} nodes` : 'Select a node'}
+      <div className="panel-header nl-header" data-help-id="node-link-overview">
+        <span className="nl-header-title">
+          Node-Link View -- <span className="header-hint">
+            {selectedNodeId ? `${layoutNodes.length} nodes` : 'Select a node'}
+          </span>
         </span>
-      </div>
-      <div className="node-link-wrapper">
-        <div className="panel-content node-link-content" ref={containerRef}>
-          {selectedNodeId ? (
-            layoutNodes.length > 0 ? (
-              <div className="node-link-zoom-spacer">
-                <div className="node-link-zoom-wrapper" ref={zoomWrapperRef}>
-                  <svg ref={svgRef} className={`node-link-svg${layoutMode === 'force' ? ' force-mode' : ''}`} />
-                </div>
-              </div>
-            ) : !layoutInProgress ? (
-              <div className="placeholder">Computing layout...</div>
-            ) : null
-          ) : (
-            <div className="placeholder">
-              Select a concept in the tree to see its neighborhood
-            </div>
-          )}
-          {layoutInProgress && (
-            <div className="layout-progress-overlay">
-              <div className="layout-progress-content">
-                <span>Computing layout ({displayedNodeIds.size} nodes)...</span>
-                {canUndo && (
-                  <button className="layout-cancel-btn" onClick={historyBack}>Cancel</button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
             {/* --- History group --- */}
@@ -1557,6 +1530,35 @@ export const NodeLinkView = memo(function NodeLinkView() {
             <button className="zoom-btn" data-help-id="fit-to-view" onClick={zoomToFit} title="Fit to view">&#8865;</button>
           </div>
         )}
+      </div>
+      <div className="node-link-wrapper">
+        <div className="panel-content node-link-content" ref={containerRef}>
+          {selectedNodeId ? (
+            layoutNodes.length > 0 ? (
+              <div className="node-link-zoom-spacer">
+                <div className="node-link-zoom-wrapper" ref={zoomWrapperRef}>
+                  <svg ref={svgRef} className={`node-link-svg${layoutMode === 'force' ? ' force-mode' : ''}`} />
+                </div>
+              </div>
+            ) : !layoutInProgress ? (
+              <div className="placeholder">Computing layout...</div>
+            ) : null
+          ) : (
+            <div className="placeholder">
+              Select a concept in the tree to see its neighborhood
+            </div>
+          )}
+          {layoutInProgress && (
+            <div className="layout-progress-overlay">
+              <div className="layout-progress-content">
+                <span>Computing layout ({displayedNodeIds.size} nodes)...</span>
+                {canUndo && (
+                  <button className="layout-cancel-btn" onClick={historyBack}>Cancel</button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </>
   );

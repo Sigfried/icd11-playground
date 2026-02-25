@@ -181,19 +181,27 @@
   stroke-width: 2px;
 }
 
-/* Zoom controls */
+/* NL header with inline toolbar */
+.nl-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nl-header-title {
+  white-space: nowrap;
+}
+
+/* Toolbar controls */
 .node-link-controls {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   display: flex;
   gap: 4px;
-  z-index: 1;
+  margin-left: auto;
 }
 
 .zoom-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   font-size: 0.85rem;
   line-height: 1;
@@ -215,7 +223,7 @@
 /* Toolbar separator */
 .toolbar-separator {
   width: 1px;
-  height: 20px;
+  height: 16px;
   align-self: center;
   background: var(--border-color);
   opacity: 0.5;
@@ -256,8 +264,6 @@
   align-items: center;
   justify-content: center;
   opacity: 0.5;
-  width: 24px;
-  height: 24px;
 }
 
 .layout-toggle-btn:hover {
