@@ -7,12 +7,13 @@ import './TreeSearch.css';
 export type SearchMode = 'search' | 'filter';
 
 interface TreeSearchProps {
+  mode: SearchMode;
   onFilterChange: (matchIds: Set<string> | null, query: string) => void;
   onHighlightChange: (matchIds: Set<string> | null, query: string) => void;
 }
 
 /** Magnifying glass icon (14×14) */
-const SearchIcon = () => (
+export const SearchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <circle cx="6" cy="6" r="4.25" />
     <line x1="9" y1="9" x2="12.5" y2="12.5" />
@@ -20,16 +21,15 @@ const SearchIcon = () => (
 );
 
 /** Funnel icon (14×14) */
-const FilterIcon = () => (
+export const FilterIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1.5 2.5h11l-4 4.5v4l-3 1.5V7z" />
   </svg>
 );
 
-export function TreeSearch({ onFilterChange, onHighlightChange }: TreeSearchProps) {
+export function TreeSearch({ mode, onFilterChange, onHighlightChange }: TreeSearchProps) {
   const { hasNode, searchQuery, setSearchQuery } = useGraph();
   const [query, setQuery] = useState(searchQuery);
-  const [mode, setMode] = useState<SearchMode>('search');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -158,6 +158,7 @@ export function TreeSearch({ onFilterChange, onHighlightChange }: TreeSearchProp
   return (
     <div className="tree-search" data-help-id="tree-search">
       <div className="tree-search-bar">
+        <SearchIcon />
         <input
           ref={inputRef}
           className="tree-search-input"
@@ -168,23 +169,6 @@ export function TreeSearch({ onFilterChange, onHighlightChange }: TreeSearchProp
         />
         {loading && <span className="tree-search-spinner" />}
         {resultCount && <span className="tree-search-count">{resultCount}</span>}
-
-        <div className="tree-search-modes">
-          <button
-            className={`tree-search-mode-btn${mode === 'search' ? ' active' : ''}`}
-            onClick={() => setMode('search')}
-            title="Highlight matches in tree"
-          >
-            <SearchIcon />
-          </button>
-          <button
-            className={`tree-search-mode-btn${mode === 'filter' ? ' active' : ''}`}
-            onClick={() => setMode('filter')}
-            title="Filter tree to matches"
-          >
-            <FilterIcon />
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--text-secondary);
 }
 
 .tree-search-input {
@@ -52,32 +53,6 @@
   to { transform: rotate(360deg); }
 }
 
-/* Mode toggle buttons */
-.tree-search-modes {
-  display: flex;
-  gap: 2px;
-}
-
-.tree-search-mode-btn {
-  padding: 2px 6px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.tree-search-mode-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.tree-search-mode-btn.active {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
 
 /* Search match highlight in tree (highlight mode) */
 .tree-node.search-match {

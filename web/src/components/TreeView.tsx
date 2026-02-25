@@ -3,7 +3,19 @@ import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers
 import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
-import { TreeSearch } from './TreeSearch';
+import { type SearchMode, TreeSearch, FilterIcon } from './TreeSearch';
+
+/** Branching-down tree icon (14×14) */
+const TreeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="7" y1="2" x2="7" y2="6" />
+    <line x1="7" y1="6" x2="3" y2="10" />
+    <line x1="7" y1="6" x2="11" y2="10" />
+    <circle cx="7" cy="2" r="1" fill="currentColor" stroke="none" />
+    <circle cx="3" cy="10.5" r="1" fill="currentColor" stroke="none" />
+    <circle cx="11" cy="10.5" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
 import { trackRender } from '../utils/renderStormDetector';
 import './TreeView.css';
 
@@ -313,20 +325,40 @@ export const TreeView = memo(function TreeView() {
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Search mode (persistent)
+  const [searchMode, setSearchMode] = useState<SearchMode>(
+    () => (localStorage.getItem('icd11-tree-mode') as SearchMode) || 'search'
+  );
+  const handleSetSearchMode = useCallback((mode: SearchMode) => {
+    setSearchMode(mode);
+    localStorage.setItem('icd11-tree-mode', mode);
+  }, []);
+
   // Search state
   const [filterMatchIds, setFilterMatchIds] = useState<Set<string> | null>(null);
   const [highlightMatchIds, setHighlightMatchIds] = useState<Set<string> | null>(null);
   const [highlightQuery, setHighlightQuery] = useState('');
 
+  // Combine search filter results with selection-based filtering
+  const effectiveFilterMatchIds = useMemo(() => {
+    if (searchMode !== 'filter') return null; // search mode — no filtering
+    if (filterMatchIds) return filterMatchIds; // filter mode with query results
+    // Filter mode, no query — filter to selected/hovered nodes
+    const ids = new Set<string>();
+    if (selectedNodeId) ids.add(selectedNodeId);
+    if (hoveredNodeId) ids.add(hoveredNodeId);
+    return ids.size > 0 ? ids : null; // null = show everything (nothing selected)
+  }, [searchMode, filterMatchIds, selectedNodeId, hoveredNodeId]);
+
   // Compute filter ancestors
   const filterAncestorIds = useMemo(() => {
-    if (!filterMatchIds) return null;
-    return computeFilterAncestors(filterMatchIds, getParents);
-  }, [filterMatchIds, getParents]);
+    if (!effectiveFilterMatchIds) return null;
+    return computeFilterAncestors(effectiveFilterMatchIds, getParents);
+  }, [effectiveFilterMatchIds, getParents]);
 
   // Auto-expand paths to matches in filter/highlight mode
   useEffect(() => {
-    const matchIds = filterMatchIds ?? highlightMatchIds;
+    const matchIds = effectiveFilterMatchIds ?? highlightMatchIds;
     if (!matchIds || matchIds.size === 0) return;
 
     // Limit auto-expand to prevent performance issues with too many matches
@@ -351,7 +383,7 @@ export const TreeView = memo(function TreeView() {
       }
       return next;
     });
-  }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
+  }, [effectiveFilterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
 
   // Search callbacks
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
@@ -431,11 +463,11 @@ export const TreeView = memo(function TreeView() {
   };
 
   const searchCtxValue: SearchCtx = useMemo(() => ({
-    filterMatchIds,
+    filterMatchIds: effectiveFilterMatchIds,
     filterAncestorIds,
     highlightMatchIds,
     highlightQuery,
-  }), [filterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery]);
+  }), [effectiveFilterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery]);
 
   // Global keyboard shortcut: Ctrl+F or / to focus search
   useEffect(() => {
@@ -463,10 +495,27 @@ export const TreeView = memo(function TreeView() {
   return (
     <DescTooltipContext.Provider value={descCtxValue}>
       <SearchContext.Provider value={searchCtxValue}>
-        <div className="panel-header" data-help-id="tree-view-overview">
-          Tree View -- <span className="header-hint">Foundation hierarchy</span>
+        <div className="panel-header tree-header" data-help-id="tree-view-overview">
+          <span>Tree View -- <span className="header-hint">Foundation hierarchy</span></span>
+          <div className="tree-mode-toggle">
+            <button
+              className={`tree-mode-btn${searchMode === 'search' ? ' active' : ''}`}
+              onClick={() => handleSetSearchMode('search')}
+              title="Full tree (highlight search matches)"
+            >
+              <TreeIcon /> Tree
+            </button>
+            <button
+              className={`tree-mode-btn${searchMode === 'filter' ? ' active' : ''}`}
+              onClick={() => handleSetSearchMode('filter')}
+              title="Filter view (show only matches and ancestors)"
+            >
+              <FilterIcon /> Filter
+            </button>
+          </div>
         </div>
         <TreeSearch
+          mode={searchMode}
           onFilterChange={handleFilterChange}
           onHighlightChange={handleHighlightChange}
         />

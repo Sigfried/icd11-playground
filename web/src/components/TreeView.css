@@ -109,8 +109,43 @@
 }
 
 .header-hint {
-  margin-left: auto;
   font-size: 0.75rem;
   font-weight: normal;
   color: var(--text-secondary);
+}
+
+.tree-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-mode-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.tree-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tree-mode-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tree-mode-btn.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
 }
