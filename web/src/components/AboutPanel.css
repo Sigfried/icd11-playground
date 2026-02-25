@@ -61,6 +61,35 @@
   color: var(--text-primary);
 }
 
+/* Keyboard shortcuts table */
+.shortcut-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+.shortcut-table td {
+  padding: 3px 8px 3px 0;
+  color: var(--text-primary);
+  vertical-align: baseline;
+}
+
+.shortcut-table td:first-child {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.shortcut-table kbd {
+  font-family: monospace;
+  font-size: 0.78rem;
+  padding: 1px 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+
 .about-coming-soon {
   margin-top: 16px;
   padding-top: 12px;

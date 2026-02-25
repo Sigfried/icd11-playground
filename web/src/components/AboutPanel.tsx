@@ -45,6 +45,18 @@ export function AboutPanel({ helpContent, onDismiss, onHideOnStartup, hideOnStar
             <div key={section.id}>
               <h3>{section.title}</h3>
               <Markdown>{section.body}</Markdown>
+              {section.id === 'keyboard-shortcuts' && section.entries.length > 0 && (
+                <table className="shortcut-table">
+                  <tbody>
+                    {section.entries.map(e => (
+                      <tr key={e.id}>
+                        <td><kbd>{e.shortcut}</kbd></td>
+                        <td>{e.title}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           ))}
 
