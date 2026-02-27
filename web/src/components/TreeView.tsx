@@ -339,16 +339,16 @@ export const TreeView = memo(function TreeView() {
   const [highlightMatchIds, setHighlightMatchIds] = useState<Set<string> | null>(null);
   const [highlightQuery, setHighlightQuery] = useState('');
 
-  // Combine search filter results with selection-based filtering
+  // Combine search filter results with selection-based filtering.
+  // Only uses selectedNodeId (not hoveredNodeId) to avoid high-frequency
+  // cascades from NL hover that cause main-thread freezes.
   const effectiveFilterMatchIds = useMemo(() => {
     if (searchMode !== 'filter') return null; // search mode — no filtering
     if (filterMatchIds) return filterMatchIds; // filter mode with query results
-    // Filter mode, no query — filter to selected/hovered nodes
-    const ids = new Set<string>();
-    if (selectedNodeId) ids.add(selectedNodeId);
-    if (hoveredNodeId) ids.add(hoveredNodeId);
-    return ids.size > 0 ? ids : null; // null = show everything (nothing selected)
-  }, [searchMode, filterMatchIds, selectedNodeId, hoveredNodeId]);
+    // Filter mode, no query — filter to selected node's ancestor paths
+    if (selectedNodeId) return new Set([selectedNodeId]);
+    return null; // nothing selected — show full tree
+  }, [searchMode, filterMatchIds, selectedNodeId]);
 
   // Compute filter ancestors
   const filterAncestorIds = useMemo(() => {
@@ -356,9 +356,11 @@ export const TreeView = memo(function TreeView() {
     return computeFilterAncestors(effectiveFilterMatchIds, getParents);
   }, [effectiveFilterMatchIds, getParents]);
 
-  // Auto-expand paths to matches in filter/highlight mode
+  // Auto-expand paths to matches in search-driven filter/highlight mode.
+  // Uses filterMatchIds (search results), not effectiveFilterMatchIds
+  // (which includes selection-based filtering that shouldn't auto-expand).
   useEffect(() => {
-    const matchIds = effectiveFilterMatchIds ?? highlightMatchIds;
+    const matchIds = filterMatchIds ?? highlightMatchIds;
     if (!matchIds || matchIds.size === 0) return;
 
     // Limit auto-expand to prevent performance issues with too many matches
@@ -383,7 +385,7 @@ export const TreeView = memo(function TreeView() {
       }
       return next;
     });
-  }, [effectiveFilterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
+  }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
 
   // Search callbacks
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {

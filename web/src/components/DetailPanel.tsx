@@ -185,21 +185,25 @@ interface AncestorsProps {
   activePathIndex: number;
   onCycle: (delta: number) => void;
   onSelectPath: (index: number) => void;
+  onHoverPath: (path: TreePath) => void;
   getNode: (id: string) => ConceptNode | null;
   isPreviewing: boolean;
   setHighlightedNodeIds: (ids: Set<string>) => void;
 }
 
-function Ancestors({ paths, activePathIndex, onCycle, onSelectPath, getNode: getNodeFn, isPreviewing, setHighlightedNodeIds }: AncestorsProps) {
+function Ancestors({ paths, activePathIndex, onCycle, onSelectPath, onHoverPath, getNode: getNodeFn, isPreviewing, setHighlightedNodeIds }: AncestorsProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);
   }, []);
 
+  // Highlight only the target concept (last in path) and scroll tree to this path
   const handleMouseEnter = useCallback((path: TreePath) => {
-    setHighlightedNodeIds(new Set(path));
-  }, [setHighlightedNodeIds]);
+    const target = path[path.length - 1];
+    setHighlightedNodeIds(new Set([target]));
+    onHoverPath(path);
+  }, [setHighlightedNodeIds, onHoverPath]);
 
   const handleMouseLeave = useCallback(() => {
     setHighlightedNodeIds(new Set());
@@ -306,6 +310,10 @@ export const DetailPanel = memo(function DetailPanel() {
     navigateToTreePath(paths[index]);
   }, [paths, navigateToTreePath]);
 
+  const handleHoverPath = useCallback((path: TreePath) => {
+    navigateToTreePath(path);
+  }, [navigateToTreePath]);
+
   if (!displayNodeId) {
     return (
       <>
@@ -373,6 +381,7 @@ export const DetailPanel = memo(function DetailPanel() {
             activePathIndex={activePathIndex}
             onCycle={handleCyclePath}
             onSelectPath={handleSelectPath}
+            onHoverPath={handleHoverPath}
             getNode={getNode}
             isPreviewing={isPreviewing}
             setHighlightedNodeIds={setHighlightedNodeIds}

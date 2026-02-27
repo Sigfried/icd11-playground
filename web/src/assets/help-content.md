@@ -28,11 +28,12 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
 ### about-button
 
 - **Title:** About this tool
-- **Description:** Opens the About panel with an overview of what this tool does, what's implemented, and what's coming soon.
+- **Description:** Opens the About panel with an overview of what this tool does, what's implemented, what's coming soon, and a keyboard shortcuts reference table.
 - **Interactions:**
   - Click to open the About panel
   - The panel also appears automatically on your first visit
   - Check "Don't show on startup" to suppress the auto-show
+  - Scroll down for the keyboard shortcuts reference
 
 ### share-button
 
@@ -56,7 +57,7 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
 
 The tree is the primary navigation interface. It renders the full Foundation hierarchy — all 69,000 concepts are loaded in memory, so expanding and collapsing is instant. Concepts with multiple parents appear at each location in the tree; selecting any instance highlights all of them and updates the other panels.
 
-The tree supports searching in two modes: **search** (highlights matches in place within the full tree) and **filter** (hides non-matches, showing only results and their ancestors). Search queries are tracked in the undo history.
+The tree supports two modes, toggled via buttons in the title bar: **Tree** (full tree with search matches highlighted in place) and **Filter** (hides non-matches). In filter mode with no search query, the tree collapses to show only the selected concept and its ancestor paths. The mode persists across sessions. Search queries are tracked in the undo history.
 
 ### tree-view-overview
 
@@ -81,15 +82,16 @@ The tree supports searching in two modes: **search** (highlights matches in plac
 ### tree-search
 
 - **Title:** Tree search
-- **Description:** Search for concepts by name in the tree. Two modes available: search (highlight matches in place) and filter (hide non-matches).
+- **Description:** Search for concepts by name in the tree. Behavior depends on the active mode (Tree or Filter), selected via buttons in the tree title bar.
 - **Interactions:**
   - Type to search — results appear after a brief pause
-  - Click the magnifying glass icon for search mode (highlights matches in the full tree)
-  - Click the funnel icon for filter mode (hides non-matching nodes, shows only matches and their ancestors)
-  - Matching text is highlighted in yellow
+  - In **Tree mode**: matches are highlighted in place within the full tree (orange border and text)
+  - In **Filter mode**: non-matching nodes are hidden, showing only matches and their ancestors
+  - In **Filter mode with no query**: the tree collapses to show only the selected concept and its ancestor paths
+  - Matching text in node titles is highlighted
   - Result count shown next to the search input
 - **Shortcut:** Ctrl+F or / to focus the search input; Escape to clear
-- **Context:** Search queries are saved in the undo history — you can undo/redo to restore a previous search.
+- **Context:** Search queries are saved in the undo history — you can undo/redo to restore a previous search. The Tree/Filter mode selection persists across sessions (stored in localStorage).
 
 ---
 
@@ -200,7 +202,7 @@ Layout changes are animated: new nodes scale in at their target position, remove
   - Click a node to select it as the new focus concept
   - Hover a node to see a tooltip with its title and stats, and preview its details in the detail panel
   - Scroll to pan; Ctrl+scroll to zoom
-  - Use the toolbar buttons at the bottom for zoom, fit, undo/redo
+  - Use the toolbar buttons in the panel header for zoom, fit, undo/redo
 - **Context:** The diagram shows ancestors up to two levels deep (skipping root and top-level categories) and direct children. Children beyond the first two are grouped into clusters to keep the view manageable.
 
 ### nl-node
@@ -272,7 +274,7 @@ Layout changes are animated: new nodes scale in at their target position, remove
 
 ## Node-Link Toolbar
 
-Controls at the bottom of the node-link diagram for zoom, fit-to-view, and exploration history (undo/redo). Scroll to pan; Ctrl+scroll (Cmd+scroll on Mac) to zoom smoothly.
+Controls in the node-link panel header for zoom, fit-to-view, and exploration history (undo/redo). Scroll to pan; Ctrl+scroll (Cmd+scroll on Mac) to zoom smoothly.
 
 ### zoom-in
 
@@ -320,28 +322,40 @@ Controls at the bottom of the node-link diagram for zoom, fit-to-view, and explo
 
 ## Detail Panel
 
-The detail panel shows metadata for the currently selected concept: title, definition, parents, and children. The title appears instantly from the in-memory graph; the definition is fetched on demand from the ICD-11 API and cached in your browser for future visits.
+The detail panel shows metadata for the currently selected concept: title, ancestors (paths to root), definition, and children. The title appears instantly from the in-memory graph; the definition is fetched on demand from the ICD-11 API and cached in your browser for future visits.
 
-Parent and child lists are interactive — click any item to navigate to it, or use the badges to expand sub-lists inline without leaving the current concept. When you hover a node in the node-link diagram, the detail panel temporarily previews that node's information (marked with a "Preview" label) without changing your selection.
+The Ancestors section shows all paths from the selected concept to the root, which is especially useful for understanding polyhierarchy — concepts with multiple parents have multiple distinct paths. Children are interactive — click any item to navigate to it, or use the badges to expand sub-lists inline without leaving the current concept. When you hover a node in the node-link diagram, the detail panel temporarily previews that node's information (marked with a "Preview" label) without changing your selection.
 
 ### detail-panel-overview
 
 - **Title:** Detail panel
-- **Description:** Shows metadata for the selected concept: title, definition, parents, children, and a link to the WHO Foundation browser.
+- **Description:** Shows metadata for the selected concept: title, ancestors (paths to root), definition, children, and a link to the WHO Foundation browser.
 - **Interactions:**
-  - Click a parent or child name to select that concept
-  - Click section headers (Parents, Children) to expand/collapse the list
-  - Badges on list items work the same as in the tree — click to expand inline, hover to highlight
+  - Click a child name to select that concept
+  - Click section headers (Ancestors, Children) to expand/collapse
+  - Badges on child list items work the same as in the tree — click to expand inline, hover to highlight
+  - Use the prev/next buttons (◁/▷) in the Ancestors header to cycle through tree occurrences
 - **Context:** The title appears instantly from the in-memory graph. The definition is fetched on demand from the ICD-11 API and cached locally.
+
+### detail-ancestors
+
+- **Title:** Ancestors (paths to root)
+- **Description:** Shows all distinct paths from the selected concept up to the Foundation root. Each path is a breadcrumb trail showing the ancestor chain. For polyhierarchy concepts (multiple parents), there are multiple paths.
+- **Interactions:**
+  - Hover a path to highlight intermediate ancestor nodes in the tree and NL diagram
+  - Click a path to scroll the tree to that specific occurrence of the concept
+  - Use the prev/next buttons (◁/▷) to cycle through tree occurrences
+  - The path count badge shows the total number of distinct paths
+- **Context:** The first ~3 levels (root, "ICD Entity", top-level chapters) are truncated with "..." to save space — hover to see full names in a tooltip. Paths are sorted by length (shortest first). The currently active path (matching the tree's scroll position) is indicated with a left border highlight.
 
 ### detail-preview
 
 - **Title:** Preview mode
-- **Description:** When you hover a node in the node-link diagram, the detail panel temporarily shows that node's information with a "Preview" label.
+- **Description:** When you hover a node in the node-link diagram, the detail panel temporarily shows that node's information with a "Preview" label. The preview is read-only — moving the cursor into the detail panel ends the preview.
 - **Interactions:**
   - Move the mouse off the node to return to the selected concept's details
   - Click the node to make it the permanent selection
-- **Context:** Lets you explore the neighborhood without committing to a selection.
+- **Context:** Lets you explore the neighborhood without committing to a selection. The preview cannot be interacted with directly — it's a quick glance at the concept's metadata.
 
 ### detail-browser-link
 
@@ -468,7 +482,7 @@ Quick reference for all keyboard shortcuts. Most shortcuts work globally; Escape
 
 ## Cross-Panel Behavior
 
-The three panels are tightly linked. Selecting a concept anywhere updates all panels simultaneously — the tree expands and scrolls to show it, the diagram rebuilds around it, and the detail panel shows its metadata. Hovering a badge in any panel highlights related nodes across all panels, so you can see at a glance where a concept's parents or children appear in each view.
+The three panels are tightly linked. Selecting a concept anywhere updates all panels simultaneously — the tree expands and scrolls to show it, the diagram rebuilds around it, and the detail panel shows its metadata. Hovering a node in the NL diagram scrolls the tree to that node and shows a preview in the detail panel. Hovering a badge in any panel highlights related nodes across all panels, so you can see at a glance where a concept's parents or children appear in each view.
 
 This coordination is what makes the tool useful for understanding polyhierarchy: you can see the same concept from the tree perspective (where does it sit in the hierarchy?), the diagram perspective (what's its local neighborhood?), and the detail perspective (what does the ICD-11 API say about it?) — all at once.
 

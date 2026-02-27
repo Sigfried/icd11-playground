@@ -25,8 +25,11 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Descendant overlay: show all levels with scrolling | :white_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
 | | Advanced search options | :white_circle: |
+| | Tree stats popover | :white_circle: |
+| | Filter mode: remove hover-based filtering (crash fix) | :yellow_circle: |
+| | Ancestor path hover: scroll + highlight target only | :yellow_circle: |
 | **Detail Panel** | Display `fullySpecifiedName` | :white_circle: |
-| | Paths to root | :yellow_circle: |
+| | Paths to root / Ancestors section redesign | :yellow_circle: |
 | | Detail panel differentiation from tree | :yellow_circle: |
 | **Data Model** | Foundation cross-references (maternal, perinatal, impairment) | :white_circle: |
 | | Canonical vs linked parents | :white_circle: Investigation |
@@ -185,6 +188,91 @@ Cross-panel: hovering a node in the NL diagram should highlight and scroll to th
 
 ---
 
+## Tree View — Filter Mode Fix
+
+### Problem
+
+Filter mode with no search query currently filters the tree to show ancestors of both the selected *and* hovered node. Hovering nodes in the NL diagram triggers a cascade: new filter set → BFS ancestor computation → auto-expand effect → `setExpandedPaths` → re-render → scroll effect → possibly more expanding. Rapid hovering causes a main-thread freeze (white screen crash with no error boundary catch or console output).
+
+Additionally, filtering to the hovered node is confusing: expanding children of the selected concept in filter mode doesn't show the children because they're filtered out, even though the expand/collapse toggle still works. The tree jumps around unpredictably as the user moves the mouse.
+
+### Fix
+
+Remove `hoveredNodeId` from the filter set. In filter mode with no search query, filter only to the **selected node** and its ancestors. This eliminates the high-frequency cascade (selection changes are low-frequency click events, not rapid mouse movement) and makes the filtered view stable and predictable.
+
+Behavior summary:
+- **Tree mode, no query:** Full tree, no filtering
+- **Tree mode, with query:** Full tree, matches highlighted in place (orange)
+- **Filter mode, no query:** Tree collapsed to selected node + its ancestor paths; everything else hidden. If nothing selected, full tree shown.
+- **Filter mode, with query:** Tree collapsed to search matches + their ancestors (existing behavior)
+
+---
+
+## Tree View — Ancestor Path Hover Behavior
+
+### Problem
+
+When hovering an ancestor path segment in the detail panel, the tree highlights all intermediate ancestor nodes with blue highlighting scattered across multiple tree locations. This is disorienting — the user loses track of where they were looking.
+
+### Fix
+
+Change ancestor path hover to:
+1. **Scroll the tree** to the specific path occurrence being hovered
+2. **Highlight only the target concept** (the node at the end of the path), not intermediates
+
+This provides orientation ("where is this path in the tree?") without visual noise.
+
+---
+
+## Tree View — Stats Popover
+
+A tree info popover (triggered from an icon in the tree title bar) showing structural statistics:
+
+- **Total concepts:** 69,478 (root descendant count)
+- **Total tree rows (fully expanded):** Precalculated count of all paths-to-root across all nodes — this number reflects polyhierarchy inflation since nodes with N parents appear N times
+- **Visible rows:** Count of currently rendered tree rows
+- **Visible unique concepts:** Deduplicated count of distinct concepts among visible rows
+- **Filter note** (when active): "Filtered to ancestors of [concept name]" or "Filtered to N search matches"
+
+The contrast between total tree rows and total concepts quantifies the polyhierarchy's structural complexity. The visible rows vs unique concepts shows how much duplication is in the current view.
+
+---
+
+## Detail Panel — Preview Mode Non-Interactivity
+
+The detail panel in preview mode (triggered by hovering a node in the NL diagram) cannot be interacted with — moving the cursor into the panel ends the preview and returns to the selected concept's details. This means clickable elements (parent/child links, badges) in the preview are unreachable.
+
+This is acceptable as-is: the preview is for quick information glance, not interaction. Not rendering interactive affordances during preview could reduce unnecessary state computation during hover and would be more honest UI. Low priority — note for future cleanup.
+
+---
+
+## Detail Panel — Ancestors Section Redesign
+
+### Current state
+
+The Ancestors section shows horizontal breadcrumb trails (one per path to root) with truncated concept names, prev/next cycle buttons, and hover highlighting. Issues:
+- Horizontal paths are hard to read when long
+- Truncated names in the middle are indistinguishable
+- Hover highlights scatter across multiple tree locations (see [Ancestor Path Hover](#tree-view--ancestor-path-hover-behavior))
+
+### Proposed redesign
+
+1. **Expand/collapse per ancestor row.** Each path shown as a single summary line (collapsed) or an indented vertical list (expanded). Summary line shows first/last few concepts with ellipsis.
+
+2. **Indented list when expanded.** Each concept on its own line, indented by depth. Hovering a concept scrolls the tree to that concept and highlights only it.
+
+3. **Concept name in detail title bar.** Move the target concept's name out of the Ancestors section header and into the detail panel's title bar (always visible, not scrolled away).
+
+4. **Section reorder.** Detail panel shows, in order:
+   - Title bar with concept name (fixed, not scrollable)
+   - Ancestors section (collapsible)
+   - Concept metadata (ID, descendant count, definition, browser link)
+   - Children section (collapsible)
+
+This restructures the detail panel around the question "where does this concept sit in the hierarchy?" (ancestors above, details in the middle, children below).
+
+---
+
 ## Descendant Overlay — Show All Levels
 
 The descendant overlay currently caps at 5 levels. Since the maximum path depth is 13, this can cut off significant subtree structure. Change to show **all descendant levels** with scrolling in the overlay when the content exceeds the available height. No need for a hard level cap.
@@ -193,22 +281,23 @@ The descendant overlay currently caps at 5 levels. Since the maximum path depth 
 
 ## Polyhierarchy Occurrence Navigation
 
-For concepts with multiple parents, users need ways to find and navigate between all occurrences in the tree:
+For concepts with multiple parents, users need ways to find and navigate between all occurrences in the tree.
 
-- **Paths to root**: Show all distinct paths from selected node to root as clickable breadcrumb trails in the detail panel. Clicking a path scrolls the tree to that occurrence.
-  ```
-  Paths to Root:
-    1. ... > Bacterial intestinal infections > Abdominal actinomycosis
-    2. ... > Other bacterial diseases > Actinomycosis > Abdominal actinomycosis
-  ```
+### What's implemented
 
-- **Go-to-next-occurrence**: An affordance (button or keyboard shortcut) to cycle through the tree locations where the selected concept appears.
+- **Ancestors section** in detail panel shows all paths to root as horizontal breadcrumb trails, sorted by path length. Paths truncate the first 3 levels with "..." prefix. Clicking a path scrolls the tree to that occurrence.
+- **Prev/next cycle buttons** (`◁` / `▷`) in the Ancestors header cycle through tree occurrences of the selected concept, scrolling the tree to each one.
+- **Path highlighting**: hovering a path highlights intermediate nodes. (Slated for simplification — see [Ancestor Path Hover Behavior](#tree-view--ancestor-path-hover-behavior).)
+- **Filter mode**: with no search query, collapses the tree to the selected node's ancestor paths. (Slated to remove hover-based filtering — see [Filter Mode Fix](#tree-view--filter-mode-fix).)
+
+### Remaining
 
 - **Filter view for occurrences**: "View other occurrences" could activate filter mode showing only the paths containing the selected concept — leveraging the existing search/filter infrastructure.
+- **Ancestors section redesign** — see [dedicated section](#detail-panel--ancestors-section-redesign).
 
 ### Detail panel differentiation
 
-The parents/children lists in the detail panel largely duplicate what's visible in the tree. The detail panel should show information *not* available in the tree — paths to root, relationship types, cross-references, and `fullySpecifiedName` would address this.
+The parents/children lists in the detail panel largely duplicate what's visible in the tree. The detail panel should show information *not* available in the tree — paths to root, relationship types, cross-references, and `fullySpecifiedName` would address this. The [Ancestors section redesign](#detail-panel--ancestors-section-redesign) and moving concept name to the title bar are steps in this direction.
 
 ---
 
@@ -346,6 +435,8 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 
 ## Known Bugs / Tech Debt
 
+- **Filter mode crash (white screen)**: In filter mode with no search query, hovering nodes in the NL diagram triggers a cascade: `effectiveFilterMatchIds` recomputes on every hover → BFS ancestor walk → auto-expand effect → `setExpandedPaths` → re-render → scroll effect → `navigateTreeToNode` → more expanding. Rapid hovering freezes the main thread. No error boundary catch, no console output — just a white screen. **Fix:** Remove `hoveredNodeId` from the filter set (see [Filter Mode Fix](#tree-view--filter-mode-fix)).
+- **Filter mode hides expanded children**: In filter mode, expanding children of the selected concept via the tree toggle doesn't show the children because they're filtered out (only ancestors pass the filter). The toggle animates but nothing appears. Confusing UX.
 - **Divider drag stops at header**: Dragging a panel divider upward stops at the bottom edge of the app header instead of continuing past it. The header does disappear on mouseup (horz < 0.05 threshold), but the drag itself is clipped during the gesture.
 - **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
 - **Escape tooltip suppress**: The suppress-on-Escape mechanism (prevents tooltip re-creation while cursor hovers) may not be working correctly. Needs investigation and possibly a test.
