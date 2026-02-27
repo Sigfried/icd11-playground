@@ -318,8 +318,8 @@ export const TreeView = memo(function TreeView() {
   trackRender('TreeView');
   const {
     rootId, selectedNodeId, hoveredNodeId, graphLoading,
-    setExpandedPaths, getParents,
-    targetTreePath, clearTargetTreePath, navigateTreeToNode,
+    setExpandedPaths, getParents, displayedNodeIds,
+    targetTreePath, clearTargetTreePath,
   } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
@@ -387,6 +387,37 @@ export const TreeView = memo(function TreeView() {
     });
   }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
 
+  // Pre-expand tree paths for all NL-displayed nodes so hover only needs to scroll.
+  // Runs once per selection change (displayedNodeIds changes), not per hover.
+  useEffect(() => {
+    if (displayedNodeIds.size === 0) return;
+
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of displayedNodeIds) {
+        // Build first-parent path to root
+        const ancestorPath: string[] = [id];
+        let currentId = id;
+        for (let i = 0; i < 30; i++) {
+          const parents = getParents(currentId);
+          if (parents.length === 0) break;
+          ancestorPath.unshift(parents[0].id);
+          currentId = parents[0].id;
+        }
+        // Expand all prefixes
+        for (let i = 1; i <= ancestorPath.length; i++) {
+          const key = pathKey(ancestorPath.slice(0, i));
+          if (!prev.has(key)) {
+            next.add(key);
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [displayedNodeIds, getParents, setExpandedPaths]);
+
   // Search callbacks
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
     setFilterMatchIds(ids);
@@ -415,18 +446,16 @@ export const TreeView = memo(function TreeView() {
     });
   }, [selectedNodeId]);
 
-  // Scroll to hovered node (from NL diagram hover)
+  // Scroll to hovered node (from NL diagram hover).
+  // All NL-displayed nodes are pre-expanded in the tree (see displayedNodeIds
+  // effect above), so hover only needs to scroll — no expand calls.
   useEffect(() => {
     if (!hoveredNodeId || !contentRef.current) return;
-    // Check if already visible in the DOM
-    const existing = contentRef.current.querySelector(`[data-node-id="${CSS.escape(hoveredNodeId)}"]`);
-    if (existing) {
-      existing.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    } else {
-      // Not visible — expand first-parent chain so it appears
-      navigateTreeToNode(hoveredNodeId);
+    const el = contentRef.current.querySelector(`[data-node-id="${CSS.escape(hoveredNodeId)}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-  }, [hoveredNodeId, navigateTreeToNode]);
+  }, [hoveredNodeId]);
 
   // Scroll to targetTreePath when it changes (set by navigateToTreePath)
   useEffect(() => {

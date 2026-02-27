@@ -202,6 +202,8 @@ export const NodeLinkView = memo(function NodeLinkView() {
   const zoomingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // RAF-based zoom throttle: only one DOM update per animation frame
   const zoomRafRef = useRef<number | null>(null);
+  const hoverEmphasisRafRef = useRef<number | null>(null);
+  const pendingHoverIdRef = useRef<string | null | undefined>(undefined);
   // Debounced spacer resize (triggers layout reflow — keep infrequent)
   const spacerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Layout mode: hierarchical (ELK) or force-directed (D3-force)
@@ -886,27 +888,36 @@ export const NodeLinkView = memo(function NodeLinkView() {
   /**
    * Apply hover emphasis directly via D3 (no React state involved).
    * Highlights edges connected to the hovered node and dims the rest.
+   * Throttled to one update per animation frame to avoid overwhelming
+   * the browser renderer with rapid SVG class mutations.
    */
   function applyHoverEmphasis(hoveredId: string | null) {
-    if (!svgRef.current) return;
-    const svg = d3.select(svgRef.current);
+    pendingHoverIdRef.current = hoveredId;
+    if (hoverEmphasisRafRef.current !== null) return; // already scheduled
+    hoverEmphasisRafRef.current = requestAnimationFrame(() => {
+      hoverEmphasisRafRef.current = null;
+      const id = pendingHoverIdRef.current;
+      pendingHoverIdRef.current = undefined;
+      if (!svgRef.current || id === undefined) return;
 
-    const connectedNodes = new Set<string>();
-    if (hoveredId) connectedNodes.add(hoveredId);
+      const svg = d3.select(svgRef.current);
+      const connectedNodes = new Set<string>();
+      if (id) connectedNodes.add(id);
 
-    svg.selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge').each(function (d) {
-      const connected = hoveredId !== null && (d.source === hoveredId || d.target === hoveredId);
-      if (connected) {
-        connectedNodes.add(d.source);
-        connectedNodes.add(d.target);
-      }
-      d3.select(this)
-        .classed('edge-connected', connected)
-        .classed('edge-dimmed', hoveredId !== null && !connected);
-    });
+      svg.selectAll<SVGPathElement, LayoutEdge>('path.node-link-edge').each(function (d) {
+        const connected = id !== null && (d.source === id || d.target === id);
+        if (connected) {
+          connectedNodes.add(d.source);
+          connectedNodes.add(d.target);
+        }
+        d3.select(this)
+          .classed('edge-connected', connected)
+          .classed('edge-dimmed', id !== null && !connected);
+      });
 
-    svg.selectAll<SVGGElement, LayoutNode>('g.node-link-node').each(function (d) {
-      d3.select(this).classed('node-dimmed', hoveredId !== null && !connectedNodes.has(d.id));
+      svg.selectAll<SVGGElement, LayoutNode>('g.node-link-node').each(function (d) {
+        d3.select(this).classed('node-dimmed', id !== null && !connectedNodes.has(d.id));
+      });
     });
   }
 
@@ -1267,12 +1278,13 @@ export const NodeLinkView = memo(function NodeLinkView() {
       .on('click', () => selectNode(node.id))
       .on('mouseenter', function () {
         if (zoomingRef.current || helpModeRef.current) return;
-        d3.select(this).raise();
-        // Instant D3-only visual emphasis (no React state)
+        // Throttled D3-only visual emphasis (no React state)
         applyHoverEmphasis(node.id);
         // Debounced context update for DetailPanel preview
         if (hoverDebounceRef.current) clearTimeout(hoverDebounceRef.current);
-        hoverDebounceRef.current = setTimeout(() => setHoveredNodeId(node.id), 150);
+        hoverDebounceRef.current = setTimeout(() => {
+          setHoveredNodeId(node.id);
+        }, 150);
         if (!tooltipSuppressedRef.current) {
           infoTooltipTimerRef.current = setTimeout(() => {
             if (!zoomingRef.current) showInfoTooltip(this as SVGGElement, node.id);
