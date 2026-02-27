@@ -206,6 +206,22 @@ Behavior summary:
 - **Filter mode, no query:** Tree collapsed to selected node + its ancestor paths; everything else hidden. If nothing selected, full tree shown.
 - **Filter mode, with query:** Tree collapsed to search matches + their ancestors (existing behavior)
 
+### Open: Show children in filter mode
+
+Currently filter mode hides everything except ancestors. This means expanded children of the selected concept (or search matches) are invisible even though the user expanded them. Consider:
+
+- Show selected/matched concepts, their ancestors, **and their expanded children**. Children of the selected node are expanded by default on selection, so auto-collapse them in filter mode unless the user has manually expanded them (or a child is hovered in another panel).
+- This could apply to both search-filter and selection-filter, or only to selection-filter. With search-filter, showing expanded children of every match could get noisy.
+- Alternative: only show one level of children for the selected/focused concept, not for every match.
+
+### Open: Context-dependent button titles
+
+The Tree/Filter toggle button titles currently only reference search behavior ("Full tree (highlight search matches)" / "Filter view (show only matches and ancestors)"). When there's no search query, these descriptions are misleading since filter mode actually filters to the selected concept's ancestors. Consider:
+
+- When a search query is active: current titles referencing search matches
+- When no search query: titles referencing the selected concept, e.g., "Full tree" / "Filter to ancestors of [concept name]"
+- Could also update the button label itself (e.g., "Filter" → "Filtered to Cholera") but that may be too wide
+
 ---
 
 ## Tree View — Ancestor Path Hover Behavior
@@ -435,7 +451,7 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 
 ## Known Bugs / Tech Debt
 
-- **Filter mode crash (white screen)**: In filter mode with no search query, hovering nodes in the NL diagram triggers a cascade: `effectiveFilterMatchIds` recomputes on every hover → BFS ancestor walk → auto-expand effect → `setExpandedPaths` → re-render → scroll effect → `navigateTreeToNode` → more expanding. Rapid hovering freezes the main thread. No error boundary catch, no console output — just a white screen. **Fix:** Remove `hoveredNodeId` from the filter set (see [Filter Mode Fix](#tree-view--filter-mode-fix)).
+- **White screen crash (ongoing)**: Main-thread freeze with no error boundary catch, no console output. Originally triggered by hover-driven filter cascades (fixed: removed `hoveredNodeId` from filter set). Still occurring after fix — cause unknown, no reliable repro. Symptoms: white screen, no errors in preserved console log. Diagnostic hooks: check `localStorage.getItem('icd11-render-storm')` and `localStorage.getItem('icd11-last-crash')` after a crash. Need to identify: does it happen in filter mode only or also tree mode? During NL hover or click/select? With deeply nested or many-parented concepts?
 - **Filter mode hides expanded children**: In filter mode, expanding children of the selected concept via the tree toggle doesn't show the children because they're filtered out (only ancestors pass the filter). The toggle animates but nothing appears. Confusing UX.
 - **Divider drag stops at header**: Dragging a panel divider upward stops at the bottom edge of the app header instead of continuing past it. The header does disappear on mouseup (horz < 0.05 threshold), but the drag itself is clipped during the gesture.
 - **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
