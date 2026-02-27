@@ -1,8 +1,10 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
+import { getTotalTreeRows } from '../api/foundationData';
 import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
+import { TreeStatsPopover } from './TreeStatsPopover';
 import { type SearchMode, TreeSearch, FilterIcon } from './TreeSearch';
 
 /** Branching-down tree icon (14×14) */
@@ -318,7 +320,7 @@ export const TreeView = memo(function TreeView() {
   trackRender('TreeView');
   const {
     rootId, selectedNodeId, hoveredNodeId, graphLoading,
-    setExpandedPaths, getParents, displayedNodeIds,
+    setExpandedPaths, getNode, getParents, displayedNodeIds,
     targetTreePath, clearTargetTreePath,
   } = useGraph();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -500,6 +502,43 @@ export const TreeView = memo(function TreeView() {
     highlightQuery,
   }), [effectiveFilterMatchIds, filterAncestorIds, highlightMatchIds, highlightQuery]);
 
+  // --- Stats popover ---
+  const [statsAnchor, setStatsAnchor] = useState<DOMRect | null>(null);
+
+  const handleStatsClick = useCallback((e: React.MouseEvent) => {
+    if (statsAnchor) { setStatsAnchor(null); return; }
+    setStatsAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+  }, [statsAnchor]);
+
+  const dismissStats = useCallback(() => setStatsAnchor(null), []);
+
+  // Compute visible row stats on demand when popover opens
+  const visibleStats = useMemo(() => {
+    if (!statsAnchor || !contentRef.current) return { rows: 0, unique: 0 };
+    const els = contentRef.current.querySelectorAll('[data-node-id]');
+    const ids = new Set<string>();
+    els.forEach(el => {
+      const id = el.getAttribute('data-node-id');
+      if (id) ids.add(id);
+    });
+    return { rows: els.length, unique: ids.size };
+  }, [statsAnchor]);
+
+  const totalConcepts = getNode('root')?.descendantCount ?? 0;
+
+  // Build filter note
+  const filterNote = useMemo(() => {
+    if (searchMode !== 'filter') return null;
+    if (filterMatchIds && highlightQuery) {
+      return `Filtered to ${filterMatchIds.size.toLocaleString()} search matches for "${highlightQuery}"`;
+    }
+    if (selectedNodeId && !filterMatchIds) {
+      const name = getNode(selectedNodeId)?.title ?? selectedNodeId;
+      return `Filtered to ancestors of ${name}`;
+    }
+    return null;
+  }, [searchMode, filterMatchIds, highlightQuery, selectedNodeId, getNode]);
+
   // Global keyboard shortcut: Ctrl+F or / to focus search
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -528,6 +567,17 @@ export const TreeView = memo(function TreeView() {
       <SearchContext.Provider value={searchCtxValue}>
         <div className="panel-header tree-header" data-help-id="tree-view-overview">
           <span>Tree View -- <span className="header-hint">Foundation hierarchy</span></span>
+          <button
+            className={`tree-stats-btn${statsAnchor ? ' active' : ''}`}
+            onClick={handleStatsClick}
+            title="Tree statistics"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <circle cx="7" cy="7" r="6" />
+              <line x1="7" y1="6" x2="7" y2="10" />
+              <circle cx="7" cy="4.2" r="0.6" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
           <div className="tree-mode-toggle">
             <button
               className={`tree-mode-btn${searchMode === 'search' ? ' active' : ''}`}
@@ -567,6 +617,17 @@ export const TreeView = memo(function TreeView() {
             onClose={hide}
             onMouseEnter={cancelHide}
             onMouseLeave={scheduleHide}
+          />
+        )}
+        {statsAnchor && (
+          <TreeStatsPopover
+            anchorRect={statsAnchor}
+            onDismiss={dismissStats}
+            totalConcepts={totalConcepts}
+            totalTreeRows={getTotalTreeRows()}
+            visibleRows={visibleStats.rows}
+            visibleUnique={visibleStats.unique}
+            filterNote={filterNote}
           />
         )}
       </SearchContext.Provider>

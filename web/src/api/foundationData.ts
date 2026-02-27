@@ -41,6 +41,10 @@ let graph: Graph<ConceptNode> | null = null;
 // Graph release version from _meta (e.g. "2024-01")
 let graphRelease: string | null = null;
 
+// Precomputed: sum of all root-to-node path counts across all nodes.
+// Represents the total number of tree rows if every node were fully expanded.
+let totalTreeRows: number = 0;
+
 // In-flight detail requests to avoid duplicate fetches
 const detailInflight = new Map<string, Promise<EntityDetail>>();
 
@@ -75,15 +79,44 @@ export function initGraph(data: FoundationGraphJson, release?: string): void {
     }
   }
 
+  // Compute totalTreeRows via topological DP:
+  // pathsToNode[root] = 1; pathsToNode[v] = Σ pathsToNode[parent of v]
+  // totalTreeRows = Σ pathsToNode[v] for all v
+  const pathsTo = new Map<string, number>();
+  // BFS in topological order (parents before children) using in-degree tracking
+  const inDeg = new Map<string, number>();
+  graph.forEachNode((id) => { inDeg.set(id, graph!.inDegree(id)); });
+  const queue: string[] = [];
+  inDeg.forEach((deg, id) => { if (deg === 0) queue.push(id); });
+  for (const id of queue) pathsTo.set(id, 1); // roots have 1 path
+  let idx = 0;
+  while (idx < queue.length) {
+    const id = queue[idx++];
+    const myPaths = pathsTo.get(id)!;
+    for (const child of graph.outNeighbors(id)) {
+      pathsTo.set(child, (pathsTo.get(child) ?? 0) + myPaths);
+      const remaining = inDeg.get(child)! - 1;
+      inDeg.set(child, remaining);
+      if (remaining === 0) queue.push(child);
+    }
+  }
+  totalTreeRows = 0;
+  pathsTo.forEach(count => { totalTreeRows += count; });
+
   // Expose for debugging
   (window as unknown as Record<string, unknown>).graph = graph;
 
-  console.log(`Graph initialized: ${graph.order} nodes, ${graph.size} edges`);
+  console.log(`Graph initialized: ${graph.order} nodes, ${graph.size} edges, ${totalTreeRows.toLocaleString()} total tree rows`);
 }
 
 /** Get the graph release version (e.g. "2024-01"), or null if not set. */
 export function getGraphRelease(): string | null {
   return graphRelease;
+}
+
+/** Total tree rows if fully expanded (precomputed at init). */
+export function getTotalTreeRows(): number {
+  return totalTreeRows;
 }
 
 function assertGraph(): Graph<ConceptNode> {

@@ -123,7 +123,6 @@
 .tree-mode-toggle {
   display: flex;
   gap: 2px;
-  margin-left: auto;
 }
 
 .tree-mode-btn {
@@ -146,6 +145,29 @@
 }
 
 .tree-mode-btn.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.tree-stats-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.tree-stats-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tree-stats-btn.active {
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }

@@ -1,0 +1,68 @@
+/* Tree Stats Popover — portal to body, positioned near anchor */
+.tree-stats-popover {
+  position: fixed;
+  z-index: 200;
+  min-width: 220px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.tree-stats-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin: 0 0 8px 0;
+}
+
+.tree-stats-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.tree-stats-table td {
+  padding: 2px 0;
+}
+
+.tree-stats-label {
+  color: var(--text-secondary);
+  padding-right: 16px;
+  white-space: nowrap;
+}
+
+.tree-stats-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.tree-stats-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.tree-stats-derived .tree-stats-label,
+.tree-stats-derived .tree-stats-value {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.tree-stats-separator td {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tree-stats-filter-note {
+  margin: 8px 0 0 0;
+  font-size: 0.78rem;
+  color: var(--accent-yellow);
+  font-style: italic;
+}
