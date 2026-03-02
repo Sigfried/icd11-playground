@@ -14,18 +14,17 @@ export interface DescendantLevel {
 
 const LEVEL_LABELS = ['Children', 'Grandchildren', 'Great-grandchildren'];
 
-/** Compute descendant levels (BFS) up to a depth limit */
+/** Compute descendant levels via BFS. Continues until no more descendants. */
 export function computeDescendantLevels(
   rootId: string,
   getChildrenFn: (id: string) => ConceptNode[],
-  maxDepth = 5,
 ): DescendantLevel[] {
   const levels: DescendantLevel[] = [];
   let currentIds = [rootId];
   let cumulativeCount = 0;
   const seen = new Set<string>([rootId]);
 
-  for (let depth = 0; depth < maxDepth; depth++) {
+  for (let depth = 0; ; depth++) {
     const nextNodes: ConceptNode[] = [];
     for (const id of currentIds) {
       for (const child of getChildrenFn(id)) {

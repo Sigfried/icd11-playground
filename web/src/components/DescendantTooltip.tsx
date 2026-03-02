@@ -28,7 +28,7 @@ export function DescendantTooltip({ nodeId, path, anchorRect, onClose, onMouseEn
   const tipRef = useRef<HTMLDivElement>(null);
 
   const node = getNode(nodeId);
-  const levels = computeDescendantLevels(nodeId, getChildren, 5);
+  const levels = computeDescendantLevels(nodeId, getChildren);
 
   // Dismiss on click outside (but not on clicks inside the tooltip)
   useEffect(() => {
