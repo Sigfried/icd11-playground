@@ -22,12 +22,12 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Fit-to-view cycling (fit all / fit width / fit height) | :white_circle: |
 | **NL Diagram** | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
-| | Descendant overlay: show all levels with scrolling | :white_circle: |
+| | Subgraph Shape View (drillable icicle/sunburst) | :yellow_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
 | | Advanced search options | :white_circle: |
 | | Filter mode: remove hover-based filtering (crash fix) | :yellow_circle: |
 | | Ancestor path hover: scroll + highlight target only | :yellow_circle: |
-| **Detail Panel** | Display `fullySpecifiedName` | :white_circle: |
+| **Detail Panel** | ~~Display `fullySpecifiedName`~~ | :green_circle: Done |
 | | Paths to root / Ancestors section redesign | :yellow_circle: |
 | | Detail panel differentiation from tree | :yellow_circle: |
 | **Data Model** | Foundation cross-references (maternal, perinatal, impairment) | :white_circle: |
@@ -288,9 +288,52 @@ This restructures the detail panel around the question "where does this concept 
 
 ---
 
-## Descendant Overlay — Show All Levels
+## Subgraph Shape View
 
-The descendant overlay currently caps at 5 levels. Since the maximum path depth is 13, this can cut off significant subtree structure. Change to show **all descendant levels** with scrolling in the overlay when the content exceeds the available height. No need for a hard level cap.
+A second NL-style view focused on **subgraph structure exploration** rather than neighborhood display. Where the current NL view shows a node's immediate parents/children/grandchildren, this view helps users understand the *shape* of the DAG rooted at any given node.
+
+### Interaction model
+
+Inspired by drillable sunburst/icicle charts:
+
+- **Drill down**: Click any descendant node to make it the new root (re-renders the view from that node's perspective)
+- **Drill up**: If the root has exactly one parent, clicking the root drills up to that parent. If the root has **multiple parents**, they're shown as nodes *above* the root — click any parent to drill up through that lineage.
+- **Back navigation**: After drilling into a child whose parent has many siblings, it may be hard to find the previous root among those siblings. Solution TBD — breadcrumb trail, explicit back button, or history stack.
+
+### What each summary node should convey
+
+For each visible node (or aggregated group), display:
+- **Children count / Descendant count** (already computed in graph data)
+- **Repeated nodes**: count of nodes that appear in multiple places within this subgraph, or shared with other subgraphs elsewhere in the Foundation
+- **Leaf node count**: descendants with no children (terminal concepts)
+- **Depth from here**: max depth of the subtree rooted at this node
+
+### Layout direction
+
+Horizontal (left → right) is preferred — matches the tree's top-down with a rotated icicle feel, and better uses wide screens.
+
+### Visualization approach — needs design
+
+The challenge: representing polyhierarchy in a space-partitioning chart. Standard icicle/sunburst assumes a tree (each node has exactly one parent). Options under consideration:
+
+1. **Modified icicle** (left → right): Size segments by descendant count. Nodes with multiple parents could appear multiple times (like the tree), or could be visually marked (e.g., dashed border, shared-node icon) and only appear once with a visual indicator of their other parents.
+
+2. **Aggregated summary nodes**: Instead of showing individual nodes at every level, show summary statistics per level (like the descendant level popover, but as a visual chart). Click a level segment to drill into it.
+
+3. **Hybrid**: Show individual nodes for the first 2–3 levels (direct children, grandchildren), then aggregate deeper levels into summary segments.
+
+### Example test case
+
+**Histopathology** (ID: 411368752) — 50 children, 3,225 descendants, max depth 5, 2 parents. URL: `http://localhost:5173/?s=eyJ2IjoidW5rbm93biIsIm9wcyI6W1sic2VsZWN0IiwiNDExMzY4NzUyIl1dfQ`
+
+This is a mid-complexity subtree where the shape should be displayable. Good for prototyping because it's large enough to need aggregation but not so large as to be overwhelming.
+
+### Open questions
+
+- Should this replace the current NL view, be a toggle/tab alongside it, or live in a separate panel?
+- How to visually encode polyhierarchy — repeated nodes, shared segments, edge indicators?
+- At what descendant count should individual nodes give way to aggregation?
+- Should the view link to the tree (click a node in shape view → select in tree)?
 
 ---
 
@@ -316,9 +359,9 @@ The parents/children lists in the detail panel largely duplicate what's visible 
 
 ---
 
-## Detail Panel — `fullySpecifiedName`
+## ~~Detail Panel — `fullySpecifiedName`~~ Done
 
-The API returns a `fullySpecifiedName` field that is fetched but not displayed. This is a longer, unambiguous name that can help distinguish concepts with similar short titles. Display it in the detail panel, probably below the main title in a smaller/muted style.
+Displayed below the title in the detail panel in muted style. Only shown when it differs from the node title (many are identical).
 
 ---
 
