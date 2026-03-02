@@ -27,4 +27,15 @@
   /* Semantic: hover/preview/highlight (transient attention — "I'm looking at this") */
   --color-hover: var(--accent-blue);
   --color-hover-bg: rgba(86, 156, 214, 0.15);
+
+  /* Semantic: search match highlighting */
+  --color-search-match: var(--accent-orange);
+
+  /* Semantic: badges (parent/child/descendant relationship indicators) */
+  --color-badge-parents: var(--accent-cyan);
+  --color-badge-children: var(--accent-green);
+  --color-badge-descendants: #5a8a50;
+
+  /* Semantic: links */
+  --color-link: var(--accent-cyan);
 }

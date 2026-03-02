@@ -197,7 +197,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     isSelected && 'selected',
     isHovered && 'hovered',
     isHighlighted && 'highlighted',
-    isSearchMatch && 'search-match',
+    (isSearchMatch || isFilterMatch) && 'search-match',
     isFilterActive && !isFilterMatch && isFilterAncestor && 'filter-ancestor',
   ].filter(Boolean).join(' ');
 

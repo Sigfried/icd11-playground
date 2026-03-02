@@ -145,8 +145,8 @@
 }
 
 .tree-mode-btn.active {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
 
 .tree-stats-btn {
@@ -168,6 +168,6 @@
 }
 
 .tree-stats-btn.active {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  border-color: var(--color-link);
+  color: var(--color-link);
 }
