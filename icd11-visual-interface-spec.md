@@ -25,7 +25,6 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Descendant overlay: show all levels with scrolling | :white_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
 | | Advanced search options | :white_circle: |
-| | Tree stats popover | :white_circle: |
 | | Filter mode: remove hover-based filtering (crash fix) | :yellow_circle: |
 | | Ancestor path hover: scroll + highlight target only | :yellow_circle: |
 | **Detail Panel** | Display `fullySpecifiedName` | :white_circle: |
