@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, useEffect, useMemo } from 'react';
+import Markdown from 'react-markdown';
 import { type ConceptNode, type EntityDetail, type TreePath, useGraph } from '../providers/GraphProvider';
 import { sortPathsInTreeOrder } from '../api/foundationData';
 import { Badge, type BadgeType } from './Badge';
@@ -342,11 +343,14 @@ export const DetailPanel = memo(function DetailPanel() {
           <h2 className={`detail-title${isPreviewing ? ' preview' : ''}`}>
             {nodeData?.title ?? `Entity ${displayNodeId}`}
           </h2>
+          {detail?.fullySpecifiedName && detail.fullySpecifiedName !== nodeData?.title && (
+            <div className="detail-fsn">{detail.fullySpecifiedName}</div>
+          )}
 
           {detailLoading ? (
             <p className="detail-definition loading">Loading definition...</p>
           ) : definition ? (
-            <p className="detail-definition">{definition}</p>
+            <div className="detail-definition"><Markdown>{definition}</Markdown></div>
           ) : null}
 
           <div className="detail-meta">

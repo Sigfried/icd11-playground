@@ -15,11 +15,26 @@
   color: var(--color-hover);
 }
 
+.detail-fsn {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+}
+
 .detail-definition {
   margin: 0 0 12px 0;
   font-size: 0.9rem;
   line-height: 1.4;
   color: var(--text-primary);
+}
+
+.detail-definition p {
+  margin: 0 0 4px 0;
+}
+
+.detail-definition ul {
+  margin: 4px 0;
+  padding-left: 20px;
 }
 
 .detail-meta {

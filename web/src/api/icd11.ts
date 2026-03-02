@@ -114,7 +114,9 @@ export function extractIdFromUri(uri: string): string {
 export function getTextValue(
   text: { '@language': string; '@value': string } | undefined
 ): string {
-  return text?.['@value'] ?? '';
+  const raw = text?.['@value'] ?? '';
+  // Strip format indicators (e.g. "!markdown ") returned by the API
+  return raw.replace(/^!markdown\s+/, '');
 }
 
 // --- Search ---

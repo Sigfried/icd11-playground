@@ -25,6 +25,7 @@ export interface ConceptNode {
 export interface EntityDetail {
   definition?: string;
   longDefinition?: string;
+  fullySpecifiedName?: string;
   synonyms: string[];
   narrowerTerms: string[];
   inclusions: string[];
@@ -248,6 +249,7 @@ function entityToDetail(entity: FoundationEntity): EntityDetail {
   return {
     definition: getTextValue(entity.definition) || undefined,
     longDefinition: getTextValue(entity.longDefinition) || undefined,
+    fullySpecifiedName: getTextValue(entity.fullySpecifiedName) || undefined,
     synonyms: (entity.synonym ?? []).map(s => getTextValue(s)),
     narrowerTerms: (entity.narrowerTerm ?? []).map(t => getTextValue(t)),
     inclusions: (entity.inclusion ?? []).map(i => getTextValue(i)),
