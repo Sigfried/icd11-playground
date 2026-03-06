@@ -1,6 +1,6 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useAppStore, type TreePath, type ConceptNode, pathKey } from '../store/appStore';
-import { getTotalTreeRows } from '../api/foundationData';
+import { useAppStore, type ConceptNode } from '../store/appStore';
+import { getTreeRow, getRowsForNode, getTotalRows } from '../api/treeData';
 import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
 import { DescendantTooltip } from './DescendantTooltip';
@@ -39,7 +39,7 @@ import './TreeView.css';
 /** Descendant tooltip state (shared via context to avoid prop drilling) */
 interface DescTooltipState {
   nodeId: string;
-  path: TreePath;
+  rowIndex: number;
   anchorRect: DOMRect;
 }
 
@@ -75,17 +75,15 @@ const SearchContext = createContext<SearchCtx>({
 });
 
 interface TreeNodeProps {
-  nodeId: string;
-  path: TreePath;
-  depth: number;
+  rowIndex: number;
 }
 
-function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
+function TreeNode({ rowIndex }: TreeNodeProps) {
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
-  const expandedPaths = useAppStore(s => s.expandedPaths);
+  const expandedRows = useAppStore(s => s.expandedRows);
   const selectNode = useAppStore(s => s.selectNode);
-  const toggleExpand = useAppStore(s => s.toggleExpand);
+  const toggleExpandRow = useAppStore(s => s.toggleExpandRow);
   const expandParentPaths = useAppStore(s => s.expandParentPaths);
   const highlightedNodeIds = useAppStore(s => s.highlightedNodeIds);
   const setHighlightedNodeIds = useAppStore(s => s.setHighlightedNodeIds);
@@ -96,8 +94,11 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
   const descCtx = useContext(DescTooltipContext);
   const searchCtx = useContext(SearchContext);
 
-  const pk = pathKey(path);
-  const isExpanded = expandedPaths.has(pk);
+  const row = getTreeRow(rowIndex);
+  if (!row) return null;
+
+  const { nodeId, depth } = row;
+  const isExpanded = expandedRows.has(rowIndex);
   const isSelected = selectedNodeId === nodeId;
   const isHovered = hoveredNodeId === nodeId;
   const isHighlighted = highlightedNodeIds.has(nodeId);
@@ -113,8 +114,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 
   const handleExpandClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleExpand(path);
-  }, [path, toggleExpand]);
+    toggleExpandRow(rowIndex);
+  }, [rowIndex, toggleExpandRow]);
 
   const handleSelectClick = useCallback(() => {
     selectNode(nodeId);
@@ -128,8 +129,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
 
   const handleChildBadgeClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleExpand(path);
-  }, [path, toggleExpand]);
+    toggleExpandRow(rowIndex);
+  }, [rowIndex, toggleExpandRow]);
 
   const handleDescendantBadgeClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -138,8 +139,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
       return;
     }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    descCtx.show({ nodeId, path, anchorRect: rect });
-  }, [nodeId, path, descCtx]);
+    descCtx.show({ nodeId, rowIndex, anchorRect: rect });
+  }, [nodeId, rowIndex, descCtx]);
 
   const handleDescendantBadgeHover = useCallback((e: React.MouseEvent) => {
     if (helpMode) return;
@@ -147,8 +148,8 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     setHighlightedNodeIds(new Set(getChildren(nodeId).map(c => c.id)));
     descCtx.cancelHide();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    descCtx.show({ nodeId, path, anchorRect: rect });
-  }, [nodeId, path, getChildren, setHighlightedNodeIds, descCtx, helpMode]);
+    descCtx.show({ nodeId, rowIndex, anchorRect: rect });
+  }, [nodeId, rowIndex, getChildren, setHighlightedNodeIds, descCtx, helpMode]);
 
   const handleDescendantBadgeLeave = useCallback(() => {
     setHighlightedNodeIds(new Set());
@@ -186,9 +187,6 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
     );
   }
 
-  // Get children in API order (all in memory)
-  const childNodes = isExpanded ? getChildren(nodeId) : [];
-
   const nodeClasses = [
     'tree-node',
     isSelected && 'selected',
@@ -208,7 +206,7 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
       <div
         className={nodeClasses}
         data-node-id={nodeId}
-        data-path-key={pk}
+        data-row-index={rowIndex}
         data-help-id="tree-node"
         style={{ paddingLeft: depth * 20 }}
         onClick={handleSelectClick}
@@ -261,14 +259,12 @@ function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
         </span>
       </div>
 
-      {isExpanded && childNodes.length > 0 && (
+      {isExpanded && row.childRowIndices.length > 0 && (
         <div className="tree-children">
-          {childNodes.map(child => (
+          {row.childRowIndices.map(childIdx => (
             <TreeNode
-              key={`${pk}/${child.id}`}
-              nodeId={child.id}
-              path={[...path, child.id]}
-              depth={depth + 1}
+              key={childIdx}
+              rowIndex={childIdx}
             />
           ))}
         </div>
@@ -311,17 +307,43 @@ function computeFilterAncestors(
   return ancestors;
 }
 
+/**
+ * Expand ancestor rows for a set of node IDs.
+ * For each node, finds its first row occurrence and adds all ancestor row indices.
+ */
+function expandAncestorRowsForNodes(nodeIds: Iterable<string>, prev: Set<number>, maxNodes: number): Set<number> {
+  const next = new Set(prev);
+  let changed = false;
+  let count = 0;
+  for (const id of nodeIds) {
+    if (count >= maxNodes) break;
+    count++;
+    const rows = getRowsForNode(id);
+    if (rows.length === 0) continue;
+    const row = getTreeRow(rows[0]);
+    if (!row) continue;
+    // pathFromRoot includes self; expand all ancestors (exclude self)
+    for (const ancestorIdx of row.pathFromRoot.slice(0, -1)) {
+      if (!prev.has(ancestorIdx)) {
+        next.add(ancestorIdx);
+        changed = true;
+      }
+    }
+  }
+  return changed ? next : prev;
+}
+
 export const TreeView = memo(function TreeView() {
   const rootId = useAppStore(s => s.rootId);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
   const graphLoading = useAppStore(s => s.graphLoading);
-  const setExpandedPaths = useAppStore(s => s.setExpandedPaths);
+  const setExpandedRows = useAppStore(s => s.setExpandedRows);
   const getNode = useAppStore(s => s.getNode);
   const getParents = useAppStore(s => s.getParents);
   const displayedNodeIds = useAppStore(s => s.displayedNodeIds);
-  const targetTreePath = useAppStore(s => s.targetTreePath);
-  const clearTargetTreePath = useAppStore(s => s.clearTargetTreePath);
+  const targetRowIndex = useAppStore(s => s.targetRowIndex);
+  const clearTargetRow = useAppStore(s => s.clearTargetRow);
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -354,60 +376,18 @@ export const TreeView = memo(function TreeView() {
     return computeFilterAncestors(effectiveFilterMatchIds, getParents);
   }, [effectiveFilterMatchIds, getParents]);
 
-  // Auto-expand paths to matches in search-driven filter/highlight mode.
+  // Auto-expand rows to matches in search-driven filter/highlight mode.
   useEffect(() => {
     const matchIds = filterMatchIds ?? highlightMatchIds;
     if (!matchIds || matchIds.size === 0) return;
+    setExpandedRows(prev => expandAncestorRowsForNodes(matchIds, prev, 100));
+  }, [filterMatchIds, highlightMatchIds, setExpandedRows]);
 
-    const MAX_EXPAND = 100;
-    const idsToExpand = [...matchIds].slice(0, MAX_EXPAND);
-
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
-      for (const id of idsToExpand) {
-        const ancestorPath: string[] = [id];
-        let currentId = id;
-        for (let i = 0; i < 30; i++) {
-          const parents = getParents(currentId);
-          if (parents.length === 0) break;
-          ancestorPath.unshift(parents[0].id);
-          currentId = parents[0].id;
-        }
-        for (let i = 1; i <= ancestorPath.length; i++) {
-          next.add(pathKey(ancestorPath.slice(0, i)));
-        }
-      }
-      return next;
-    });
-  }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
-
-  // Pre-expand tree paths for all NL-displayed nodes so hover only needs to scroll.
+  // Pre-expand tree rows for all NL-displayed nodes so hover only needs to scroll.
   useEffect(() => {
     if (displayedNodeIds.size === 0) return;
-
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const id of displayedNodeIds) {
-        const ancestorPath: string[] = [id];
-        let currentId = id;
-        for (let i = 0; i < 30; i++) {
-          const parents = getParents(currentId);
-          if (parents.length === 0) break;
-          ancestorPath.unshift(parents[0].id);
-          currentId = parents[0].id;
-        }
-        for (let i = 1; i <= ancestorPath.length; i++) {
-          const key = pathKey(ancestorPath.slice(0, i));
-          if (!prev.has(key)) {
-            next.add(key);
-            changed = true;
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [displayedNodeIds, getParents, setExpandedPaths]);
+    setExpandedRows(prev => expandAncestorRowsForNodes(displayedNodeIds, prev, Infinity));
+  }, [displayedNodeIds, setExpandedRows]);
 
   // Search callbacks
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
@@ -445,16 +425,15 @@ export const TreeView = memo(function TreeView() {
     }
   }, [hoveredNodeId]);
 
-  // Scroll to targetTreePath when it changes
+  // Scroll to targetRowIndex when it changes
   useEffect(() => {
-    if (!targetTreePath || !contentRef.current) return;
-    const pk = pathKey(targetTreePath);
+    if (targetRowIndex === null || !contentRef.current) return;
     requestAnimationFrame(() => {
-      const el = contentRef.current?.querySelector(`[data-path-key="${CSS.escape(pk)}"]`);
+      const el = contentRef.current?.querySelector(`[data-row-index="${targetRowIndex}"]`);
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      clearTargetTreePath();
+      clearTargetRow();
     });
-  }, [targetTreePath, clearTargetTreePath]);
+  }, [targetRowIndex, clearTargetRow]);
 
   const cancelHide = useCallback(() => {
     if (hideTimerRef.current) {
@@ -523,6 +502,13 @@ export const TreeView = memo(function TreeView() {
     return null;
   }, [searchMode, filterMatchIds, highlightQuery, selectedNodeId, getNode]);
 
+  // Find the root row index (row 0 for single-root trees)
+  const rootRowIndex = useMemo(() => {
+    if (!rootId) return -1;
+    const rows = getRowsForNode(rootId);
+    return rows.length > 0 ? rows[0] : -1;
+  }, [rootId]);
+
   // Global keyboard shortcut: Ctrl+F or / to focus search
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -587,8 +573,8 @@ export const TreeView = memo(function TreeView() {
         <div className="panel-content tree-content" ref={contentRef}>
           {graphLoading ? (
             <div className="placeholder">Loading Foundation...</div>
-          ) : rootId ? (
-            <TreeNode nodeId={rootId} path={[rootId]} depth={0} />
+          ) : rootRowIndex >= 0 ? (
+            <TreeNode rowIndex={rootRowIndex} />
           ) : (
             <div className="placeholder">Failed to load Foundation</div>
           )}
@@ -596,7 +582,7 @@ export const TreeView = memo(function TreeView() {
         {descTooltip && (
           <DescendantTooltip
             nodeId={descTooltip.nodeId}
-            path={descTooltip.path}
+            rowIndex={descTooltip.rowIndex}
             anchorRect={descTooltip.anchorRect}
             onClose={hide}
             onMouseEnter={cancelHide}
@@ -608,7 +594,7 @@ export const TreeView = memo(function TreeView() {
             anchorRect={statsAnchor}
             onDismiss={dismissStats}
             totalConcepts={totalConcepts}
-            totalTreeRows={getTotalTreeRows()}
+            totalTreeRows={getTotalRows()}
             visibleRows={visibleStats.rows}
             visibleUnique={visibleStats.unique}
             filterNote={filterNote}

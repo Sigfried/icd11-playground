@@ -81,7 +81,7 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       }
 
       // Navigate tree
-      const nav = computeTreeNav(id, get().expandedPaths);
+      const nav = computeTreeNav(id, get().expandedRows);
       set(nav);
     },
 

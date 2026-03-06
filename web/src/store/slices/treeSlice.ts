@@ -1,108 +1,133 @@
 /**
  * Tree expansion and navigation slice.
  *
- * Owns: expandedPaths, targetTreePath, tree navigation.
- * Uses foundationData directly for parent lookups.
+ * Uses materialized TreeRow[] from treeData. Expansion is tracked as
+ * Set<number> of expanded row indices. Visible rows are computed from
+ * the expansion set + DFS order.
  */
 
 import type { TreePath } from '../../api/foundationData';
-import { getParents, hasNode } from '../../api/foundationData';
+import { getRowsForNode, getTreeRows, getTreeRow } from '../../api/treeData';
 import type { SetState, GetState } from '../types';
 
 export { type TreePath };
 
-/** Convert TreePath to string key for Set storage */
-export function pathKey(path: TreePath): string {
-  return path.join('/');
-}
-
-export interface TreeSliceState {
-  expandedPaths: Set<string>;
-  targetTreePath: TreePath | null;
-}
-
-export interface TreeSliceActions {
-  setExpandedPaths: (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
-  toggleExpand: (path: TreePath) => void;
-  expandParentPaths: (nodeId: string) => void;
-  navigateTreeToNode: (targetId: string) => void;
-  navigateToTreePath: (path: TreePath) => void;
-  clearTargetTreePath: () => void;
+/**
+ * Expand all ancestors of a row (make it visible).
+ * Returns ancestor row indices (excludes self).
+ */
+function expandAncestors(rowIndex: number): number[] {
+  const row = getTreeRow(rowIndex);
+  if (!row) return [];
+  return row.pathFromRoot.slice(0, -1);
 }
 
 /**
- * Build first-parent path and expand all prefixes.
- * Shared by navigateTreeToNode and other callers that need tree nav.
+ * Compute tree navigation: find the first row for a node, expand its ancestors.
  */
-export function computeTreeNav(targetId: string, prevExpandedPaths: Set<string>): {
-  expandedPaths: Set<string>;
-  targetTreePath: TreePath;
+export function computeTreeNav(targetId: string, prevExpandedRows: Set<number>): {
+  expandedRows: Set<number>;
+  targetRowIndex: number;
 } {
-  if (!hasNode(targetId)) return { expandedPaths: prevExpandedPaths, targetTreePath: [] };
-  const path: string[] = [targetId];
-  let currentId = targetId;
-  for (let i = 0; i < 30; i++) {
-    const parents = getParents(currentId);
-    if (parents.length === 0) break;
-    path.unshift(parents[0].id);
-    currentId = parents[0].id;
+  const nodeRows = getRowsForNode(targetId);
+  if (nodeRows.length === 0) return { expandedRows: prevExpandedRows, targetRowIndex: -1 };
+  const targetRow = nodeRows[0]; // first occurrence
+  const ancestors = expandAncestors(targetRow);
+  const next = new Set(prevExpandedRows);
+  for (const idx of ancestors) next.add(idx);
+  return { expandedRows: next, targetRowIndex: targetRow };
+}
+
+/** Find the row index matching a TreePath (nodeId[] from root to target). */
+export function findRowForPath(path: TreePath): number {
+  const rows = getTreeRows();
+  if (path.length === 0 || rows.length === 0) return -1;
+
+  // Find root rows for path[0]
+  const rootRows = getRowsForNode(path[0]);
+  if (rootRows.length === 0) return -1;
+  if (path.length === 1) return rootRows[0];
+
+  // For each candidate root row, walk down matching children
+  for (const startRow of rootRows) {
+    let currentRow = startRow;
+    let matched = true;
+    for (let p = 1; p < path.length; p++) {
+      const parent = rows[currentRow];
+      let found = false;
+      for (const childIdx of parent.childRowIndices) {
+        if (rows[childIdx].nodeId === path[p]) {
+          currentRow = childIdx;
+          found = true;
+          break;
+        }
+      }
+      if (!found) { matched = false; break; }
+    }
+    if (matched) return currentRow;
   }
-  const next = new Set(prevExpandedPaths);
-  for (let i = 1; i <= path.length; i++) {
-    next.add(pathKey(path.slice(0, i)));
-  }
-  return { expandedPaths: next, targetTreePath: path };
+  return -1;
+}
+
+export interface TreeSliceState {
+  expandedRows: Set<number>;
+  targetRowIndex: number | null;
+}
+
+export interface TreeSliceActions {
+  setExpandedRows: (updater: Set<number> | ((prev: Set<number>) => Set<number>)) => void;
+  toggleExpandRow: (rowIndex: number) => void;
+  expandParentPaths: (nodeId: string) => void;
+  navigateTreeToNode: (targetId: string) => void;
+  navigateToRow: (rowIndex: number) => void;
+  navigateToTreePath: (path: TreePath) => void;
+  clearTargetRow: () => void;
 }
 
 export function createTreeSlice(set: SetState, _get: GetState): TreeSliceState & TreeSliceActions {
   return {
-    expandedPaths: new Set<string>(),
-    targetTreePath: null,
+    expandedRows: new Set<number>(),
+    targetRowIndex: null,
 
-    setExpandedPaths: (updater) => set(state => ({
-      expandedPaths: typeof updater === 'function' ? updater(state.expandedPaths) : updater,
+    setExpandedRows: (updater) => set(state => ({
+      expandedRows: typeof updater === 'function' ? updater(state.expandedRows) : updater,
     })),
 
-    toggleExpand: (path) => set(state => {
-      const key = pathKey(path);
-      const next = new Set(state.expandedPaths);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return { expandedPaths: next };
+    toggleExpandRow: (rowIndex) => set(state => {
+      const next = new Set(state.expandedRows);
+      if (next.has(rowIndex)) next.delete(rowIndex);
+      else next.add(rowIndex);
+      return { expandedRows: next };
     }),
 
     expandParentPaths: (nodeId) => set(state => {
-      const nodeParents = getParents(nodeId);
-      if (nodeParents.length <= 1) return state;
-      const next = new Set(state.expandedPaths);
-      for (const parent of nodeParents) {
-        const ancestorPath: string[] = [parent.id, nodeId];
-        let currentId = parent.id;
-        for (let i = 0; i < 30; i++) {
-          const grandparents = getParents(currentId);
-          if (grandparents.length === 0) break;
-          ancestorPath.unshift(grandparents[0].id);
-          currentId = grandparents[0].id;
-        }
-        for (let i = 1; i <= ancestorPath.length; i++) {
-          next.add(pathKey(ancestorPath.slice(0, i)));
-        }
+      const nodeRows = getRowsForNode(nodeId);
+      if (nodeRows.length <= 1) return state;
+      const next = new Set(state.expandedRows);
+      for (const rowIdx of nodeRows) {
+        for (const a of expandAncestors(rowIdx)) next.add(a);
       }
-      return { expandedPaths: next };
+      return { expandedRows: next };
     }),
 
     navigateTreeToNode: (targetId) => set(state =>
-      computeTreeNav(targetId, state.expandedPaths)
+      computeTreeNav(targetId, state.expandedRows)
     ),
 
-    navigateToTreePath: (path) => set(state => {
-      const next = new Set(state.expandedPaths);
-      for (let i = 1; i <= path.length; i++) {
-        next.add(pathKey(path.slice(0, i)));
-      }
-      return { expandedPaths: next, targetTreePath: path };
+    navigateToRow: (rowIndex) => set(state => {
+      const next = new Set(state.expandedRows);
+      for (const a of expandAncestors(rowIndex)) next.add(a);
+      return { expandedRows: next, targetRowIndex: rowIndex };
     }),
 
-    clearTargetTreePath: () => set({ targetTreePath: null }),
+    navigateToTreePath: (path) => set(state => {
+      const rowIndex = findRowForPath(path);
+      if (rowIndex === -1) return state;
+      const next = new Set(state.expandedRows);
+      for (const a of expandAncestors(rowIndex)) next.add(a);
+      return { expandedRows: next, targetRowIndex: rowIndex };
+    }),
+
+    clearTargetRow: () => set({ targetRowIndex: null }),
   };
 }

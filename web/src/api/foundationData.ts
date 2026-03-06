@@ -115,11 +115,6 @@ export function getGraphRelease(): string | null {
   return graphRelease;
 }
 
-/** Total tree rows if fully expanded (precomputed at init). */
-export function getTotalTreeRows(): number {
-  return totalTreeRows;
-}
-
 function assertGraph(): Graph<ConceptNode> {
   if (!graph) throw new Error('Graph not initialized — call initGraph() first');
   return graph;

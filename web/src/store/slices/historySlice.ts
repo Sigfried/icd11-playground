@@ -163,9 +163,9 @@ export function createHistorySlice(set: SetState, get: GetState): HistorySliceSt
                 };
 
                 if (focusId && hasNode(focusId)) {
-                  const nav = computeTreeNav(focusId, get().expandedPaths);
-                  updates.expandedPaths = nav.expandedPaths;
-                  updates.targetTreePath = nav.targetTreePath;
+                  const nav = computeTreeNav(focusId, get().expandedRows);
+                  updates.expandedRows = nav.expandedRows;
+                  updates.targetRowIndex = nav.targetRowIndex;
                 }
 
                 set(updates as Partial<import('../types').AppState>);
@@ -200,7 +200,7 @@ export function createHistorySlice(set: SetState, get: GetState): HistorySliceSt
 
       const snapshot = currentSnapshot(newHistory);
       if (snapshot?.focusNodeId && hasNode(snapshot.focusNodeId)) {
-        const nav = computeTreeNav(snapshot.focusNodeId, get().expandedPaths);
+        const nav = computeTreeNav(snapshot.focusNodeId, get().expandedRows);
         set(nav);
       }
       persistHistory(get);
@@ -214,7 +214,7 @@ export function createHistorySlice(set: SetState, get: GetState): HistorySliceSt
 
       const snapshot = currentSnapshot(newHistory);
       if (snapshot?.focusNodeId && hasNode(snapshot.focusNodeId)) {
-        const nav = computeTreeNav(snapshot.focusNodeId, get().expandedPaths);
+        const nav = computeTreeNav(snapshot.focusNodeId, get().expandedRows);
         set(nav);
       }
       persistHistory(get);

@@ -14,6 +14,7 @@ import {
   getGraph,
   getPathsToRoot,
 } from '../../api/foundationData';
+import { buildTree } from '../../api/treeData';
 import { type FoundationGraphJson, foundationStore } from '../../api/foundationStore';
 import type { GraphMeta } from '../../api/foundationStore';
 import type { SetState, GetState } from '../types';
@@ -67,10 +68,12 @@ export function createGraphSlice(set: SetState, _get: GetState): GraphSliceState
         const meta = data._meta as GraphMeta | undefined;
         delete data._meta;
         fdInitGraph(data, meta?.release);
+        buildTree();
 
+        // Expand root row (row 0)
         set({
           rootId: 'root',
-          expandedPaths: new Set(['root']),
+          expandedRows: new Set([0]),
           graphLoading: false,
         });
       } catch (error) {

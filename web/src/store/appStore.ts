@@ -17,7 +17,7 @@ import { createShareSlice } from './slices/shareSlice';
 // Re-export types consumers need
 export type { ConceptNode, EntityDetail, TreePath } from '../api/foundationData';
 export type { PendingRestore } from './slices/historySlice';
-export { pathKey } from './slices/treeSlice';
+export type { TreeRow, NodeEntry } from '../api/treeData';
 
 export const useAppStore = create<AppState>()((set, get) => ({
   ...createGraphSlice(set, get),

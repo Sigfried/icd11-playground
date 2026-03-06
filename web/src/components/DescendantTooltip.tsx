@@ -10,23 +10,24 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useAppStore, type TreePath, pathKey } from '../store/appStore';
+import { useAppStore } from '../store/appStore';
+import { getTreeRow } from '../api/treeData';
 import { computeDescendantLevels, type DescendantLevel } from '../utils/descendantLevels';
 import './DescendantTooltip.css';
 
 interface DescendantTooltipProps {
   nodeId: string;
-  path: TreePath;
+  rowIndex: number;
   anchorRect: DOMRect;
   onClose: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
 
-export function DescendantTooltip({ nodeId, path, anchorRect, onClose, onMouseEnter, onMouseLeave }: DescendantTooltipProps) {
+export function DescendantTooltip({ nodeId, rowIndex, anchorRect, onClose, onMouseEnter, onMouseLeave }: DescendantTooltipProps) {
   const getNode = useAppStore(s => s.getNode);
   const getChildren = useAppStore(s => s.getChildren);
-  const setExpandedPaths = useAppStore(s => s.setExpandedPaths);
+  const setExpandedRows = useAppStore(s => s.setExpandedRows);
   const tipRef = useRef<HTMLDivElement>(null);
 
   const node = getNode(nodeId);
@@ -50,21 +51,27 @@ export function DescendantTooltip({ nodeId, path, anchorRect, onClose, onMouseEn
   }, [onClose]);
 
   const expandToLevel = useCallback((_level: DescendantLevel, levelIdx: number) => {
-    const throughLevels = levels.slice(0, levelIdx + 1);
-    setExpandedPaths(prev => {
+    const expandDepth = levelIdx + 1;
+    setExpandedRows(prev => {
       const next = new Set(prev);
-      const expandBfs = (id: string, currentPath: string[], remainingDepth: number) => {
-        next.add(pathKey(currentPath));
-        if (remainingDepth <= 0) return;
-        for (const child of getChildren(id)) {
-          expandBfs(child.id, [...currentPath, child.id], remainingDepth - 1);
+      // BFS through childRowIndices to the requested depth
+      const queue: Array<{ ri: number; d: number }> = [{ ri: rowIndex, d: 0 }];
+      while (queue.length > 0) {
+        const { ri, d } = queue.shift()!;
+        next.add(ri);
+        if (d < expandDepth) {
+          const row = getTreeRow(ri);
+          if (row) {
+            for (const childIdx of row.childRowIndices) {
+              queue.push({ ri: childIdx, d: d + 1 });
+            }
+          }
         }
-      };
-      expandBfs(nodeId, path, throughLevels.length);
+      }
       return next;
     });
     onClose();
-  }, [nodeId, path, levels, getChildren, setExpandedPaths, onClose]);
+  }, [rowIndex, setExpandedRows, onClose]);
 
   // Position: to the right of the anchor, or left if not enough room
   const tipStyle: React.CSSProperties = {
