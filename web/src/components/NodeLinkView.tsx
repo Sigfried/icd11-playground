@@ -2,7 +2,7 @@ import { memo, useRef, useEffect, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import ELK from 'elkjs/lib/elk-api';
 import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url';
-import { type ConceptNode, useGraph } from '../providers/GraphProvider';
+import { useAppStore, type ConceptNode } from '../store/appStore';
 import { buildNlSubgraph } from '../state/nlSubgraph';
 import { computeDescendantLevels } from '../utils/descendantLevels';
 import { renderBadgeHTML } from './Badge';
@@ -156,14 +156,25 @@ function computeClusterInfo(
 
 export const NodeLinkView = memo(function NodeLinkView() {
   trackRender('NodeLinkView');
-  const {
-    selectedNodeId, selectNode, setHoveredNodeId,
-    getNode, getParents, getChildren, getGraph,
-    displayedNodeIds, expandNodes, removeNode, removeNodes, resetNeighborhood,
-    historyBack, historyForward, canUndo, canRedo,
-    highlightedNodeIds, setHighlightedNodeIds,
-    helpMode,
-  } = useGraph();
+  const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const selectNode = useAppStore(s => s.selectNode);
+  const setHoveredNodeId = useAppStore(s => s.setHoveredNodeId);
+  const getNode = useAppStore(s => s.getNode);
+  const getParents = useAppStore(s => s.getParents);
+  const getChildren = useAppStore(s => s.getChildren);
+  const getGraph = useAppStore(s => s.getGraph);
+  const displayedNodeIds = useAppStore(s => s.displayedNodeIds);
+  const expandNodes = useAppStore(s => s.expandNodes);
+  const removeNode = useAppStore(s => s.removeNode);
+  const removeNodes = useAppStore(s => s.removeNodes);
+  const resetNeighborhood = useAppStore(s => s.resetNeighborhood);
+  const historyBack = useAppStore(s => s.historyBack);
+  const historyForward = useAppStore(s => s.historyForward);
+  const canUndo = useAppStore(s => s.canUndo);
+  const canRedo = useAppStore(s => s.canRedo);
+  const highlightedNodeIds = useAppStore(s => s.highlightedNodeIds);
+  const setHighlightedNodeIds = useAppStore(s => s.setHighlightedNodeIds);
+  const helpMode = useAppStore(s => s.helpMode);
   const svgRef = useRef<SVGSVGElement>(null);
   // Ref so D3 closures always see current helpMode
   const helpModeRef = useRef(helpMode);

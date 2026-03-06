@@ -4,7 +4,7 @@
  */
 
 import type { CrashCheckpointData } from '../utils/crashCheckpoint';
-import { useGraph } from '../providers/GraphProvider';
+import { useAppStore } from '../store/appStore';
 import './ResumeModal.css';
 
 interface CrashRecoveryModalProps {
@@ -15,7 +15,7 @@ interface CrashRecoveryModalProps {
 }
 
 export function CrashRecoveryModal({ checkpoint, crashLoop, onRestore, onStartFresh }: CrashRecoveryModalProps) {
-  const { getNode } = useGraph();
+  const getNode = useAppStore(s => s.getNode);
 
   const focusTitle = checkpoint.selectedNodeId
     ? (getNode(checkpoint.selectedNodeId)?.title ?? checkpoint.selectedNodeId)

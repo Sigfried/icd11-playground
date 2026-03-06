@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DetailPanel } from './DetailPanel';
-import { GraphProvider, useGraph } from '../providers/GraphProvider';
+import { useAppStore } from '../store/appStore';
 
 /**
  * Test for DetailPanel rendering with selection changes.
@@ -78,20 +78,25 @@ describe('DetailPanel selection change', () => {
       const [shouldSelect, setShouldSelect] = useState(false);
 
       return (
-        <GraphProvider>
+        <>
           <GraphSetup shouldSelect={shouldSelect} />
           <DetailPanel />
           <button onClick={() => setShouldSelect(true)} data-testid="select-btn">
             Select Node
           </button>
-        </GraphProvider>
+        </>
       );
     }
 
     function GraphSetup({ shouldSelect }: { shouldSelect: boolean }) {
-      const { selectNode } = useGraph();
+      const selectNode = useAppStore(s => s.selectNode);
+      const initGraph = useAppStore(s => s.initGraph);
 
-      React.useEffect(() => {
+      useEffect(() => {
+        initGraph();
+      }, [initGraph]);
+
+      useEffect(() => {
         if (shouldSelect) {
           selectNode('test-123');
         }

@@ -1,6 +1,6 @@
 import { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import Markdown from 'react-markdown';
-import { type ConceptNode, type EntityDetail, type TreePath, useGraph } from '../providers/GraphProvider';
+import { useAppStore, type ConceptNode, type EntityDetail, type TreePath } from '../store/appStore';
 import { sortPathsInTreeOrder } from '../api/foundationData';
 import { Badge, type BadgeType } from './Badge';
 import { trackRender } from '../utils/renderStormDetector';
@@ -28,7 +28,10 @@ interface RelationListProps {
 
 /** Single item in a relation list with inline expandable sub-lists */
 function RelationListItem({ node, onSelect }: { node: ConceptNode; onSelect: (id: string) => void }) {
-  const { getParents, getChildren, highlightedNodeIds, setHighlightedNodeIds } = useGraph();
+  const getParents = useAppStore(s => s.getParents);
+  const getChildren = useAppStore(s => s.getChildren);
+  const highlightedNodeIds = useAppStore(s => s.highlightedNodeIds);
+  const setHighlightedNodeIds = useAppStore(s => s.setHighlightedNodeIds);
   const [expanded, setExpanded] = useState<Set<BadgeType>>(new Set());
   const isHighlighted = highlightedNodeIds.has(node.id);
 
@@ -244,17 +247,15 @@ function Ancestors({ paths, activePathIndex, onCycle, onSelectPath, onHoverPath,
 
 export const DetailPanel = memo(function DetailPanel() {
   trackRender('DetailPanel');
-  const {
-    selectedNodeId,
-    hoveredNodeId,
-    selectNode,
-    getNode,
-    getChildren,
-    getDetail,
-    getPathsToRoot,
-    navigateToTreePath,
-    setHighlightedNodeIds,
-  } = useGraph();
+  const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
+  const selectNode = useAppStore(s => s.selectNode);
+  const getNode = useAppStore(s => s.getNode);
+  const getChildren = useAppStore(s => s.getChildren);
+  const getDetail = useAppStore(s => s.getDetail);
+  const getPathsToRoot = useAppStore(s => s.getPathsToRoot);
+  const navigateToTreePath = useAppStore(s => s.navigateToTreePath);
+  const setHighlightedNodeIds = useAppStore(s => s.setHighlightedNodeIds);
 
   const displayNodeId = hoveredNodeId ?? selectedNodeId;
   const isPreviewing = hoveredNodeId !== null && hoveredNodeId !== selectedNodeId;

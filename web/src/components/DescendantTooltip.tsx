@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useGraph, type TreePath, pathKey } from '../providers/GraphProvider';
+import { useAppStore, type TreePath, pathKey } from '../store/appStore';
 import { computeDescendantLevels, type DescendantLevel } from '../utils/descendantLevels';
 import './DescendantTooltip.css';
 
@@ -24,7 +24,9 @@ interface DescendantTooltipProps {
 }
 
 export function DescendantTooltip({ nodeId, path, anchorRect, onClose, onMouseEnter, onMouseLeave }: DescendantTooltipProps) {
-  const { getNode, getChildren, setExpandedPaths } = useGraph();
+  const getNode = useAppStore(s => s.getNode);
+  const getChildren = useAppStore(s => s.getChildren);
+  const setExpandedPaths = useAppStore(s => s.setExpandedPaths);
   const tipRef = useRef<HTMLDivElement>(null);
 
   const node = getNode(nodeId);

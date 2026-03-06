@@ -3,8 +3,8 @@
  * Lets the user choose to resume or start fresh.
  */
 
-import type { PendingRestore } from '../hooks/useNlHistory';
-import { useGraph } from '../providers/GraphProvider';
+import type { PendingRestore } from '../store/appStore';
+import { useAppStore } from '../store/appStore';
 import './ResumeModal.css';
 
 interface ResumeModalProps {
@@ -12,7 +12,7 @@ interface ResumeModalProps {
 }
 
 export function ResumeModal({ pending }: ResumeModalProps) {
-  const { getNode } = useGraph();
+  const getNode = useAppStore(s => s.getNode);
 
   const focusTitle = pending.focusNodeId
     ? (getNode(pending.focusNodeId)?.title ?? pending.focusNodeId)

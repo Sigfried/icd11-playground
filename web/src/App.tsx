@@ -1,16 +1,14 @@
 import { useCallback, useState, useEffect } from 'react';
-import { GraphProvider, useGraph } from './providers/GraphProvider';
+import { useAppStore } from './store/appStore';
 import { TreeView } from './components/TreeView';
 import { NodeLinkView } from './components/NodeLinkView';
 import { DetailPanel } from './components/DetailPanel';
 import { ResumeModal } from './components/ResumeModal';
-import { CrashRecoveryModal } from './components/CrashRecoveryModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AboutPanel } from './components/AboutPanel';
 import { HelpPopover } from './components/HelpPopover';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import { useHelpMode } from './hooks/useHelpMode';
-import { trackRender } from './utils/renderStormDetector';
 import './App.css';
 
 /**
@@ -30,14 +28,12 @@ function LayoutToggle({ mode, onToggle }: { mode: string; onToggle: () => void }
       title={mode === 'two-row' ? 'Switch to column layout' : 'Switch to row layout'}
     >
       {mode === 'two-row' ? (
-        // Show the two-col icon (what you'll switch TO)
         <svg width="20" height="16" viewBox="0 0 20 16">
           <rect x="0.5" y="0.5" width="19" height="15" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
           <line x1="8" y1="1" x2="8" y2="15" stroke="currentColor" strokeWidth="1" />
           <line x1="8" y1="8" x2="19" y2="8" stroke="currentColor" strokeWidth="1" />
         </svg>
       ) : (
-        // Show the two-row icon (what you'll switch TO)
         <svg width="20" height="16" viewBox="0 0 20 16">
           <rect x="0.5" y="0.5" width="19" height="15" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
           <line x1="10" y1="1" x2="10" y2="9" stroke="currentColor" strokeWidth="1" />
@@ -48,28 +44,53 @@ function LayoutToggle({ mode, onToggle }: { mode: string; onToggle: () => void }
   );
 }
 
-function GlobalCrashRecoveryModal() {
-  const { crashCheckpoint, crashLoop, restoreCrashCheckpoint, dismissCrashCheckpoint } = useGraph();
-  if (!crashCheckpoint) return null;
-  return (
-    <CrashRecoveryModal
-      checkpoint={crashCheckpoint}
-      crashLoop={crashLoop}
-      onRestore={restoreCrashCheckpoint}
-      onStartFresh={dismissCrashCheckpoint}
-    />
-  );
+/** Runs init effects: graph load, history restore, URL snapshot, about panel. */
+function AppInit() {
+  const initGraph = useAppStore(s => s.initGraph);
+  const initHistory = useAppStore(s => s.initHistory);
+  const applyUrlSnapshot = useAppStore(s => s.applyUrlSnapshot);
+  const graphLoading = useAppStore(s => s.graphLoading);
+  const rootId = useAppStore(s => s.rootId);
+  const historyInitComplete = useAppStore(s => s.historyInitComplete);
+  const pendingRestore = useAppStore(s => s.pendingRestore);
+  const setShowAbout = useAppStore(s => s.setShowAbout);
+
+  const graphReady = !graphLoading && rootId !== null;
+
+  // Load graph on mount
+  useEffect(() => { initGraph(); }, [initGraph]);
+
+  // Load history after graph is ready
+  useEffect(() => {
+    if (graphReady) initHistory();
+  }, [graphReady, initHistory]);
+
+  // Apply URL snapshot after history init
+  useEffect(() => {
+    if (graphReady && historyInitComplete) applyUrlSnapshot();
+  }, [graphReady, historyInitComplete, applyUrlSnapshot]);
+
+  // Auto-show About panel on first visit
+  useEffect(() => {
+    if (!graphReady || pendingRestore) return;
+    if (!localStorage.getItem('icd11-hide-about')) {
+      setShowAbout(true);
+    }
+  }, [graphReady, pendingRestore, setShowAbout]);
+
+  return null;
 }
 
 function GlobalResumeModal() {
-  const { pendingRestore, crashCheckpoint } = useGraph();
-  // Suppress resume modal while crash recovery modal is showing
-  if (!pendingRestore || crashCheckpoint) return null;
+  const pendingRestore = useAppStore(s => s.pendingRestore);
+  if (!pendingRestore) return null;
   return <ResumeModal pending={pendingRestore} />;
 }
 
 function GlobalHelpPopover() {
-  const { activeHelpEntry, helpContent, dismissHelpEntry } = useGraph();
+  const activeHelpEntry = useAppStore(s => s.activeHelpEntry);
+  const helpContent = useAppStore(s => s.helpContent);
+  const dismissHelpEntry = useAppStore(s => s.dismissHelpEntry);
   if (!activeHelpEntry) return null;
   const entry = helpContent.entries.get(activeHelpEntry.id);
   return (
@@ -83,7 +104,11 @@ function GlobalHelpPopover() {
 }
 
 function GlobalAboutPanel() {
-  const { showAbout, helpContent, setShowAbout, pendingRestore, crashCheckpoint } = useGraph();
+  const showAbout = useAppStore(s => s.showAbout);
+  const helpContent = useAppStore(s => s.helpContent);
+  const setShowAbout = useAppStore(s => s.setShowAbout);
+  const pendingRestore = useAppStore(s => s.pendingRestore);
+
   const [hideOnStartup, setHideOnStartup] = useState(
     () => localStorage.getItem('icd11-hide-about') === 'true'
   );
@@ -99,7 +124,7 @@ function GlobalAboutPanel() {
 
   const handleDismiss = useCallback(() => setShowAbout(false), [setShowAbout]);
 
-  if (!showAbout || pendingRestore || crashCheckpoint) return null;
+  if (!showAbout || pendingRestore) return null;
   return (
     <AboutPanel
       helpContent={helpContent}
@@ -111,13 +136,19 @@ function GlobalAboutPanel() {
 }
 
 function HelpModeInterceptor() {
-  const { helpMode, toggleHelpMode, exitHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry, helpContent } = useGraph();
+  const helpMode = useAppStore(s => s.helpMode);
+  const toggleHelpMode = useAppStore(s => s.toggleHelpMode);
+  const exitHelpMode = useAppStore(s => s.exitHelpMode);
+  const showHelpEntry = useAppStore(s => s.showHelpEntry);
+  const dismissHelpEntry = useAppStore(s => s.dismissHelpEntry);
+  const activeHelpEntry = useAppStore(s => s.activeHelpEntry);
+  const helpContent = useAppStore(s => s.helpContent);
   useHelpMode({ helpMode, toggleHelpMode, exitHelpMode, showHelpEntry, dismissHelpEntry, activeHelpEntry, helpContent });
   return null;
 }
 
 function AboutButton() {
-  const { setShowAbout } = useGraph();
+  const setShowAbout = useAppStore(s => s.setShowAbout);
   return (
     <button
       className="about-button"
@@ -131,7 +162,8 @@ function AboutButton() {
 }
 
 function ShareButton() {
-  const { shareCurrentView, displayedNodeIds } = useGraph();
+  const shareCurrentView = useAppStore(s => s.shareCurrentView);
+  const displayedNodeIds = useAppStore(s => s.displayedNodeIds);
   const [copied, setCopied] = useState(false);
   const disabled = displayedNodeIds.size === 0;
 
@@ -170,7 +202,8 @@ function ShareButton() {
 }
 
 function HelpToggle() {
-  const { helpMode, toggleHelpMode } = useGraph();
+  const helpMode = useAppStore(s => s.helpMode);
+  const toggleHelpMode = useAppStore(s => s.toggleHelpMode);
   return (
     <button
       className={`help-toggle${helpMode ? ' active' : ''}`}
@@ -184,10 +217,8 @@ function HelpToggle() {
 }
 
 function AppContent() {
-  trackRender('AppContent');
   const { mode, toggleMode, vert, horz, onDividerMouseDown, collapsed } = useLayoutMode();
 
-  /** Build divider className with collapse-direction hints */
   const dividerClass = (orientation: 'vertical' | 'horizontal', before: boolean, after: boolean) => {
     const classes = ['panel-divider', orientation];
     if (before) classes.push('collapsed-before');
@@ -199,8 +230,8 @@ function AppContent() {
 
   return (
     <>
+      <AppInit />
       <HelpModeInterceptor />
-      <GlobalCrashRecoveryModal />
       <GlobalResumeModal />
       <GlobalAboutPanel />
       <GlobalHelpPopover />
@@ -279,12 +310,6 @@ function AppContent() {
   );
 }
 
-function App() {
-  return (
-    <GraphProvider>
-      <AppContent />
-    </GraphProvider>
-  );
+export default function App() {
+  return <AppContent />;
 }
-
-export default App;

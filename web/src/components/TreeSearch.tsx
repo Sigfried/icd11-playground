@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type SearchResult, searchFoundation } from '../api/icd11';
 import { searchNodes } from '../api/foundationData';
-import { useGraph } from '../providers/GraphProvider';
+import { useAppStore } from '../store/appStore';
 import './TreeSearch.css';
 
 export type SearchMode = 'search' | 'filter';
@@ -28,7 +28,9 @@ export const FilterIcon = () => (
 );
 
 export function TreeSearch({ mode, onFilterChange, onHighlightChange }: TreeSearchProps) {
-  const { hasNode, searchQuery, setSearchQuery } = useGraph();
+  const hasNode = useAppStore(s => s.hasNode);
+  const searchQuery = useAppStore(s => s.searchQuery);
+  const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const [query, setQuery] = useState(searchQuery);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);

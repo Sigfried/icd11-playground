@@ -1,5 +1,5 @@
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { type TreePath, type ConceptNode, useGraph, pathKey } from '../providers/GraphProvider';
+import { useAppStore, type TreePath, type ConceptNode, pathKey } from '../store/appStore';
 import { getTotalTreeRows } from '../api/foundationData';
 import { isInputFocused } from '../utils/isInputFocused';
 import { Badge } from './Badge';
@@ -18,7 +18,6 @@ const TreeIcon = () => (
     <circle cx="11" cy="10.5" r="1" fill="currentColor" stroke="none" />
   </svg>
 );
-import { trackRender } from '../utils/renderStormDetector';
 import './TreeView.css';
 
 /**
@@ -82,20 +81,18 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ nodeId, path, depth }: TreeNodeProps) {
-  const {
-    selectedNodeId,
-    hoveredNodeId,
-    expandedPaths,
-    selectNode,
-    toggleExpand,
-    expandParentPaths,
-    highlightedNodeIds,
-    setHighlightedNodeIds,
-    helpMode,
-    getNode,
-    getChildren,
-    getParents,
-  } = useGraph();
+  const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
+  const expandedPaths = useAppStore(s => s.expandedPaths);
+  const selectNode = useAppStore(s => s.selectNode);
+  const toggleExpand = useAppStore(s => s.toggleExpand);
+  const expandParentPaths = useAppStore(s => s.expandParentPaths);
+  const highlightedNodeIds = useAppStore(s => s.highlightedNodeIds);
+  const setHighlightedNodeIds = useAppStore(s => s.setHighlightedNodeIds);
+  const helpMode = useAppStore(s => s.helpMode);
+  const getNode = useAppStore(s => s.getNode);
+  const getChildren = useAppStore(s => s.getChildren);
+  const getParents = useAppStore(s => s.getParents);
   const descCtx = useContext(DescTooltipContext);
   const searchCtx = useContext(SearchContext);
 
@@ -287,8 +284,6 @@ function highlightTitle(title: string, query: string): React.ReactNode {
   const re = new RegExp(`(${escaped})`, 'gi');
   const parts = title.split(re);
   if (parts.length === 1) return title;
-  // split with a capturing group alternates: non-match, match, non-match, ...
-  // Odd-indexed parts are the matches.
   return parts.map((part, i) =>
     i % 2 === 1 ? <mark key={i}>{part}</mark> : part
   );
@@ -300,13 +295,13 @@ function highlightTitle(title: string, query: string): React.ReactNode {
  */
 function computeFilterAncestors(
   matchIds: Set<string>,
-  getParents: (id: string) => ConceptNode[],
+  getParentsFn: (id: string) => ConceptNode[],
 ): Set<string> {
   const ancestors = new Set<string>();
   const queue = [...matchIds];
   while (queue.length > 0) {
     const id = queue.pop()!;
-    for (const parent of getParents(id)) {
+    for (const parent of getParentsFn(id)) {
       if (!ancestors.has(parent.id) && !matchIds.has(parent.id)) {
         ancestors.add(parent.id);
         queue.push(parent.id);
@@ -317,12 +312,16 @@ function computeFilterAncestors(
 }
 
 export const TreeView = memo(function TreeView() {
-  trackRender('TreeView');
-  const {
-    rootId, selectedNodeId, hoveredNodeId, graphLoading,
-    setExpandedPaths, getNode, getParents, displayedNodeIds,
-    targetTreePath, clearTargetTreePath,
-  } = useGraph();
+  const rootId = useAppStore(s => s.rootId);
+  const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
+  const graphLoading = useAppStore(s => s.graphLoading);
+  const setExpandedPaths = useAppStore(s => s.setExpandedPaths);
+  const getNode = useAppStore(s => s.getNode);
+  const getParents = useAppStore(s => s.getParents);
+  const displayedNodeIds = useAppStore(s => s.displayedNodeIds);
+  const targetTreePath = useAppStore(s => s.targetTreePath);
+  const clearTargetTreePath = useAppStore(s => s.clearTargetTreePath);
   const contentRef = useRef<HTMLDivElement>(null);
   const [descTooltip, setDescTooltip] = useState<DescTooltipState | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -342,14 +341,11 @@ export const TreeView = memo(function TreeView() {
   const [highlightQuery, setHighlightQuery] = useState('');
 
   // Combine search filter results with selection-based filtering.
-  // Only uses selectedNodeId (not hoveredNodeId) to avoid high-frequency
-  // cascades from NL hover that cause main-thread freezes.
   const effectiveFilterMatchIds = useMemo(() => {
-    if (searchMode !== 'filter') return null; // search mode — no filtering
-    if (filterMatchIds) return filterMatchIds; // filter mode with query results
-    // Filter mode, no query — filter to selected node's ancestor paths
+    if (searchMode !== 'filter') return null;
+    if (filterMatchIds) return filterMatchIds;
     if (selectedNodeId) return new Set([selectedNodeId]);
-    return null; // nothing selected — show full tree
+    return null;
   }, [searchMode, filterMatchIds, selectedNodeId]);
 
   // Compute filter ancestors
@@ -359,20 +355,16 @@ export const TreeView = memo(function TreeView() {
   }, [effectiveFilterMatchIds, getParents]);
 
   // Auto-expand paths to matches in search-driven filter/highlight mode.
-  // Uses filterMatchIds (search results), not effectiveFilterMatchIds
-  // (which includes selection-based filtering that shouldn't auto-expand).
   useEffect(() => {
     const matchIds = filterMatchIds ?? highlightMatchIds;
     if (!matchIds || matchIds.size === 0) return;
 
-    // Limit auto-expand to prevent performance issues with too many matches
     const MAX_EXPAND = 100;
     const idsToExpand = [...matchIds].slice(0, MAX_EXPAND);
 
     setExpandedPaths(prev => {
       const next = new Set(prev);
       for (const id of idsToExpand) {
-        // Walk up first parent chain and expand all prefixes
         const ancestorPath: string[] = [id];
         let currentId = id;
         for (let i = 0; i < 30; i++) {
@@ -390,7 +382,6 @@ export const TreeView = memo(function TreeView() {
   }, [filterMatchIds, highlightMatchIds, getParents, setExpandedPaths]);
 
   // Pre-expand tree paths for all NL-displayed nodes so hover only needs to scroll.
-  // Runs once per selection change (displayedNodeIds changes), not per hover.
   useEffect(() => {
     if (displayedNodeIds.size === 0) return;
 
@@ -398,7 +389,6 @@ export const TreeView = memo(function TreeView() {
       const next = new Set(prev);
       let changed = false;
       for (const id of displayedNodeIds) {
-        // Build first-parent path to root
         const ancestorPath: string[] = [id];
         let currentId = id;
         for (let i = 0; i < 30; i++) {
@@ -407,7 +397,6 @@ export const TreeView = memo(function TreeView() {
           ancestorPath.unshift(parents[0].id);
           currentId = parents[0].id;
         }
-        // Expand all prefixes
         for (let i = 1; i <= ancestorPath.length; i++) {
           const key = pathKey(ancestorPath.slice(0, i));
           if (!prev.has(key)) {
@@ -423,7 +412,6 @@ export const TreeView = memo(function TreeView() {
   // Search callbacks
   const handleFilterChange = useCallback((ids: Set<string> | null, query: string) => {
     setFilterMatchIds(ids);
-    // In filter mode, also set the highlight query for title marking
     if (ids) {
       setHighlightQuery(query);
     } else {
@@ -449,8 +437,6 @@ export const TreeView = memo(function TreeView() {
   }, [selectedNodeId]);
 
   // Scroll to hovered node (from NL diagram hover).
-  // All NL-displayed nodes are pre-expanded in the tree (see displayedNodeIds
-  // effect above), so hover only needs to scroll — no expand calls.
   useEffect(() => {
     if (!hoveredNodeId || !contentRef.current) return;
     const el = contentRef.current.querySelector(`[data-node-id="${CSS.escape(hoveredNodeId)}"]`);
@@ -459,7 +445,7 @@ export const TreeView = memo(function TreeView() {
     }
   }, [hoveredNodeId]);
 
-  // Scroll to targetTreePath when it changes (set by navigateToTreePath)
+  // Scroll to targetTreePath when it changes
   useEffect(() => {
     if (!targetTreePath || !contentRef.current) return;
     const pk = pathKey(targetTreePath);
@@ -512,7 +498,6 @@ export const TreeView = memo(function TreeView() {
 
   const dismissStats = useCallback(() => setStatsAnchor(null), []);
 
-  // Compute visible row stats on demand when popover opens
   const visibleStats = useMemo(() => {
     if (!statsAnchor || !contentRef.current) return { rows: 0, unique: 0 };
     const els = contentRef.current.querySelectorAll('[data-node-id]');
@@ -526,7 +511,6 @@ export const TreeView = memo(function TreeView() {
 
   const totalConcepts = getNode('root')?.descendantCount ?? 0;
 
-  // Build filter note
   const filterNote = useMemo(() => {
     if (searchMode !== 'filter') return null;
     if (filterMatchIds && highlightQuery) {
@@ -634,4 +618,3 @@ export const TreeView = memo(function TreeView() {
     </DescTooltipContext.Provider>
   );
 });
-
