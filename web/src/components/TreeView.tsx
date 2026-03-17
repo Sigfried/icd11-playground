@@ -76,9 +76,10 @@ const SearchContext = createContext<SearchCtx>({
 
 interface TreeNodeProps {
   rowIndex: number;
+  insideFilterMatch?: boolean;
 }
 
-function TreeNode({ rowIndex }: TreeNodeProps) {
+function TreeNode({ rowIndex, insideFilterMatch }: TreeNodeProps) {
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const hoveredNodeId = useAppStore(s => s.hoveredNodeId);
   const expandedRows = useAppStore(s => s.expandedRows);
@@ -173,8 +174,9 @@ function TreeNode({ rowIndex }: TreeNodeProps) {
     setHighlightedNodeIds(new Set());
   }, [setHighlightedNodeIds]);
 
-  // In filter mode, skip nodes that are neither matches nor ancestors
-  if (isFilterActive && !isFilterMatch && !isFilterAncestor) {
+  // In filter mode, skip nodes that aren't matches, ancestors of matches,
+  // or expanded descendants of a match
+  if (isFilterActive && !isFilterMatch && !isFilterAncestor && !insideFilterMatch) {
     return null;
   }
 
@@ -193,7 +195,7 @@ function TreeNode({ rowIndex }: TreeNodeProps) {
     isHovered && 'hovered',
     isHighlighted && 'highlighted',
     (isSearchMatch || isFilterMatch) && 'search-match',
-    isFilterActive && !isFilterMatch && isFilterAncestor && 'filter-ancestor',
+    isFilterActive && !isFilterMatch && (isFilterAncestor || insideFilterMatch) && 'filter-ancestor',
   ].filter(Boolean).join(' ');
 
   // Render title with search highlighting in filter/highlight modes
@@ -265,6 +267,7 @@ function TreeNode({ rowIndex }: TreeNodeProps) {
             <TreeNode
               key={childIdx}
               rowIndex={childIdx}
+              insideFilterMatch={insideFilterMatch || isFilterMatch}
             />
           ))}
         </div>
@@ -502,6 +505,12 @@ export const TreeView = memo(function TreeView() {
     return null;
   }, [searchMode, filterMatchIds, highlightQuery, selectedNodeId, getNode]);
 
+  // Context-dependent filter button title
+  // TODO: fix after search dropdown rewrite — highlightQuery race condition
+  // causes wrong title when switching modes with active search. See search-rewrite-plan.md.
+  // Also: use "Filtered to..." (past tense) when active, "Filter to..." when inactive.
+  const filterButtonTitle = 'Filter view (show only matches and ancestors)';
+
   // Find the root row index (row 0 for single-root trees)
   const rootRowIndex = useMemo(() => {
     if (!rootId) return -1;
@@ -559,7 +568,7 @@ export const TreeView = memo(function TreeView() {
             <button
               className={`tree-mode-btn${searchMode === 'filter' ? ' active' : ''}`}
               onClick={() => handleSetSearchMode('filter')}
-              title="Filter view (show only matches and ancestors)"
+              title={filterButtonTitle}
             >
               <FilterIcon /> Filter
             </button>

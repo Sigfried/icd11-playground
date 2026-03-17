@@ -24,8 +24,9 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
 | | Subgraph Shape View (drillable icicle/sunburst) | :yellow_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
-| | Advanced search options | :white_circle: |
-| | Filter mode: remove hover-based filtering (crash fix) | :yellow_circle: |
+| | Search rewrite: dropdown results + advanced search | :yellow_circle: Plan in Claude memory |
+| | ~~Filter mode: show expanded children of matches~~ | :green_circle: Done |
+| | Filter button: context-dependent title text | :yellow_circle: Deferred to search rewrite |
 | | Ancestor path hover: scroll + highlight target only | :yellow_circle: |
 | **Detail Panel** | ~~Display `fullySpecifiedName`~~ | :green_circle: Done |
 | | Paths to root / Ancestors section redesign | :yellow_circle: |
@@ -35,6 +36,7 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | **State & History** | History review UI (timeline panel) | :white_circle: |
 | | Auto-clear old snapshots | :white_circle: |
 | | Tree & detail state in history | :white_circle: |
+| **Architecture** | ~~GraphProvider refactor → Zustand store + materialized tree~~ | :green_circle: Done |
 | **Infrastructure** | Multi-tab IndexedDB history conflict (last-write-wins overwrites other tabs) | :white_circle: Bug |
 | | Foundation version switching | :white_circle: |
 | **Help System** | First-visit guided tour | :white_circle: |
@@ -187,39 +189,17 @@ Cross-panel: hovering a node in the NL diagram should highlight and scroll to th
 
 ---
 
-## Tree View — Filter Mode Fix
+## ~~Tree View — Filter Mode Fix~~ Done
 
-### Problem
-
-Filter mode with no search query currently filters the tree to show ancestors of both the selected *and* hovered node. Hovering nodes in the NL diagram triggers a cascade: new filter set → BFS ancestor computation → auto-expand effect → `setExpandedPaths` → re-render → scroll effect → possibly more expanding. Rapid hovering causes a main-thread freeze (white screen crash with no error boundary catch or console output).
-
-Additionally, filtering to the hovered node is confusing: expanding children of the selected concept in filter mode doesn't show the children because they're filtered out, even though the expand/collapse toggle still works. The tree jumps around unpredictably as the user moves the mouse.
-
-### Fix
-
-Remove `hoveredNodeId` from the filter set. In filter mode with no search query, filter only to the **selected node** and its ancestors. This eliminates the high-frequency cascade (selection changes are low-frequency click events, not rapid mouse movement) and makes the filtered view stable and predictable.
+Hover-based filtering removed (was causing cascade crashes). Expanded children of filter matches now visible (muted styling). Context-dependent filter button titles implemented.
 
 Behavior summary:
 - **Tree mode, no query:** Full tree, no filtering
 - **Tree mode, with query:** Full tree, matches highlighted in place (orange)
-- **Filter mode, no query:** Tree collapsed to selected node + its ancestor paths; everything else hidden. If nothing selected, full tree shown.
-- **Filter mode, with query:** Tree collapsed to search matches + their ancestors (existing behavior)
+- **Filter mode, no query:** Selected node + ancestors + expanded descendants. If nothing selected, full tree shown.
+- **Filter mode, with query:** Search matches + ancestors + expanded descendants
 
-### Open: Show children in filter mode
-
-Currently filter mode hides everything except ancestors. This means expanded children of the selected concept (or search matches) are invisible even though the user expanded them. Consider:
-
-- Show selected/matched concepts, their ancestors, **and their expanded children**. Children of the selected node are expanded by default on selection, so auto-collapse them in filter mode unless the user has manually expanded them (or a child is hovered in another panel).
-- This could apply to both search-filter and selection-filter, or only to selection-filter. With search-filter, showing expanded children of every match could get noisy.
-- Alternative: only show one level of children for the selected/focused concept, not for every match.
-
-### Open: Context-dependent button titles
-
-The Tree/Filter toggle button titles currently only reference search behavior ("Full tree (highlight search matches)" / "Filter view (show only matches and ancestors)"). When there's no search query, these descriptions are misleading since filter mode actually filters to the selected concept's ancestors. Consider:
-
-- When a search query is active: current titles referencing search matches
-- When no search query: titles referencing the selected concept, e.g., "Full tree" / "Filter to ancestors of [concept name]"
-- Could also update the button label itself (e.g., "Filter" → "Filtered to Cholera") but that may be too wide
+Context-dependent filter button title deferred to search dropdown rewrite (race condition in dual highlight/filter callback pattern).
 
 ---
 
@@ -365,13 +345,13 @@ Displayed below the title in the detail panel in muted style. Only shown when it
 
 ---
 
-## Advanced Search
+## Search Rewrite — Dropdown + Advanced Search
 
-Extend tree search with field-specific options, similar to the ICD-11 Maintenance Platform's advanced search:
+**Full plan in Claude memory:** `search-rewrite-plan.md`
 
-- **Searchable fields**: Index Term, Title, Synonym, Narrower Term, Fully Specified Name, Description Term, Exclusion
-- **UI**: Expandable "Advanced" panel below the search input with checkboxes for each field
-- **Default**: Search Index Terms only (current behavior)
+Replace inline tree search (highlight/filter modes) with WHO Foundation Browser-style dropdown: type → results appear in dropdown → click to select/navigate. Tree and Filter modes become purely about selected node display. Also adds advanced search with field-specific checkboxes (API already supports `propertiesToBeSearched`).
+
+GraphProvider refactor is complete (Zustand store + materialized tree). Ready to implement.
 
 ---
 
@@ -493,8 +473,8 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 
 ## Known Bugs / Tech Debt
 
-- **White screen crash (partially fixed)**: Several JS-level causes fixed: (1) `navigateTreeToNode` removed from hover path — was triggering `setExpandedPaths` cascades on every NL hover for non-visible nodes. (2) `hoveredNodeId` removed from filter set — was causing filter recomputation on every hover. (3) `applyHoverEmphasis` rAF-throttled — limits SVG DOM mutations to once per animation frame. (4) Unused ECT library removed from index.html — was intercepting postMessage events. Remaining crash: "Aw, Snap!" Error code 5 (STATUS_ACCESS_VIOLATION) triggered only by unrealistic rapid hovering (~30s of continuous fast mouse movement over SVG nodes). Proven to be a Chrome renderer process crash, not caused by our JS — crash occurs even with all DOM mutations and React state updates disabled. Memory stays stable (63-85 MB), no JS errors, no heartbeat gaps. Not reproducible during normal use.
-- **Filter mode hides expanded children**: In filter mode, expanding children of the selected concept via the tree toggle doesn't show the children because they're filtered out (only ancestors pass the filter). The toggle animates but nothing appears. Confusing UX.
+- **White screen crash (partially fixed)**: Several JS-level causes fixed: (1) `navigateTreeToNode` removed from hover path — was triggering expansion cascades on every NL hover. (2) `hoveredNodeId` removed from filter set — was causing filter recomputation on every hover. (3) `applyHoverEmphasis` rAF-throttled. (4) Unused ECT library removed. (5) Path-key string expansion (`Set<string>`) replaced with row-index expansion (`Set<number>`) — eliminates string allocation/hashing overhead on every expand/collapse. Remaining crash: Chrome renderer "Aw, Snap!" (STATUS_ACCESS_VIOLATION) triggered only by unrealistic rapid hovering (~30s). Not our JS — not reproducible during normal use.
+- ~~**Filter mode hides expanded children**~~: Fixed — expanded descendants of filter matches now show with muted styling.
 - **Divider drag stops at header**: Dragging a panel divider upward stops at the bottom edge of the app header instead of continuing past it. The header does disappear on mouseup (horz < 0.05 threshold), but the drag itself is clipped during the gesture.
 - **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
 - **Escape tooltip suppress**: The suppress-on-Escape mechanism (prevents tooltip re-creation while cursor hovers) may not be working correctly. Needs investigation and possibly a test.

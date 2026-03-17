@@ -69,10 +69,15 @@ On localhost, `icd11.ts` auto-detects and uses `http://localhost`. On GitHub Pag
 │       ├── api/
 │       │   ├── foundationData.ts  # Unified data API (sync graph + async details)
 │       │   ├── foundationStore.ts # IndexedDB cache (graph + entities)
+│       │   ├── treeData.ts        # Materialized tree array (~200K rows)
 │       │   └── icd11.ts           # ICD-11 REST API client
+│       ├── store/
+│       │   ├── appStore.ts        # Zustand store (composes slices, public API)
+│       │   ├── types.ts           # AppState union type, SetState/GetState helpers
+│       │   └── slices/            # graphSlice, helpSlice, treeSlice,
+│       │                          # historySlice, selectionSlice, shareSlice
 │       ├── components/   # TreeView, NodeLinkView, DetailPanel
 │       ├── hooks/        # useUrlState (URL ↔ selected node sync)
-│       ├── providers/    # GraphProvider (React context, UI state)
 │       └── archive/      # Old ECT-based components
 ├── analysis/             # Python scripts for crawling & analyzing Foundation
 │   ├── crawl.py          # BFS crawler + descendant stats computation
@@ -89,24 +94,38 @@ On localhost, `icd11.ts` auto-detects and uses `http://localhost`. On GitHub Pag
 
 ### Data flow
 
-1. **Startup:** GraphProvider fetches `foundation_graph.json` (cached in IndexedDB after first load)
-2. **Init:** `foundationData.initGraph()` builds a graphology instance with all 69k nodes and 77k edges
+1. **Startup:** Zustand store's `initGraph` fetches `foundation_graph.json` (cached in IndexedDB after first load)
+2. **Init:** `foundationData.initGraph()` builds a graphology instance (69k nodes, 77k edges), then `treeData.buildTree()` materializes ~200K tree rows
 3. **Navigation:** Tree expand/collapse and node selection are **synchronous** — all structure is in memory
 4. **Details:** When a node is selected, `getDetail()` fetches definition/synonyms from IndexedDB cache or ICD-11 API
 
-### Three layers
+### State management
+
+**Zustand store** (`store/appStore.ts`) with 6 slices:
+- `graphSlice` — graph init, loading state, foundationData function re-exports
+- `treeSlice` — tree expansion (`Set<number>` row indices), navigation
+- `historySlice` — NL snapshot history, undo/redo, IndexedDB persistence
+- `selectionSlice` — selectNode coordinator, expand/remove/reset actions
+- `helpSlice` — help mode, active entry, parsed help content
+- `shareSlice` — share URL generation, about panel
+
+Components import only from `useAppStore` (from `appStore.ts`). Slice files are internal.
+
+### Data layers
 
 1. **`foundationStore.ts`** — IndexedDB cache. Stores/retrieves graph and entity data. No logic.
-2. **`foundationData.ts`** — Unified data API. Owns the graphology instance. Components call this, never graphology or IndexedDB directly.
+2. **`foundationData.ts`** — Unified data API. Owns the graphology instance.
    - Sync: `getNode()`, `getChildren()`, `getParents()`, `hasNode()`
    - Async: `getDetail()` (IndexedDB-cached API call)
    - Escape hatch: `getGraph()` for NodeLinkView's ELK layout
-3. **`GraphProvider.tsx`** — React context. UI state (selection, expansion paths) and init. Exposes `foundationData` functions on context.
+3. **`treeData.ts`** — Materialized tree array. DFS-ordered `TreeRow[]` with `pathFromRoot`, `childRowIndices`. `NodeEntry` map for per-node metadata + row lookup. Built once at init, static afterward.
 
 ### Key types
 
 - **`ConceptNode`** — Structural data from graph: id, title, parentCount, childCount, childOrder, descendantCount, maxDepth
 - **`EntityDetail`** — Rich metadata from API: definition, synonyms, narrowerTerms, inclusions, exclusions, browserUrl
+- **`TreeRow`** — One row in the materialized tree: index, nodeId, parentIndex, depth, childRowIndices, pathFromRoot
+- **`NodeEntry`** — Per-node metadata + row lookup: rows[], title, parentCount, childCount, descendantCount
 
 ## API Servers
 
