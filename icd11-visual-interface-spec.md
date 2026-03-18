@@ -20,7 +20,9 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Layout comparison infrastructure | :white_circle: |
 | | Focus node vertical positioning | :white_circle: |
 | | Fit-to-view cycling (fit all / fit width / fit height) | :white_circle: |
-| **NL Diagram** | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
+| **NL Diagram** | Neighborhood scope modes (3 modes matching WHO browser) | :yellow_circle: |
+| | Node dragging | :yellow_circle: |
+| | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
 | | Subgraph Shape View (drillable icicle/sunburst) | :yellow_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
@@ -186,6 +188,84 @@ For forced layering specifically, try ELK's `layerChoiceConstraint` first — if
 ## NL Hover → Tree Highlight
 
 Cross-panel: hovering a node in the NL diagram should highlight and scroll to that node in the tree view (all instances if polyhierarchy). This is the remaining piece of hover behavior — tooltip and detail preview are done.
+
+---
+
+## NL Neighborhood Scope Modes
+
+The WHO Foundation Browser (as of 2026) added a visualization feature with three neighborhood scope modes. We should support the same three modes, using similar icons and descriptions, to enable direct comparison.
+
+### WHO browser modes
+
+The WHO browser uses icon buttons in a toolbar. Their modes (Foundation view):
+
+| Mode | WHO name | WHO icon | Shows |
+|------|----------|----------|-------|
+| 1 | Minimal Detail | ![mindetail] | Parents + focus + children |
+| 2 | Moderate Detail | ![moderatedetail] | All ancestors (to root) + focus + children |
+| 3 | Maximum Detail | ![maxdetail] | All ancestors (to root) + focus + children + all ancestors of all children |
+
+They also have a 4th toggle (linearization overlay) that highlights MMS membership within the Foundation view. We don't support linearizations yet — skip for now.
+
+### Our current behavior
+
+Our `buildInitialNeighborhood` currently shows: ancestor DAG (BFS through all parents, stopping at depth 2) + focus + children (clustered if > 2). This is closest to Mode 2 but truncates the top 2 levels (root + top-level chapters) for readability.
+
+### Proposed implementation
+
+**Three toolbar buttons** replace the current Home/reset icon in the NL panel header. Each sets the neighborhood scope when selecting a node:
+
+| Mode | Label | Description | Neighborhood |
+|------|-------|-------------|--------------|
+| 1 | Parents + Children | Immediate neighborhood only | Direct parents + focus + children |
+| 2 | Ancestors + Children | Full ancestor context (default) | All ancestors (depth ≥ 2) + focus + children |
+| 3 | Ancestors + Children + Child Ancestors | Maximum context | Mode 2 + all ancestors of each child (depth ≥ 2) |
+
+**Icons:** Match the WHO browser's visual language — small node-link diagrams showing the scope pattern. Three dots vertically (parents-focus-children), a tree going up (ancestors), a tree going up and branching below (ancestors + child ancestors). Exact SVGs TBD.
+
+**Behavior:**
+- Mode is persisted to localStorage
+- Changing mode re-computes the neighborhood for the current focus node (like clicking reset)
+- Mode 3 can produce very large neighborhoods for high-degree polyhierarchy nodes. **Must** apply the same clustering (MAX_VISIBLE_CHILDREN) and depth truncation as Mode 2. May also need a cap on total ancestor count for children (e.g., only compute child ancestors for the first N children, or cap total nodes).
+- Changing mode pushes a new history snapshot (enables undo back to previous scope)
+- After mode change, user can still manually expand/remove nodes as before — the mode only sets the initial neighborhood
+
+**Interaction with existing expand/remove:**
+- Mode sets the *default* neighborhood on select/reset. Badge-click expansion and node removal still work independently.
+- The "reset neighborhood" action uses the current mode (not always Mode 2 as it does today).
+
+### Scalability concern: Mode 3
+
+Mode 3 is the reason the WHO browser example (entity 775270311 — "Conditions with disorders of intellectual development as a relevant clinical feature", 9 children, 521 descendants) is unreadable. Each child's full ancestor DAG is added, creating a dense web of cross-cutting ancestor paths.
+
+Mitigations:
+- Apply existing clustering to children (already done — MAX_VISIBLE_CHILDREN = 2, rest in cluster)
+- Only compute child ancestors for *visible* (non-clustered) children
+- Cap total nodes (e.g., 200) and show a "truncated" indicator
+- Consider computing child ancestors lazily (show children first, add their ancestors on demand via badge click — which is what we already do)
+
+**Question:** Is Mode 3 actually useful enough to justify implementing, or should we focus on Mode 1 + 2 and rely on badge-click expansion for the child-ancestor use case? The WHO browser's Mode 3 is their least readable view. Our existing badge-click expansion achieves the same thing more controllably.
+
+### Reference
+
+- WHO visualization help: https://icd.who.int/dev11/Help/Get/visualization_main/en
+- WHO visualization legend: https://icd.who.int/dev11/Help/Get/visualization_legend/en
+- Stress test (Mode 3): https://icd.who.int/dev11/f/en#/http%3a%2f%2fid.who.int%2ficd%2fentity%2f775270311?view=V175
+
+---
+
+## NL Node Dragging
+
+Allow users to drag nodes to manually adjust the layout. This is a common expectation for node-link diagrams and the WHO browser supports it.
+
+### Design considerations
+
+- **Drag behavior:** Click-and-drag a node to reposition it. Other nodes stay put (no force simulation re-layout on drag).
+- **Persistence:** Dragged positions should survive within a session but do NOT need to persist across page reloads or in history snapshots. They're ephemeral layout tweaks.
+- **Interaction with auto-layout:** When the neighborhood changes (new node selected, nodes added/removed), ELK re-layouts the full graph and dragged positions are reset. This is acceptable — manual positioning is a temporary adjustment, not a permanent override.
+- **Panning vs dragging:** Currently the NL view supports pan (drag background) and zoom (scroll wheel). Node drag needs to be distinguished from pan. Standard approach: drag on a node moves it, drag on background pans.
+- **Implementation:** D3's `d3-drag` module handles this. After ELK computes layout, nodes get absolute positions. Drag updates the node's `x`/`y` and re-renders edges connected to it. No need to re-run ELK.
+- **Edge re-routing:** When a node is dragged, its connected edges should follow. Simple approach: straight lines between node centers (ignore ELK's orthogonal routing for dragged nodes). Better approach: re-route only affected edges. Start with simple.
 
 ---
 
