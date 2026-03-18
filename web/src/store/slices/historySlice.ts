@@ -94,17 +94,11 @@ function deriveFromHistory(history: AppHistory, graphReady: boolean): {
   canRedo: boolean;
 } {
   const snapshot = currentSnapshot(history);
-  // Scan backward through history (up to pointer) for the last mode op
-  let mode: 1 | 2 | 3 = 2;
-  for (let i = history.pointer; i >= 0; i--) {
-    const op = history.snapshots[i].op;
-    if (op?.type === 'mode') { mode = op.mode; break; }
-  }
   return {
     selectedNodeId: graphReady ? (snapshot?.focusNodeId ?? null) : null,
     displayedNodeIds: graphReady ? (snapshot?.displayedNodeIds ?? EMPTY_SET) : EMPTY_SET,
     searchQuery: snapshot?.searchQuery ?? '',
-    neighborhoodMode: mode,
+    neighborhoodMode: snapshot?.neighborhoodMode ?? 2,
     canUndo: historyCanUndo(history),
     canRedo: historyCanRedo(history),
   };

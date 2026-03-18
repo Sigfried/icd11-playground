@@ -38,8 +38,14 @@ export interface SelectionSliceActions {
   setSearchQuery: (query: string) => void;
 }
 
-/** Push snapshot via the store's historySlice action (which updates derived state). */
+/** Push snapshot via the store's historySlice action (which updates derived state).
+ *  Automatically carries forward neighborhoodMode from the previous snapshot
+ *  unless the new snapshot explicitly sets it (via a 'mode' op). */
 function push(get: GetState, snapshot: Snapshot): void {
+  if (snapshot.neighborhoodMode === undefined) {
+    const prev = currentSnapshot(get().history);
+    snapshot.neighborhoodMode = prev?.neighborhoodMode ?? 2;
+  }
   get().pushSnapshot(snapshot);
 }
 
@@ -205,6 +211,7 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       push(get, {
         focusNodeId: snapshot.focusNodeId,
         displayedNodeIds: nodeIds,
+        neighborhoodMode: mode,
         timestamp: Date.now(),
         description: `Mode: ${MODE_LABELS[mode]}`,
         op: { type: 'mode', mode },

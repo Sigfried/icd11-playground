@@ -169,6 +169,7 @@ export function replayOpsToSnapshots(ops: SnapshotOp[]): Snapshot[] {
     snapshots.push({
       focusNodeId: state.focusNodeId,
       displayedNodeIds: new Set(state.displayedNodeIds), // defensive copy
+      neighborhoodMode: state.mode,
       timestamp: Date.now(),
       description: describeOp(op),
       op,

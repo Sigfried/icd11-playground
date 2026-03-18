@@ -18,6 +18,7 @@ export type SnapshotOp =
 export interface Snapshot {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
+  neighborhoodMode?: 1 | 2 | 3;
   timestamp: number;
   description: string;
   searchQuery?: string;
