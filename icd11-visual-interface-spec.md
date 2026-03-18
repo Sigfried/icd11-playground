@@ -24,9 +24,9 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
 | | Subgraph Shape View (drillable icicle/sunburst) | :yellow_circle: |
 | **Tree View** | Polyhierarchy occurrence navigation | :white_circle: |
-| | Search rewrite: dropdown results + advanced search | :yellow_circle: Plan in Claude memory |
+| | ~~Search rewrite: dropdown results + advanced search~~ | :green_circle: Done |
 | | ~~Filter mode: show expanded children of matches~~ | :green_circle: Done |
-| | Filter button: context-dependent title text | :yellow_circle: Deferred to search rewrite |
+| | ~~Filter button: context-dependent title text~~ | :green_circle: Done |
 | | Ancestor path hover: scroll + highlight target only | :yellow_circle: |
 | **Detail Panel** | ~~Display `fullySpecifiedName`~~ | :green_circle: Done |
 | | Paths to root / Ancestors section redesign | :yellow_circle: |
@@ -193,13 +193,9 @@ Cross-panel: hovering a node in the NL diagram should highlight and scroll to th
 
 Hover-based filtering removed (was causing cascade crashes). Expanded children of filter matches now visible (muted styling). Context-dependent filter button titles implemented.
 
-Behavior summary:
-- **Tree mode, no query:** Full tree, no filtering
-- **Tree mode, with query:** Full tree, matches highlighted in place (orange)
-- **Filter mode, no query:** Selected node + ancestors + expanded descendants. If nothing selected, full tree shown.
-- **Filter mode, with query:** Search matches + ancestors + expanded descendants
-
-Context-dependent filter button title deferred to search dropdown rewrite (race condition in dual highlight/filter callback pattern).
+Behavior summary (post search-dropdown rewrite):
+- **Tree mode:** Full tree, no filtering. Search uses dropdown (results don't display in tree).
+- **Filter mode:** Selected node + ancestors + expanded descendants. If nothing selected, full tree shown. Filter button title shows "Filtered to ancestors of [concept]" when active.
 
 ---
 
@@ -326,7 +322,7 @@ For concepts with multiple parents, users need ways to find and navigate between
 - **Ancestors section** in detail panel shows all paths to root as horizontal breadcrumb trails, sorted by path length. Paths truncate the first 3 levels with "..." prefix. Clicking a path scrolls the tree to that occurrence.
 - **Prev/next cycle buttons** (`◁` / `▷`) in the Ancestors header cycle through tree occurrences of the selected concept, scrolling the tree to each one.
 - **Path highlighting**: hovering a path highlights intermediate nodes. (Slated for simplification — see [Ancestor Path Hover Behavior](#tree-view--ancestor-path-hover-behavior).)
-- **Filter mode**: with no search query, collapses the tree to the selected node's ancestor paths. (Slated to remove hover-based filtering — see [Filter Mode Fix](#tree-view--filter-mode-fix).)
+- **Filter mode**: collapses the tree to the selected node and its ancestor paths.
 
 ### Remaining
 
@@ -345,13 +341,9 @@ Displayed below the title in the detail panel in muted style. Only shown when it
 
 ---
 
-## Search Rewrite — Dropdown + Advanced Search
+## ~~Search Rewrite — Dropdown + Advanced Search~~ Done
 
-**Full plan in Claude memory:** `search-rewrite-plan.md`
-
-Replace inline tree search (highlight/filter modes) with WHO Foundation Browser-style dropdown: type → results appear in dropdown → click to select/navigate. Tree and Filter modes become purely about selected node display. Also adds advanced search with field-specific checkboxes (API already supports `propertiesToBeSearched`).
-
-GraphProvider refactor is complete (Zustand store + materialized tree). Ready to implement.
+Replaced inline tree search (highlight/filter modes) with WHO Foundation Browser-style dropdown: type → results appear in dropdown → click to select. Tree and Filter modes are now purely about selected node display. Advanced search panel with field-specific checkboxes (Title, Synonym, Narrower Term, Fully Specified Name, Description, Exclusion) using the API's `propertiesToBeSearched` parameter. Hierarchical grouping in results (indent results whose parent is also a result). Keyboard navigation (arrows + Enter). Field selections persist to localStorage.
 
 ---
 
@@ -479,6 +471,7 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 - **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
 - **Escape tooltip suppress**: The suppress-on-Escape mechanism (prevents tooltip re-creation while cursor hovers) may not be working correctly. Needs investigation and possibly a test.
 - **Foundation ordering**: Sibling order in NL diagram only partially matches Foundation order (uses model order hint). Full ordering would require changes to the layout engine or manual node positioning.
+- **Advanced search returns no results for definition text**: Searching text pasted from a concept's definition (e.g., "dystrophy caused by the loss" from Pigmentary retinal dystrophy) with the Description checkbox returns 0 results, regardless of which field checkboxes are selected. The field names (`Title`, `Synonym`, `NarrowerTerm`, `FullySpecifiedName`, `Definition`, `Exclusion`) match the swagger spec. Needs testing against a running API to determine if this is an API limitation (phrase matching not supported on definitions?) or a bug in our request.
 
 ---
 
