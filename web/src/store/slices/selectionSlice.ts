@@ -21,18 +21,9 @@ const MODE_LABELS: Record<NeighborhoodMode, string> = {
   3: 'Ancestors + Children + Child Ancestors',
 };
 
-const STORAGE_KEY_MODE = 'icd11-neighborhood-mode';
-
-function loadMode(): NeighborhoodMode {
-  const raw = localStorage.getItem(STORAGE_KEY_MODE);
-  if (raw === '1' || raw === '2' || raw === '3') return Number(raw) as NeighborhoodMode;
-  return 2;
-}
-
 export interface SelectionSliceState {
   hoveredNodeId: string | null;
   highlightedNodeIds: Set<string>;
-  neighborhoodMode: NeighborhoodMode;
 }
 
 export interface SelectionSliceActions {
@@ -56,7 +47,6 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
   return {
     hoveredNodeId: null,
     highlightedNodeIds: new Set<string>(),
-    neighborhoodMode: loadMode(),
 
     setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
     setHighlightedNodeIds: (ids) => set({ highlightedNodeIds: ids }),
@@ -208,10 +198,7 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
     },
 
     setNeighborhoodMode: (mode) => {
-      localStorage.setItem(STORAGE_KEY_MODE, String(mode));
-      set({ neighborhoodMode: mode });
-
-      // Re-compute neighborhood with new mode
+      // Re-compute neighborhood with new mode (mode is derived from history via the 'mode' op)
       const snapshot = currentSnapshot(get().history);
       if (!snapshot?.focusNodeId) return;
       const nodeIds = buildInitialNeighborhood(snapshot.focusNodeId, getParents, getChildren, getNode, mode);

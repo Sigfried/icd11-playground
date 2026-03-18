@@ -50,6 +50,7 @@ export interface HistorySliceState {
   selectedNodeId: string | null;
   displayedNodeIds: Set<string>;
   searchQuery: string;
+  neighborhoodMode: 1 | 2 | 3;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -88,14 +89,22 @@ function deriveFromHistory(history: AppHistory, graphReady: boolean): {
   selectedNodeId: string | null;
   displayedNodeIds: Set<string>;
   searchQuery: string;
+  neighborhoodMode: 1 | 2 | 3;
   canUndo: boolean;
   canRedo: boolean;
 } {
   const snapshot = currentSnapshot(history);
+  // Scan backward through history (up to pointer) for the last mode op
+  let mode: 1 | 2 | 3 = 2;
+  for (let i = history.pointer; i >= 0; i--) {
+    const op = history.snapshots[i].op;
+    if (op?.type === 'mode') { mode = op.mode; break; }
+  }
   return {
     selectedNodeId: graphReady ? (snapshot?.focusNodeId ?? null) : null,
     displayedNodeIds: graphReady ? (snapshot?.displayedNodeIds ?? EMPTY_SET) : EMPTY_SET,
     searchQuery: snapshot?.searchQuery ?? '',
+    neighborhoodMode: mode,
     canUndo: historyCanUndo(history),
     canRedo: historyCanRedo(history),
   };
@@ -119,6 +128,7 @@ export function createHistorySlice(set: SetState, get: GetState): HistorySliceSt
     selectedNodeId: null,
     displayedNodeIds: EMPTY_SET,
     searchQuery: '',
+    neighborhoodMode: 2,
     canUndo: false,
     canRedo: false,
 
