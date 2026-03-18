@@ -21,6 +21,7 @@ Legend: :yellow_circle: Needs design | :white_circle: Not started | :black_circl
 | | Focus node vertical positioning | :white_circle: |
 | | Fit-to-view cycling (fit all / fit width / fit height) | :white_circle: |
 | **NL Diagram** | Neighborhood scope modes (3 modes matching WHO browser) | :yellow_circle: |
+| | Clustering rework (threshold vs display count, configurable) | :yellow_circle: |
 | | Node dragging | :yellow_circle: |
 | | Foundation ordering of siblings | :yellow_circle: Partially (model order hint) |
 | | NL hover → tree highlight (cross-panel) | :white_circle: |
@@ -226,7 +227,7 @@ Our `buildInitialNeighborhood` currently shows: ancestor DAG (BFS through all pa
 **Behavior:**
 - Mode is persisted to localStorage
 - Changing mode re-computes the neighborhood for the current focus node (like clicking reset)
-- Mode 3 can produce very large neighborhoods for high-degree polyhierarchy nodes. **Must** apply the same clustering (MAX_VISIBLE_CHILDREN) and depth truncation as Mode 2. May also need a cap on total ancestor count for children (e.g., only compute child ancestors for the first N children, or cap total nodes).
+- No caps or limits on node count — let it render whatever the mode produces. Add limits later only if we hit real performance problems.
 - Changing mode pushes a new history snapshot (enables undo back to previous scope)
 - After mode change, user can still manually expand/remove nodes as before — the mode only sets the initial neighborhood
 
@@ -234,23 +235,36 @@ Our `buildInitialNeighborhood` currently shows: ancestor DAG (BFS through all pa
 - Mode sets the *default* neighborhood on select/reset. Badge-click expansion and node removal still work independently.
 - The "reset neighborhood" action uses the current mode (not always Mode 2 as it does today).
 
-### Scalability concern: Mode 3
+### Clustering changes (prerequisite)
 
-Mode 3 is the reason the WHO browser example (entity 775270311 — "Conditions with disorders of intellectual development as a relevant clinical feature", 9 children, 521 descendants) is unreadable. Each child's full ancestor DAG is added, creating a dense web of cross-cutting ancestor paths.
+Current clustering: show first 2 children, cluster the rest (`MAX_VISIBLE_CHILDREN = 2`). This needs rework:
 
-Mitigations:
-- Apply existing clustering to children (already done — MAX_VISIBLE_CHILDREN = 2, rest in cluster)
-- Only compute child ancestors for *visible* (non-clustered) children
-- Cap total nodes (e.g., 200) and show a "truncated" indicator
-- Consider computing child ancestors lazily (show children first, add their ancestors on demand via badge click — which is what we already do)
+- **Separate threshold from display count.** Two settings:
+  - `clusterThreshold` — minimum child count before clustering kicks in (default: 6). If a node has fewer than this many children, show all of them, no cluster.
+  - `visibleBeforeCluster` — how many children to show before the cluster node (default: 3).
+- **Make configurable.** These should be constants for now but structured so they can become user-configurable settings later (e.g., a settings panel or URL params).
+- **Applies across all modes.** Same clustering logic in Mode 1, 2, and 3.
 
-**Question:** Is Mode 3 actually useful enough to justify implementing, or should we focus on Mode 1 + 2 and rely on badge-click expansion for the child-ancestor use case? The WHO browser's Mode 3 is their least readable view. Our existing badge-click expansion achieves the same thing more controllably.
+### Mode 3 and comparison with WHO browser
+
+Mode 3 is important: if WHO considers it one of their three core modes, we should support it. More importantly, Mode 3 is where the WHO visualization especially falls apart — so having a good Mode 3 is a competitive advantage.
+
+Stress tests:
+- Entity 775270311 ("Conditions with disorders of intellectual development as a relevant clinical feature") — 9 children, 521 descendants. Bad in WHO Mode 3.
+- Entity 186534168 ("Syndromic genetic deafness") — 117 children, 138 descendants, height 3. Bad in WHO in all modes, really bad in Mode 3.
+
+Mode 3 computes child ancestors for all *visible* (non-clustered) children. With the new clustering defaults (show 3 before cluster, skip clustering if < 6 children), this means:
+- A node with 5 children → all 5 shown, all 5 get ancestors
+- A node with 117 children → 3 shown + cluster, only 3 get ancestors (user can expand cluster to add more)
+
+This is inherently more controllable than the WHO approach (which dumps all child ancestors at once).
 
 ### Reference
 
 - WHO visualization help: https://icd.who.int/dev11/Help/Get/visualization_main/en
 - WHO visualization legend: https://icd.who.int/dev11/Help/Get/visualization_legend/en
 - Stress test (Mode 3): https://icd.who.int/dev11/f/en#/http%3a%2f%2fid.who.int%2ficd%2fentity%2f775270311?view=V175
+- Stress test (all modes): https://icd.who.int/dev11/f/en#/http%3a%2f%2fid.who.int%2ficd%2fentity%2f186534168
 
 ---
 
