@@ -8,7 +8,7 @@
  */
 
 import { getNode, getGraph, getChildren, getParents, getGraphRelease } from '../api/foundationData';
-import { buildInitialNeighborhood } from './buildInitialNeighborhood';
+import { buildInitialNeighborhood, getAncestorDAG, type NeighborhoodMode } from './buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from './nlSubgraph';
 import type { Snapshot, SnapshotOp } from './nlHistory';
 
@@ -19,7 +19,8 @@ type SerializedOp =
   | ['add', string[]]
   | ['remove', string]
   | ['removeBatch', string[]]
-  | ['reset'];
+  | ['reset']
+  | ['mode', number];
 
 interface InstructionPayload {
   v: string;
@@ -52,6 +53,7 @@ function serializeOp(op: SnapshotOp): SerializedOp {
     case 'remove': return ['remove', op.id];
     case 'removeBatch': return ['removeBatch', op.ids];
     case 'reset': return ['reset'];
+    case 'mode': return ['mode', op.mode];
   }
 }
 
@@ -63,13 +65,20 @@ function deserializeOp(raw: SerializedOp): SnapshotOp {
     case 'remove': return { type: 'remove', id: raw[1] };
     case 'removeBatch': return { type: 'removeBatch', ids: raw[1] };
     case 'reset': return { type: 'reset' };
+    case 'mode': return { type: 'mode', mode: raw[1] as NeighborhoodMode };
   }
 }
 
 // --- Replay ---
 
-function buildNeighborhood(nodeId: string): Set<string> {
-  return buildInitialNeighborhood(nodeId, getParents, getChildren, getNode);
+const MODE_LABELS: Record<NeighborhoodMode, string> = {
+  1: 'Parents + Children',
+  2: 'Ancestors + Children',
+  3: 'Ancestors + Children + Child Ancestors',
+};
+
+function buildNeighborhood(nodeId: string, mode: NeighborhoodMode): Set<string> {
+  return buildInitialNeighborhood(nodeId, getParents, getChildren, getNode, mode);
 }
 
 function describeOp(op: SnapshotOp): string {
@@ -80,41 +89,59 @@ function describeOp(op: SnapshotOp): string {
     case 'remove': return `Removed ${getNode(op.id)?.title ?? op.id}`;
     case 'removeBatch': return `Removed ${op.ids.length} node${op.ids.length === 1 ? '' : 's'}`;
     case 'reset': return 'Reset neighborhood';
+    case 'mode': return `Mode: ${MODE_LABELS[op.mode]}`;
   }
 }
 
+interface ReplayState {
+  focusNodeId: string | null;
+  displayedNodeIds: Set<string>;
+  mode: NeighborhoodMode;
+}
+
 /** Apply a single op to produce new state. */
-function applyOp(
-  op: SnapshotOp,
-  focusNodeId: string | null,
-  displayedNodeIds: Set<string>,
-): { focusNodeId: string | null; displayedNodeIds: Set<string> } {
+function applyOp(op: SnapshotOp, state: ReplayState): ReplayState {
+  const { focusNodeId, displayedNodeIds, mode } = state;
   switch (op.type) {
     case 'select':
-      return { focusNodeId: op.nodeId, displayedNodeIds: buildNeighborhood(op.nodeId) };
+      return { ...state, focusNodeId: op.nodeId, displayedNodeIds: buildNeighborhood(op.nodeId, mode) };
     case 'reselect': {
       const merged = new Set(displayedNodeIds);
-      for (const id of buildNeighborhood(op.nodeId)) merged.add(id);
-      return { focusNodeId: op.nodeId, displayedNodeIds: merged };
+      for (const id of buildNeighborhood(op.nodeId, mode)) merged.add(id);
+      return { ...state, focusNodeId: op.nodeId, displayedNodeIds: merged };
     }
     case 'add': {
       const next = new Set(displayedNodeIds);
       for (const id of op.ids) next.add(id);
-      return { focusNodeId, displayedNodeIds: next };
+      // Mode 3: also add ancestor DAGs for newly added nodes
+      if (mode === 3) {
+        for (const id of op.ids) {
+          if (!displayedNodeIds.has(id)) {
+            const ancestors = getAncestorDAG(id, getParents, next);
+            for (const aid of ancestors) next.add(aid);
+          }
+        }
+      }
+      return { ...state, displayedNodeIds: next };
     }
     case 'remove': {
-      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
+      if (!focusNodeId) return state;
       const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
-      return { focusNodeId, displayedNodeIds: removeNodeWithPruning(sub, op.id, focusNodeId).displayedNodeIds };
+      return { ...state, displayedNodeIds: removeNodeWithPruning(sub, op.id, focusNodeId).displayedNodeIds };
     }
     case 'removeBatch': {
-      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
+      if (!focusNodeId) return state;
       const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
-      return { focusNodeId, displayedNodeIds: removeNodesWithPruning(sub, op.ids, focusNodeId).displayedNodeIds };
+      return { ...state, displayedNodeIds: removeNodesWithPruning(sub, op.ids, focusNodeId).displayedNodeIds };
     }
     case 'reset': {
-      if (!focusNodeId) return { focusNodeId, displayedNodeIds };
-      return { focusNodeId, displayedNodeIds: buildNeighborhood(focusNodeId) };
+      if (!focusNodeId) return state;
+      return { ...state, displayedNodeIds: buildNeighborhood(focusNodeId, mode) };
+    }
+    case 'mode': {
+      const newMode = op.mode;
+      if (!focusNodeId) return { ...state, mode: newMode };
+      return { ...state, mode: newMode, displayedNodeIds: buildNeighborhood(focusNodeId, newMode) };
     }
   }
 }
@@ -123,26 +150,25 @@ function applyOp(
 export function replayOps(ops: SnapshotOp[]): {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
+  mode: NeighborhoodMode;
 } {
-  let focusNodeId: string | null = null;
-  let displayedNodeIds = new Set<string>();
+  let state: ReplayState = { focusNodeId: null, displayedNodeIds: new Set(), mode: 2 };
   for (const op of ops) {
-    ({ focusNodeId, displayedNodeIds } = applyOp(op, focusNodeId, displayedNodeIds));
+    state = applyOp(op, state);
   }
-  return { focusNodeId, displayedNodeIds };
+  return state;
 }
 
 /** Replay a sequence of ops, returning a Snapshot for each step (full history). */
 export function replayOpsToSnapshots(ops: SnapshotOp[]): Snapshot[] {
   const snapshots: Snapshot[] = [];
-  let focusNodeId: string | null = null;
-  let displayedNodeIds = new Set<string>();
+  let state: ReplayState = { focusNodeId: null, displayedNodeIds: new Set(), mode: 2 };
 
   for (const op of ops) {
-    ({ focusNodeId, displayedNodeIds } = applyOp(op, focusNodeId, displayedNodeIds));
+    state = applyOp(op, state);
     snapshots.push({
-      focusNodeId,
-      displayedNodeIds: new Set(displayedNodeIds), // defensive copy
+      focusNodeId: state.focusNodeId,
+      displayedNodeIds: new Set(state.displayedNodeIds), // defensive copy
       timestamp: Date.now(),
       description: describeOp(op),
       op,

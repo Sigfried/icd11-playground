@@ -7,15 +7,32 @@
 
 import { currentSnapshot } from '../../state/nlHistory';
 import { getNode, getChildren, getParents, getGraph } from '../../api/foundationData';
-import { buildInitialNeighborhood } from '../../state/buildInitialNeighborhood';
+import { buildInitialNeighborhood, getAncestorDAG, type NeighborhoodMode } from '../../state/buildInitialNeighborhood';
 import { buildNlSubgraph, removeNodeWithPruning, removeNodesWithPruning } from '../../state/nlSubgraph';
 import { computeTreeNav } from './treeSlice';
 import type { Snapshot } from '../../state/nlHistory';
 import type { SetState, GetState } from '../types';
 
+export type { NeighborhoodMode };
+
+const MODE_LABELS: Record<NeighborhoodMode, string> = {
+  1: 'Parents + Children',
+  2: 'Ancestors + Children',
+  3: 'Ancestors + Children + Child Ancestors',
+};
+
+const STORAGE_KEY_MODE = 'icd11-neighborhood-mode';
+
+function loadMode(): NeighborhoodMode {
+  const raw = localStorage.getItem(STORAGE_KEY_MODE);
+  if (raw === '1' || raw === '2' || raw === '3') return Number(raw) as NeighborhoodMode;
+  return 2;
+}
+
 export interface SelectionSliceState {
   hoveredNodeId: string | null;
   highlightedNodeIds: Set<string>;
+  neighborhoodMode: NeighborhoodMode;
 }
 
 export interface SelectionSliceActions {
@@ -26,6 +43,7 @@ export interface SelectionSliceActions {
   removeNode: (id: string) => void;
   removeNodes: (ids: string[], description: string) => void;
   resetNeighborhood: () => void;
+  setNeighborhoodMode: (mode: NeighborhoodMode) => void;
   setSearchQuery: (query: string) => void;
 }
 
@@ -38,12 +56,14 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
   return {
     hoveredNodeId: null,
     highlightedNodeIds: new Set<string>(),
+    neighborhoodMode: loadMode(),
 
     setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
     setHighlightedNodeIds: (ids) => set({ highlightedNodeIds: ids }),
 
     selectNode: (id) => {
       set({ highlightedNodeIds: new Set() });
+      const mode = get().neighborhoodMode;
 
       if (!id) {
         push(get, {
@@ -59,7 +79,7 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       const snapshot = currentSnapshot(get().history);
 
       if (snapshot && snapshot.displayedNodeIds.has(id)) {
-        const newNeighborhood = buildInitialNeighborhood(id, getParents, getChildren, getNode);
+        const newNeighborhood = buildInitialNeighborhood(id, getParents, getChildren, getNode, mode);
         const merged = new Set(snapshot.displayedNodeIds);
         for (const nid of newNeighborhood) merged.add(nid);
         push(get, {
@@ -70,7 +90,7 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
           op: { type: 'reselect', nodeId: id },
         });
       } else {
-        const nodeIds = buildInitialNeighborhood(id, getParents, getChildren, getNode);
+        const nodeIds = buildInitialNeighborhood(id, getParents, getChildren, getNode, mode);
         push(get, {
           focusNodeId: id,
           displayedNodeIds: nodeIds,
@@ -90,6 +110,17 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       if (!snapshot) return;
       const next = new Set(snapshot.displayedNodeIds);
       for (const id of ids) next.add(id);
+
+      // Mode 3: also add ancestor DAGs for newly added nodes
+      if (get().neighborhoodMode === 3) {
+        for (const id of ids) {
+          if (!snapshot.displayedNodeIds.has(id)) {
+            const ancestors = getAncestorDAG(id, getParents, next);
+            for (const aid of ancestors) next.add(aid);
+          }
+        }
+      }
+
       push(get, {
         focusNodeId: snapshot.focusNodeId,
         displayedNodeIds: next,
@@ -164,14 +195,32 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
     resetNeighborhood: () => {
       const snapshot = currentSnapshot(get().history);
       if (!snapshot?.focusNodeId) return;
+      const mode = get().neighborhoodMode;
       const title = getNode(snapshot.focusNodeId)?.title ?? snapshot.focusNodeId;
-      const nodeIds = buildInitialNeighborhood(snapshot.focusNodeId, getParents, getChildren, getNode);
+      const nodeIds = buildInitialNeighborhood(snapshot.focusNodeId, getParents, getChildren, getNode, mode);
       push(get, {
         focusNodeId: snapshot.focusNodeId,
         displayedNodeIds: nodeIds,
         timestamp: Date.now(),
         description: `Reset neighborhood for ${title}`,
         op: { type: 'reset' },
+      });
+    },
+
+    setNeighborhoodMode: (mode) => {
+      localStorage.setItem(STORAGE_KEY_MODE, String(mode));
+      set({ neighborhoodMode: mode });
+
+      // Re-compute neighborhood with new mode
+      const snapshot = currentSnapshot(get().history);
+      if (!snapshot?.focusNodeId) return;
+      const nodeIds = buildInitialNeighborhood(snapshot.focusNodeId, getParents, getChildren, getNode, mode);
+      push(get, {
+        focusNodeId: snapshot.focusNodeId,
+        displayedNodeIds: nodeIds,
+        timestamp: Date.now(),
+        description: `Mode: ${MODE_LABELS[mode]}`,
+        op: { type: 'mode', mode },
       });
     },
 

@@ -12,7 +12,8 @@ export type SnapshotOp =
   | { type: 'add'; ids: string[] }
   | { type: 'remove'; id: string }
   | { type: 'removeBatch'; ids: string[] }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  | { type: 'mode'; mode: 1 | 2 | 3 };
 
 export interface Snapshot {
   focusNodeId: string | null;

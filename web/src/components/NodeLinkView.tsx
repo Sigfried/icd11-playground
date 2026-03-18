@@ -168,6 +168,8 @@ export const NodeLinkView = memo(function NodeLinkView() {
   const removeNode = useAppStore(s => s.removeNode);
   const removeNodes = useAppStore(s => s.removeNodes);
   const resetNeighborhood = useAppStore(s => s.resetNeighborhood);
+  const neighborhoodMode = useAppStore(s => s.neighborhoodMode);
+  const setNeighborhoodMode = useAppStore(s => s.setNeighborhoodMode);
   const historyBack = useAppStore(s => s.historyBack);
   const historyForward = useAppStore(s => s.historyForward);
   const canUndo = useAppStore(s => s.canUndo);
@@ -1472,6 +1474,56 @@ export const NodeLinkView = memo(function NodeLinkView() {
         </span>
         {selectedNodeId && layoutNodes.length > 0 && (
           <div className="node-link-controls">
+            {/* --- Neighborhood mode buttons --- */}
+            <button
+              className={`zoom-btn mode-btn${neighborhoodMode === 1 ? ' active' : ''}`}
+              data-help-id="mode-1"
+              onClick={() => neighborhoodMode === 1 ? resetNeighborhood() : setNeighborhoodMode(1)}
+              title="Mode 1: Parents + Children"
+            >
+              {/* WHO-style: focus top-center, two children below */}
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                <rect x="7" y="2" width="6" height="4" rx="1" />
+                <line x1="10" y1="6" x2="5" y2="11" /><line x1="10" y1="6" x2="15" y2="11" />
+                <rect x="2" y="11" width="6" height="4" rx="1" />
+                <rect x="12" y="11" width="6" height="4" rx="1" />
+              </svg>
+            </button>
+            <button
+              className={`zoom-btn mode-btn${neighborhoodMode === 2 ? ' active' : ''}`}
+              data-help-id="mode-2"
+              onClick={() => neighborhoodMode === 2 ? resetNeighborhood() : setNeighborhoodMode(2)}
+              title="Mode 2: Ancestors + Children (default)"
+            >
+              {/* WHO-style: ancestor on top, focus middle, two children below */}
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                <rect x="7" y="1" width="6" height="3.5" rx="1" />
+                <line x1="10" y1="4.5" x2="10" y2="7" />
+                <rect x="7" y="7" width="6" height="3.5" rx="1" />
+                <line x1="10" y1="10.5" x2="5" y2="13.5" /><line x1="10" y1="10.5" x2="15" y2="13.5" />
+                <rect x="2" y="13.5" width="6" height="3.5" rx="1" />
+                <rect x="12" y="13.5" width="6" height="3.5" rx="1" />
+              </svg>
+            </button>
+            <button
+              className={`zoom-btn mode-btn${neighborhoodMode === 3 ? ' active' : ''}`}
+              data-help-id="mode-3"
+              onClick={() => neighborhoodMode === 3 ? resetNeighborhood() : setNeighborhoodMode(3)}
+              title="Mode 3: Ancestors + Children + Child Ancestors"
+            >
+              {/* WHO-style: ancestor top, focus middle, two children below, each child has an ancestor line going up-out */}
+              <svg viewBox="0 0 24 20" width="22" height="18" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                <rect x="9" y="1" width="6" height="3.5" rx="1" />
+                <line x1="12" y1="4.5" x2="12" y2="7" />
+                <rect x="9" y="7" width="6" height="3.5" rx="1" />
+                <line x1="12" y1="10.5" x2="6" y2="13.5" /><line x1="12" y1="10.5" x2="18" y2="13.5" />
+                <rect x="3" y="13.5" width="6" height="3.5" rx="1" />
+                <rect x="15" y="13.5" width="6" height="3.5" rx="1" />
+                <line x1="3" y1="13.5" x2="1" y2="8" /><rect x="0" y="4.5" width="3.5" height="3.5" rx="1" fill="currentColor" opacity="0.5" />
+                <line x1="21" y1="13.5" x2="23" y2="8" /><rect x="20.5" y="4.5" width="3.5" height="3.5" rx="1" fill="currentColor" opacity="0.5" />
+              </svg>
+            </button>
+            <span className="toolbar-separator" />
             {/* --- History group --- */}
             {canUndo && (
               <button className="zoom-btn reset-neighborhood-btn" data-help-id="reset-neighborhood" onClick={resetNeighborhood} title="Reset to default neighborhood">

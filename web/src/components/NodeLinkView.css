@@ -240,6 +240,26 @@
   background: rgba(206, 145, 120, 0.15);
 }
 
+/* Neighborhood mode buttons */
+.mode-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-btn.active {
+  background: rgba(86, 156, 214, 0.2);
+  border-color: var(--accent-blue);
+  color: var(--color-link);
+  opacity: 1;
+}
+
+.mode-btn.active:hover {
+  background: rgba(86, 156, 214, 0.3);
+}
+
 /* Undo/redo buttons */
 .undo-btn, .redo-btn {
   display: flex;
