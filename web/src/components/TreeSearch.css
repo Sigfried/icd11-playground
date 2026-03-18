@@ -39,6 +39,19 @@
   white-space: nowrap;
 }
 
+.tree-search-clear {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+.tree-search-clear:hover {
+  color: var(--text-primary);
+}
+
 .tree-search-spinner {
   width: 14px;
   height: 14px;
@@ -53,24 +66,121 @@
   to { transform: rotate(360deg); }
 }
 
-
-/* Search match highlight in tree (highlight and filter modes) */
-.tree-node.search-match {
-  border-left: 3px solid var(--color-search-match);
+/* Advanced search toggle */
+.tree-search-advanced-toggle {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  padding: 2px 4px;
+}
+.tree-search-advanced-toggle:hover,
+.tree-search-advanced-toggle.active {
+  color: var(--color-link);
 }
 
-.tree-node.search-match .tree-node-title {
+/* Advanced search panel */
+.tree-search-advanced {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 0 2px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.tree-search-advanced-label {
+  font-weight: 600;
+}
+
+.tree-search-field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-search-field-checkbox input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--color-link);
+}
+
+.tree-search-field-hint {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Dropdown */
+.tree-search-dropdown {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 100%;
+  z-index: 100;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tree-search-dropdown-loading,
+.tree-search-dropdown-empty {
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.tree-search-result {
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-left: 3px solid transparent;
+}
+
+.tree-search-result:hover,
+.tree-search-result.keyboard-selected {
+  background: var(--bg-secondary);
+  border-left-color: var(--color-link);
+}
+
+.tree-search-result.indented {
+  padding-left: 26px;
+}
+
+.tree-search-result-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-search-result-title em {
+  font-style: normal;
   color: var(--color-search-match);
+  font-weight: 600;
+}
+
+.tree-search-result-property {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
 /* Filter mode: ancestor-only nodes are muted */
 .tree-node.filter-ancestor .tree-node-title {
   color: var(--text-secondary);
-}
-
-/* Highlighted search text in filter/highlight modes */
-.tree-node-title mark {
-  background: none;
-  color: var(--color-search-match);
-  font-weight: 600;
 }

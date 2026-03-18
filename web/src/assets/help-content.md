@@ -57,7 +57,9 @@ The Foundation is distinct from the MMS (Mortality and Morbidity Statistics) lin
 
 The tree is the primary navigation interface. It renders the full Foundation hierarchy — all 69,000 concepts are loaded in memory, so expanding and collapsing is instant. Concepts with multiple parents appear at each location in the tree; selecting any instance highlights all of them and updates the other panels.
 
-The tree supports two modes, toggled via buttons in the title bar: **Tree** (full tree with search matches highlighted in place) and **Filter** (hides non-matches). In filter mode with no search query, the tree collapses to show only the selected concept and its ancestor paths. The mode persists across sessions. Search queries are tracked in the undo history.
+Search works via a **dropdown**: type a query, results appear below the input, and clicking a result selects that concept (same as clicking in the tree). An **Advanced** toggle lets you restrict search to specific fields (Title, Synonym, Narrower Term, etc.).
+
+The tree supports two display modes, toggled via buttons in the title bar: **Tree** (full tree) and **Filter** (shows only the selected concept and its ancestor paths). The mode persists across sessions.
 
 ### tree-view-overview
 
@@ -82,16 +84,25 @@ The tree supports two modes, toggled via buttons in the title bar: **Tree** (ful
 ### tree-search
 
 - **Title:** Tree search
-- **Description:** Search for concepts by name in the tree. Behavior depends on the active mode (Tree or Filter), selected via buttons in the tree title bar.
+- **Description:** Search for Foundation concepts. Results appear in a dropdown below the input — click a result to select it.
 - **Interactions:**
-  - Type to search — results appear after a brief pause
-  - In **Tree mode**: matches are highlighted in place within the full tree (orange border and text)
-  - In **Filter mode**: non-matching nodes are hidden, showing only matches and their ancestors
-  - In **Filter mode with no query**: the tree collapses to show only the selected concept and its ancestor paths
-  - Matching text in node titles is highlighted
+  - Type to search — results appear in a dropdown after a brief pause
+  - Click a result (or press Enter) to select it as the focus concept
+  - Arrow keys navigate the dropdown; Escape closes it
   - Result count shown next to the search input
-- **Shortcut:** Ctrl+F or / to focus the search input; Escape to clear
-- **Context:** Search queries are saved in the undo history — you can undo/redo to restore a previous search. The Tree/Filter mode selection persists across sessions (stored in localStorage).
+  - Click **Advanced** to choose which fields to search (Title, Synonym, Narrower Term, etc.)
+  - If a result's parent is also in the results, it appears indented
+- **Shortcut:** Ctrl+F or / to focus the search input; Escape to close dropdown or clear
+- **Context:** Search queries are saved in the undo history — you can undo/redo to restore a previous search. Advanced field selections persist across sessions (stored in localStorage).
+
+### tree-search-advanced
+
+- **Title:** Advanced search
+- **Description:** Restrict search to specific concept fields. When no fields are checked, the API searches all indexed fields (default). Checking fields narrows the search to only those properties.
+- **Interactions:**
+  - Check/uncheck field checkboxes to include or exclude them from search
+  - Fields: Title, Synonym, Narrower Term, Fully Specified Name, Description, Exclusion
+- **Context:** Field selections are saved to localStorage and persist across sessions.
 
 ---
 
@@ -425,7 +436,7 @@ Every action you take is recorded as a snapshot in your exploration history with
 - **Selecting a node** → "Selected Cholera" — computes the default neighborhood and records it
 - **Expanding via badge click** → "Added 3 parents of Diabetes mellitus" — adds nodes to the displayed set
 - **Removing a node** → "Removed Schizophrenia (+2 pruned)" — removes the node and any that became disconnected
-- **Searching** → "Search: diabetes" — records the search query so undo restores the previous search
+- **Searching** → "Search: diabetes" — records the search query so undo restores the previous search text
 - **Resetting neighborhood** → "Reset neighborhood for Cholera" — returns to the default neighborhood
 
 You can step backward and forward through this history with Ctrl+Z / Ctrl+Shift+Z (or the toolbar undo/redo buttons). If you take a new action after undoing, the undone steps are discarded (standard undo behavior).
