@@ -165,8 +165,12 @@ export const NodeLinkView = memo(function NodeLinkView() {
   const getGraph = useAppStore(s => s.getGraph);
   const displayedNodeIds = useAppStore(s => s.displayedNodeIds);
   const expandNodes = useAppStore(s => s.expandNodes);
+  const expandChildren = useAppStore(s => s.expandChildren);
+  const expandParents = useAppStore(s => s.expandParents);
+  const expandDescThrough = useAppStore(s => s.expandDescThrough);
   const removeNode = useAppStore(s => s.removeNode);
-  const removeNodes = useAppStore(s => s.removeNodes);
+  const removeChildren = useAppStore(s => s.removeChildren);
+  const removeParents = useAppStore(s => s.removeParents);
   const resetNeighborhood = useAppStore(s => s.resetNeighborhood);
   const neighborhoodMode = useAppStore(s => s.neighborhoodMode);
   const setNeighborhoodMode = useAppStore(s => s.setNeighborhoodMode);
@@ -366,26 +370,8 @@ export const NodeLinkView = memo(function NodeLinkView() {
   /** Expand a cluster: replace cluster ID with its hidden child IDs */
   const expandCluster = useCallback((clusterId: string) => {
     const parentId = clusterId.slice('cluster:'.length);
-    const { childIds } = computeClusterInfo(parentId, getChildren, displayedNodeIds);
-    // Remove cluster ID and add all hidden children
-    const idsToAdd = childIds.filter(id => !displayedNodeIds.has(id));
-    // We also need to remove the cluster — build the new set explicitly
-    const next = new Set(displayedNodeIds);
-    next.delete(clusterId);
-    for (const id of idsToAdd) next.add(id);
-    // Use expandNodes to push as new snapshot (pass the full replacement set)
-    // But expandNodes only adds — we need a different approach for cluster expansion
-    // since it removes the cluster ID. Push via expandNodes with a small wrapper.
-    expandNodes(
-      // We pass the child IDs; the cluster ID removal happens by building a new set.
-      // Actually, let's use the context's expandNodes which only adds IDs to the set.
-      // For cluster expansion we need to both add children and remove cluster.
-      // Solution: just add the children, keep the cluster. The cluster's hidden count
-      // will drop to 0 and it'll be filtered out of the layout.
-      childIds,
-      `Expanded ${childIds.length} children of ${getNode(parentId)?.title ?? parentId}`,
-    );
-  }, [displayedNodeIds, getChildren, getNode, expandNodes]);
+    expandChildren(parentId);
+  }, [expandChildren]);
 
   /** Shared: collect cluster infos and build node/edge lists from displayedNodeIds */
   function prepareLayoutData() {
@@ -1139,8 +1125,7 @@ export const NodeLinkView = memo(function NodeLinkView() {
         e.stopPropagation();
         // Include all preceding levels so added nodes have edges to their parents
         const levelIdx = levels.indexOf(level);
-        const throughLevel = levels.slice(0, levelIdx + 1).flatMap(l => l.ids).filter(id => !visibleIds.has(id));
-        expandNodes(throughLevel, `Added ${level.label.toLowerCase()} (${throughLevel.length} nodes through depth ${levelIdx + 1})`);
+        expandDescThrough(node.id, levelIdx + 1);
         hideTooltip(true);
       });
       levelHeader.appendChild(addBtn);
@@ -1157,7 +1142,7 @@ export const NodeLinkView = memo(function NodeLinkView() {
         addAllBtn.textContent = `Add all ${allIds.length.toLocaleString()} through depth ${levels.length}`;
         addAllBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          expandNodes(allIds, `Added all ${allIds.length} descendants through depth ${levels.length}`);
+          expandDescThrough(node.id, levels.length);
           hideTooltip(true);
         });
         tip.appendChild(addAllBtn);
@@ -1177,7 +1162,7 @@ export const NodeLinkView = memo(function NodeLinkView() {
     nodes: ConceptNode[],
     alreadyVisibleCount: number,
     onAddNode: (id: string) => void,
-    onAddAll: (ids: string[]) => void,
+    onAddAll: () => void,
   ) {
     hideTooltip(true);
     const container = containerRef.current;
@@ -1203,13 +1188,12 @@ export const NodeLinkView = memo(function NodeLinkView() {
       tip.appendChild(vis);
     }
 
-    const allIds = nodes.map(n => n.id);
     const addAllBtn = document.createElement('button');
     addAllBtn.className = 'badge-tooltip-add-all';
     addAllBtn.textContent = `Add all ${nodes.length}`;
     addAllBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      onAddAll(allIds);
+      onAddAll();
       hideTooltip(true);
     });
     tip.appendChild(addAllBtn);
@@ -1395,20 +1379,18 @@ export const NodeLinkView = memo(function NodeLinkView() {
           e.stopPropagation();
           if (isParentBadge) {
             if (allParentsDisplayed) {
-              removeNodes(parentIds, `Removed ${parentIds.length} parents of ${node.data.title}`);
+              removeParents(node.id);
             } else {
-              expandNodes(parentIds, `Added ${parentIds.length} parents of ${node.data.title}`);
+              expandParents(node.id);
             }
           } else if (isChildBadge) {
             if (allChildrenDisplayed) {
-              removeNodes(childIds, `Removed ${childIds.length} children of ${node.data.title}`);
+              removeChildren(node.id);
             } else {
-              expandNodes(childIds, `Added ${childIds.length} children of ${node.data.title}`);
+              expandChildren(node.id);
             }
           } else if (isDescBadge) {
-            const descChildIds = getChildren(node.id).map(c => c.id);
-            const grandchildIds = descChildIds.flatMap(cId => getChildren(cId).map(gc => gc.id));
-            expandNodes([...descChildIds, ...grandchildIds], `Added descendants of ${node.data.title}`);
+            expandDescThrough(node.id, 2);
           }
           hideTooltip(true);
         });
@@ -1443,11 +1425,14 @@ export const NodeLinkView = memo(function NodeLinkView() {
 
           const notVisible = relatedNodes.filter(n => !displayedNodeIds.has(n.id));
           if (notVisible.length > 0) {
+            const addAll = isParentBadge
+              ? () => expandParents(node.id)
+              : () => expandChildren(node.id);
             showTooltip(
               badgeEl, node.id, tooltipLabel, notVisible,
               relatedNodes.length - notVisible.length,
               (id) => expandNodes([id], `Added ${getNode(id)?.title ?? id}`),
-              (ids) => expandNodes(ids, `Added ${ids.length} ${tooltipLabel.toLowerCase()}`),
+              addAll,
             );
           }
         });

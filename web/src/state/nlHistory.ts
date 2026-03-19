@@ -10,8 +10,13 @@ export type SnapshotOp =
   | { type: 'select'; nodeId: string }
   | { type: 'reselect'; nodeId: string }
   | { type: 'add'; ids: string[] }
+  | { type: 'addChildren'; nodeId: string }
+  | { type: 'addParents'; nodeId: string }
+  | { type: 'addDescThrough'; nodeId: string; depth: number }
   | { type: 'remove'; id: string }
-  | { type: 'removeBatch'; ids: string[] }
+  | { type: 'removeBatch'; ids: string[] }  // legacy — kept for old URL/IndexedDB compat
+  | { type: 'removeChildren'; nodeId: string }
+  | { type: 'removeParents'; nodeId: string }
   | { type: 'reset' }
   | { type: 'mode'; mode: 1 | 2 | 3 };
 

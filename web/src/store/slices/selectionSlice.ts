@@ -2,7 +2,7 @@
  * Selection slice — coordinator for selectNode and NL mutation actions.
  *
  * selectNode touches: history (push snapshot), tree (navigate), highlighting (clear).
- * NL actions (expandNodes, removeNode, etc.) touch: history (push snapshot).
+ * NL actions (expandChildren, removeNode, etc.) touch: history (push snapshot).
  */
 
 import { currentSnapshot } from '../../state/nlHistory';
@@ -21,6 +21,37 @@ const MODE_LABELS: Record<NeighborhoodMode, string> = {
   3: 'Ancestors + Children + Child Ancestors',
 };
 
+/** BFS descendants of nodeId through `depth` levels. depth=1 = children, depth=2 = children+grandchildren, etc. */
+function getDescendantsThrough(nodeId: string, depth: number): string[] {
+  const result: string[] = [];
+  let frontier = [nodeId];
+  for (let d = 0; d < depth; d++) {
+    const nextFrontier: string[] = [];
+    for (const id of frontier) {
+      for (const child of getChildren(id)) {
+        result.push(child.id);
+        nextFrontier.push(child.id);
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return result;
+}
+
+/** Add IDs to a set, plus ancestor DAGs if mode is 3. */
+function addWithMode3Ancestors(ids: string[], existing: Set<string>, mode: NeighborhoodMode): Set<string> {
+  const next = new Set(existing);
+  for (const id of ids) next.add(id);
+  if (mode === 3) {
+    for (const id of ids) {
+      if (!existing.has(id)) {
+        for (const aid of getAncestorDAG(id, getParents, next)) next.add(aid);
+      }
+    }
+  }
+  return next;
+}
+
 export interface SelectionSliceState {
   hoveredNodeId: string | null;
   highlightedNodeIds: Set<string>;
@@ -31,8 +62,12 @@ export interface SelectionSliceActions {
   setHighlightedNodeIds: (ids: Set<string>) => void;
   selectNode: (id: string | null) => void;
   expandNodes: (ids: string[], description: string) => void;
+  expandChildren: (nodeId: string) => void;
+  expandParents: (nodeId: string) => void;
+  expandDescThrough: (nodeId: string, depth: number) => void;
   removeNode: (id: string) => void;
-  removeNodes: (ids: string[], description: string) => void;
+  removeChildren: (nodeId: string) => void;
+  removeParents: (nodeId: string) => void;
   resetNeighborhood: () => void;
   setNeighborhoodMode: (mode: NeighborhoodMode) => void;
   setSearchQuery: (query: string) => void;
@@ -101,28 +136,62 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       set(nav);
     },
 
+    // Generic add — for single-node adds from overlay
     expandNodes: (ids, description) => {
       const snapshot = currentSnapshot(get().history);
       if (!snapshot) return;
-      const next = new Set(snapshot.displayedNodeIds);
-      for (const id of ids) next.add(id);
-
-      // Mode 3: also add ancestor DAGs for newly added nodes
-      if (get().neighborhoodMode === 3) {
-        for (const id of ids) {
-          if (!snapshot.displayedNodeIds.has(id)) {
-            const ancestors = getAncestorDAG(id, getParents, next);
-            for (const aid of ancestors) next.add(aid);
-          }
-        }
-      }
-
+      const next = addWithMode3Ancestors(ids, snapshot.displayedNodeIds, get().neighborhoodMode);
       push(get, {
         focusNodeId: snapshot.focusNodeId,
         displayedNodeIds: next,
         timestamp: Date.now(),
         description,
         op: { type: 'add', ids },
+      });
+    },
+
+    expandChildren: (nodeId) => {
+      const snapshot = currentSnapshot(get().history);
+      if (!snapshot) return;
+      const childIds = getChildren(nodeId).map(c => c.id);
+      const title = getNode(nodeId)?.title ?? nodeId;
+      const next = addWithMode3Ancestors(childIds, snapshot.displayedNodeIds, get().neighborhoodMode);
+      push(get, {
+        focusNodeId: snapshot.focusNodeId,
+        displayedNodeIds: next,
+        timestamp: Date.now(),
+        description: `Added ${childIds.length} children of ${title}`,
+        op: { type: 'addChildren', nodeId },
+      });
+    },
+
+    expandParents: (nodeId) => {
+      const snapshot = currentSnapshot(get().history);
+      if (!snapshot) return;
+      const parentIds = getParents(nodeId).map(p => p.id);
+      const title = getNode(nodeId)?.title ?? nodeId;
+      const next = addWithMode3Ancestors(parentIds, snapshot.displayedNodeIds, get().neighborhoodMode);
+      push(get, {
+        focusNodeId: snapshot.focusNodeId,
+        displayedNodeIds: next,
+        timestamp: Date.now(),
+        description: `Added ${parentIds.length} parents of ${title}`,
+        op: { type: 'addParents', nodeId },
+      });
+    },
+
+    expandDescThrough: (nodeId, depth) => {
+      const snapshot = currentSnapshot(get().history);
+      if (!snapshot) return;
+      const descIds = getDescendantsThrough(nodeId, depth);
+      const title = getNode(nodeId)?.title ?? nodeId;
+      const next = addWithMode3Ancestors(descIds, snapshot.displayedNodeIds, get().neighborhoodMode);
+      push(get, {
+        focusNodeId: snapshot.focusNodeId,
+        displayedNodeIds: next,
+        timestamp: Date.now(),
+        description: `Added descendants of ${title} through depth ${depth}`,
+        op: { type: 'addDescThrough', nodeId, depth },
       });
     },
 
@@ -159,11 +228,12 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       });
     },
 
-    removeNodes: (ids, description) => {
+    removeChildren: (nodeId) => {
       const snapshot = currentSnapshot(get().history);
       if (!snapshot || !snapshot.focusNodeId) return;
+      const childIds = getChildren(nodeId).map(c => c.id);
 
-      if (ids.includes(snapshot.focusNodeId)) {
+      if (childIds.includes(snapshot.focusNodeId)) {
         push(get, {
           focusNodeId: null,
           displayedNodeIds: new Set(),
@@ -176,15 +246,45 @@ export function createSelectionSlice(set: SetState, get: GetState): SelectionSli
       const mainGraph = getGraph();
       const nlSubgraph = buildNlSubgraph(mainGraph, snapshot.displayedNodeIds);
       const { displayedNodeIds: newIds } = removeNodesWithPruning(
-        nlSubgraph, ids, snapshot.focusNodeId,
+        nlSubgraph, childIds, snapshot.focusNodeId,
       );
-
+      const title = getNode(nodeId)?.title ?? nodeId;
       push(get, {
         focusNodeId: snapshot.focusNodeId,
         displayedNodeIds: newIds,
         timestamp: Date.now(),
-        description,
-        op: { type: 'removeBatch', ids },
+        description: `Removed children of ${title}`,
+        op: { type: 'removeChildren', nodeId },
+      });
+    },
+
+    removeParents: (nodeId) => {
+      const snapshot = currentSnapshot(get().history);
+      if (!snapshot || !snapshot.focusNodeId) return;
+      const parentIds = getParents(nodeId).map(p => p.id);
+
+      if (parentIds.includes(snapshot.focusNodeId)) {
+        push(get, {
+          focusNodeId: null,
+          displayedNodeIds: new Set(),
+          timestamp: Date.now(),
+          description: 'Removed focus node',
+        });
+        return;
+      }
+
+      const mainGraph = getGraph();
+      const nlSubgraph = buildNlSubgraph(mainGraph, snapshot.displayedNodeIds);
+      const { displayedNodeIds: newIds } = removeNodesWithPruning(
+        nlSubgraph, parentIds, snapshot.focusNodeId,
+      );
+      const title = getNode(nodeId)?.title ?? nodeId;
+      push(get, {
+        focusNodeId: snapshot.focusNodeId,
+        displayedNodeIds: newIds,
+        timestamp: Date.now(),
+        description: `Removed parents of ${title}`,
+        op: { type: 'removeParents', nodeId },
       });
     },
 

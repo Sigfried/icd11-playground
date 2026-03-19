@@ -17,8 +17,13 @@ type SerializedOp =
   | ['select', string]
   | ['reselect', string]
   | ['add', string[]]
+  | ['addChildren', string]
+  | ['addParents', string]
+  | ['addDescThrough', string, number]
   | ['remove', string]
-  | ['removeBatch', string[]]
+  | ['removeChildren', string]
+  | ['removeParents', string]
+  | ['removeBatch', string[]]  // legacy, still deserializable
   | ['reset']
   | ['mode', number];
 
@@ -50,8 +55,13 @@ function serializeOp(op: SnapshotOp): SerializedOp {
     case 'select': return ['select', op.nodeId];
     case 'reselect': return ['reselect', op.nodeId];
     case 'add': return ['add', op.ids];
+    case 'addChildren': return ['addChildren', op.nodeId];
+    case 'addParents': return ['addParents', op.nodeId];
+    case 'addDescThrough': return ['addDescThrough', op.nodeId, op.depth];
     case 'remove': return ['remove', op.id];
-    case 'removeBatch': return ['removeBatch', op.ids];
+    case 'removeBatch': return ['removeBatch', op.ids]; // legacy compat
+    case 'removeChildren': return ['removeChildren', op.nodeId];
+    case 'removeParents': return ['removeParents', op.nodeId];
     case 'reset': return ['reset'];
     case 'mode': return ['mode', op.mode];
   }
@@ -62,8 +72,13 @@ function deserializeOp(raw: SerializedOp): SnapshotOp {
     case 'select': return { type: 'select', nodeId: raw[1] };
     case 'reselect': return { type: 'reselect', nodeId: raw[1] };
     case 'add': return { type: 'add', ids: raw[1] };
+    case 'addChildren': return { type: 'addChildren', nodeId: raw[1] };
+    case 'addParents': return { type: 'addParents', nodeId: raw[1] };
+    case 'addDescThrough': return { type: 'addDescThrough', nodeId: raw[1], depth: raw[2] };
     case 'remove': return { type: 'remove', id: raw[1] };
-    case 'removeBatch': return { type: 'removeBatch', ids: raw[1] };
+    case 'removeChildren': return { type: 'removeChildren', nodeId: raw[1] };
+    case 'removeParents': return { type: 'removeParents', nodeId: raw[1] };
+    case 'removeBatch': return { type: 'removeBatch', ids: raw[1] }; // legacy compat
     case 'reset': return { type: 'reset' };
     case 'mode': return { type: 'mode', mode: raw[1] as NeighborhoodMode };
   }
@@ -81,13 +96,35 @@ function buildNeighborhood(nodeId: string, mode: NeighborhoodMode): Set<string> 
   return buildInitialNeighborhood(nodeId, getParents, getChildren, getNode, mode);
 }
 
+/** BFS descendants through N depth levels. */
+function getDescendantsThrough(nodeId: string, depth: number): string[] {
+  const result: string[] = [];
+  let frontier = [nodeId];
+  for (let d = 0; d < depth; d++) {
+    const nextFrontier: string[] = [];
+    for (const id of frontier) {
+      for (const child of getChildren(id)) {
+        result.push(child.id);
+        nextFrontier.push(child.id);
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return result;
+}
+
 function describeOp(op: SnapshotOp): string {
   switch (op.type) {
     case 'select': return `Selected ${getNode(op.nodeId)?.title ?? op.nodeId}`;
     case 'reselect': return `Selected ${getNode(op.nodeId)?.title ?? op.nodeId}`;
     case 'add': return `Added ${op.ids.length} node${op.ids.length === 1 ? '' : 's'}`;
+    case 'addChildren': return `Added children of ${getNode(op.nodeId)?.title ?? op.nodeId}`;
+    case 'addParents': return `Added parents of ${getNode(op.nodeId)?.title ?? op.nodeId}`;
+    case 'addDescThrough': return `Added descendants of ${getNode(op.nodeId)?.title ?? op.nodeId} through depth ${op.depth}`;
     case 'remove': return `Removed ${getNode(op.id)?.title ?? op.id}`;
     case 'removeBatch': return `Removed ${op.ids.length} node${op.ids.length === 1 ? '' : 's'}`;
+    case 'removeChildren': return `Removed children of ${getNode(op.nodeId)?.title ?? op.nodeId}`;
+    case 'removeParents': return `Removed parents of ${getNode(op.nodeId)?.title ?? op.nodeId}`;
     case 'reset': return 'Reset neighborhood';
     case 'mode': return `Mode: ${MODE_LABELS[op.mode]}`;
   }
@@ -97,6 +134,20 @@ interface ReplayState {
   focusNodeId: string | null;
   displayedNodeIds: Set<string>;
   mode: NeighborhoodMode;
+}
+
+/** Add IDs to a set, plus ancestor DAGs if mode is 3. */
+function addIdsWithMode3(ids: string[], existing: Set<string>, mode: NeighborhoodMode): Set<string> {
+  const next = new Set(existing);
+  for (const id of ids) next.add(id);
+  if (mode === 3) {
+    for (const id of ids) {
+      if (!existing.has(id)) {
+        for (const aid of getAncestorDAG(id, getParents, next)) next.add(aid);
+      }
+    }
+  }
+  return next;
 }
 
 /** Apply a single op to produce new state. */
@@ -111,18 +162,20 @@ function applyOp(op: SnapshotOp, state: ReplayState): ReplayState {
       return { ...state, focusNodeId: op.nodeId, displayedNodeIds: merged };
     }
     case 'add': {
-      const next = new Set(displayedNodeIds);
-      for (const id of op.ids) next.add(id);
-      // Mode 3: also add ancestor DAGs for newly added nodes
-      if (mode === 3) {
-        for (const id of op.ids) {
-          if (!displayedNodeIds.has(id)) {
-            const ancestors = getAncestorDAG(id, getParents, next);
-            for (const aid of ancestors) next.add(aid);
-          }
-        }
-      }
+      const next = addIdsWithMode3(op.ids, displayedNodeIds, mode);
       return { ...state, displayedNodeIds: next };
+    }
+    case 'addChildren': {
+      const childIds = getChildren(op.nodeId).map(c => c.id);
+      return { ...state, displayedNodeIds: addIdsWithMode3(childIds, displayedNodeIds, mode) };
+    }
+    case 'addParents': {
+      const parentIds = getParents(op.nodeId).map(p => p.id);
+      return { ...state, displayedNodeIds: addIdsWithMode3(parentIds, displayedNodeIds, mode) };
+    }
+    case 'addDescThrough': {
+      const descIds = getDescendantsThrough(op.nodeId, op.depth);
+      return { ...state, displayedNodeIds: addIdsWithMode3(descIds, displayedNodeIds, mode) };
     }
     case 'remove': {
       if (!focusNodeId) return state;
@@ -133,6 +186,18 @@ function applyOp(op: SnapshotOp, state: ReplayState): ReplayState {
       if (!focusNodeId) return state;
       const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
       return { ...state, displayedNodeIds: removeNodesWithPruning(sub, op.ids, focusNodeId).displayedNodeIds };
+    }
+    case 'removeChildren': {
+      if (!focusNodeId) return state;
+      const childIds = getChildren(op.nodeId).map(c => c.id);
+      const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
+      return { ...state, displayedNodeIds: removeNodesWithPruning(sub, childIds, focusNodeId).displayedNodeIds };
+    }
+    case 'removeParents': {
+      if (!focusNodeId) return state;
+      const parentIds = getParents(op.nodeId).map(p => p.id);
+      const sub = buildNlSubgraph(getGraph(), displayedNodeIds);
+      return { ...state, displayedNodeIds: removeNodesWithPruning(sub, parentIds, focusNodeId).displayedNodeIds };
     }
     case 'reset': {
       if (!focusNodeId) return state;
