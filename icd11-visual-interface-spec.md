@@ -527,11 +527,43 @@ Special help entries or annotations for items needing stakeholder input (e.g., c
 
 ## Proposal Authoring
 
-> **Note:** Interface design TBD. Requires understanding the .NET Maintenance Platform first.
+### Architecture
+
+The proposal generator uses the Explorer's visualization as a foundation. It does NOT use iCAT directly — instead it uses the general ICD-11 API (Foundation + possibly MMS). iCAT API calls would be needed separately by the .NET Maintenance Platform to create/modify proposals in the official system. The workflow:
+
+1. **Explorer visualizes** the current state using the Foundation API
+2. **Author composes proposal** using Explorer's interactive graph (see authoring mode below)
+3. **Proposal export** produces a structured data form describing the changes
+4. **Separate tooling** (TBD) transforms the proposal into iCAT API calls to submit to the Maintenance Platform
+
+Note: proposals may be modified by the MSAC and the WHO office before adoption, so the system must accommodate revision.
+
+### Authoring mode
+
+A dedicated mode where the graph neighborhood is fixed and interactions become editing operations:
+
+- **Setup phase:** Navigate and set up the neighborhood context you want (vis mode, zoom, expanded nodes). This becomes the starting state for the proposal view.
+- **Enter authoring mode:** Neighborhood freezes. Badge/expand interactions become editing operations.
+- **Visual diff encoding:**
+  - **Green** nodes/edges: proposed additions (new concepts, new parent edges)
+  - **Red** nodes/edges: proposed removals
+  - **Green and red lines**: new or removed edges between existing nodes
+  - **Yellow**: proposed changes to existing nodes (title, properties)
+  - **Gray**: unchanged context nodes
+- **Editing interactions:**
+  - **Plus (+)** to add new child to selected node
+  - **Minus (-)** to remove a node
+  - **Edit icon** to edit node properties
+  - **Click+drag** to add a new edge (new parent relationship)
+  - **Link click/confirm** to remove an existing edge
+
+### Textual change log
+
+All changes are conveyed textually in a proposal view with the ability for the user to annotate each operation. The undo/redo system already saves all ops that change the graph display (add/remove/select/etc.) — in a history list with textual descriptions. This could be the basis for the proposal data structure: a sequence of authored changes, each with a description and user annotation.
 
 ### Requirements
 
-1. **View existing proposals** affecting a concept or its neighborhood
+1. **View existing proposals** affecting a concept or its neighborhood (requires iCAT API access)
 2. **Author new proposals** for adding, modifying, moving, or deprecating concepts (including multi-concept changes)
 3. **Visualize proposal impact** — what would change if this proposal is implemented?
 
@@ -542,8 +574,12 @@ Special help entries or annotations for items needing stakeholder input (e.g., c
 | **Authoring location** | In-place editing on the tree? Separate form panel? Modal dialog? |
 | **Diff visualization** | Side-by-side trees? Overlay with color-coded changes? Animated transition? |
 | **Draft management** | Local storage? Backend persistence? Export as JSON? Will need to understand .NET Maintenance Platform before deciding. |
+| **MMS info in proposals** | May need to show MMS serialization context alongside Foundation structure |
+| **iCAT API integration** | Separate from visualization — transforms structured proposals into iCAT calls |
 
-Color coding for diffs: green = added, red = removed, yellow = modified, gray = unchanged.
+### Visualization as independent component
+
+The visualization needs to work as a standalone component that can be embedded in the .NET Maintenance Platform's authoring tool. The current WHO Browser vis is the basis for their approach. Our visualization should be available independently of the full Explorer UI — embeddable with just the graph display, proposal authoring mode, and necessary controls.
 
 ---
 
@@ -565,6 +601,7 @@ Color coding for diffs: green = added, red = removed, yellow = modified, gray = 
 - **Parent badges missing after close**: In the NL view, when a node's parents have been removed/closed, the node no longer shows parent badges — so there's no easy way to bring the parents back into view.
 - **Escape tooltip suppress**: The suppress-on-Escape mechanism (prevents tooltip re-creation while cursor hovers) may not be working correctly. Needs investigation and possibly a test.
 - **Foundation ordering**: Sibling order in NL diagram only partially matches Foundation order (uses model order hint). Full ordering would require changes to the layout engine or manual node positioning.
+- **Detail panel missing Additional Information / longDefinition**: The API returns `longDefinition` (seen as "Additional Information" in the WHO Browser) but the detail panel doesn't display it. Should show it below the definition when present.
 - **Advanced search returns no results for definition text**: Searching text pasted from a concept's definition (e.g., "dystrophy caused by the loss" from Pigmentary retinal dystrophy) with the Description checkbox returns 0 results, regardless of which field checkboxes are selected. The field names (`Title`, `Synonym`, `NarrowerTerm`, `FullySpecifiedName`, `Definition`, `Exclusion`) match the swagger spec. Needs testing against a running API to determine if this is an API limitation (phrase matching not supported on definitions?) or a bug in our request.
 
 ---
