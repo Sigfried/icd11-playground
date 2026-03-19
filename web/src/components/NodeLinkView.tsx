@@ -1125,7 +1125,7 @@ export const NodeLinkView = memo(function NodeLinkView() {
         e.stopPropagation();
         // Include all preceding levels so added nodes have edges to their parents
         const levelIdx = levels.indexOf(level);
-        expandDescThrough(node.id, levelIdx + 1);
+        expandDescThrough(nodeId, levelIdx + 1);
         hideTooltip(true);
       });
       levelHeader.appendChild(addBtn);
@@ -1142,7 +1142,7 @@ export const NodeLinkView = memo(function NodeLinkView() {
         addAllBtn.textContent = `Add all ${allIds.length.toLocaleString()} through depth ${levels.length}`;
         addAllBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          expandDescThrough(node.id, levels.length);
+          expandDescThrough(nodeId, levels.length);
           hideTooltip(true);
         });
         tip.appendChild(addAllBtn);
