@@ -9,6 +9,7 @@ import { AboutPanel } from './components/AboutPanel';
 import { HelpPopover } from './components/HelpPopover';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import { useHelpMode } from './hooks/useHelpMode';
+import { useTheme } from './hooks/useTheme';
 import './App.css';
 
 /**
@@ -147,6 +148,39 @@ function HelpModeInterceptor() {
   return null;
 }
 
+function ThemeToggle({ theme, onToggle }: { theme: 'light' | 'dark'; onToggle: () => void }) {
+  return (
+    <button
+      className="theme-toggle"
+      data-help-id="theme-toggle"
+      onClick={onToggle}
+      title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+    >
+      {theme === 'dark' ? (
+        // Sun icon — click to switch to light
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="8" cy="8" r="3" />
+          <g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="8" y1="1" x2="8" y2="3" />
+            <line x1="8" y1="13" x2="8" y2="15" />
+            <line x1="1" y1="8" x2="3" y2="8" />
+            <line x1="13" y1="8" x2="15" y2="8" />
+            <line x1="3.1" y1="3.1" x2="4.5" y2="4.5" />
+            <line x1="11.5" y1="11.5" x2="12.9" y2="12.9" />
+            <line x1="3.1" y1="12.9" x2="4.5" y2="11.5" />
+            <line x1="11.5" y1="4.5" x2="12.9" y2="3.1" />
+          </g>
+        </svg>
+      ) : (
+        // Moon icon — click to switch to dark
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M6 1C3.24 2.05 1.5 4.82 1.5 8c0 3.87 2.63 7 6.5 7 2.68 0 4.95-1.24 6-3.5C9.5 13 6 10.5 6 7c0-2.17.83-4.18 2.5-5.5C7.83 1.17 6.92 1 6 1z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function AboutButton() {
   const setShowAbout = useAppStore(s => s.setShowAbout);
   return (
@@ -218,6 +252,7 @@ function HelpToggle() {
 
 function AppContent() {
   const { mode, toggleMode, vert, horz, onDividerMouseDown, collapsed } = useLayoutMode();
+  const { theme, toggleTheme } = useTheme();
 
   const dividerClass = (orientation: 'vertical' | 'horizontal', before: boolean, after: boolean) => {
     const classes = ['panel-divider', orientation];
@@ -251,6 +286,7 @@ function AppContent() {
             </svg>
           </a>
           <ShareButton />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <HelpToggle />
           <AboutButton />
           <LayoutToggle mode={mode} onToggle={toggleMode} />

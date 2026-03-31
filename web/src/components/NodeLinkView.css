@@ -48,13 +48,17 @@
   stroke: var(--accent-cyan);
 }
 
+.node-link-node:hover text.node-title {
+  fill: var(--color-hover);
+}
+
 .node-link-node.selected rect {
   stroke: var(--accent-blue);
   stroke-width: 2px;
 }
 
 .node-link-node.focus rect {
-  fill: rgba(220, 220, 170, 0.15);
+  fill: var(--color-selected-bg);
   stroke: var(--accent-yellow);
   stroke-width: 2px;
 }
@@ -117,7 +121,7 @@
 
 .node-link-cluster:hover rect {
   stroke: var(--accent-cyan);
-  fill: rgba(86, 156, 214, 0.1);
+  fill: var(--color-btn-blue-bg-subtle);
 }
 
 .cluster-label {
@@ -210,8 +214,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s, background 0.2s;
+  transition: background 0.2s;
 }
 
 .zoom-btn:hover {
@@ -237,7 +240,7 @@
 
 .reset-neighborhood-btn:hover {
   color: var(--text-primary);
-  background: rgba(206, 145, 120, 0.15);
+  background: var(--color-btn-orange-bg);
 }
 
 /* Neighborhood mode buttons */
@@ -250,14 +253,13 @@
 }
 
 .mode-btn.active {
-  background: rgba(86, 156, 214, 0.2);
+  background: var(--color-btn-blue-bg);
   border-color: var(--accent-blue);
   color: var(--color-link);
-  opacity: 1;
 }
 
 .mode-btn.active:hover {
-  background: rgba(86, 156, 214, 0.3);
+  background: var(--color-btn-blue-bg-active);
 }
 
 /* Undo/redo buttons */
@@ -283,23 +285,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.5;
 }
 
 .layout-toggle-btn:hover {
-  opacity: 0.8;
+  color: var(--text-primary);
 }
 
 .layout-toggle-btn.active {
-  background: rgba(86, 156, 214, 0.2);
+  background: var(--color-btn-blue-bg);
   border-color: var(--accent-blue);
   color: var(--accent-cyan);
-  opacity: 0.8;
 }
 
 .layout-toggle-btn.active:hover {
-  background: rgba(86, 156, 214, 0.3);
-  opacity: 1;
+  background: var(--color-btn-blue-bg-active);
 }
 
 /* Zoom reset text label */
@@ -325,7 +324,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 30, 30, 0.6);
+  background: var(--overlay-progress);
   z-index: 5;
 }
 
@@ -339,13 +338,13 @@
   border-radius: 8px;
   color: var(--text-primary);
   font-size: 0.85rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-popover);
 }
 
 .layout-cancel-btn {
   padding: 4px 12px;
   font-size: 0.8rem;
-  background: rgba(206, 145, 120, 0.15);
+  background: var(--color-btn-orange-bg);
   border: 1px solid var(--accent-orange);
   border-radius: 4px;
   color: var(--accent-orange);
@@ -354,7 +353,7 @@
 }
 
 .layout-cancel-btn:hover {
-  background: rgba(206, 145, 120, 0.3);
+  background: var(--color-btn-orange-bg-hover);
   color: var(--text-primary);
 }
 
@@ -394,7 +393,7 @@
   padding: 8px 10px;
   min-width: 180px;
   max-width: 300px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-tooltip);
 }
 
 .badge-tooltip-header {
@@ -417,7 +416,7 @@
   padding: 3px 6px;
   margin-bottom: 4px;
   font-size: 0.75rem;
-  background: rgba(86, 156, 214, 0.15);
+  background: var(--color-hover-bg);
   border: 1px solid var(--accent-blue);
   border-radius: 3px;
   color: var(--accent-cyan);
@@ -426,7 +425,7 @@
 }
 
 .badge-tooltip-add-all:hover {
-  background: rgba(86, 156, 214, 0.3);
+  background: var(--color-btn-blue-bg-active);
   color: var(--text-primary);
 }
 
@@ -476,7 +475,7 @@
 .badge-tooltip-level-btn {
   padding: 1px 6px;
   font-size: 0.7rem;
-  background: rgba(86, 156, 214, 0.15);
+  background: var(--color-hover-bg);
   border: 1px solid var(--accent-blue);
   border-radius: 3px;
   color: var(--accent-cyan);
@@ -485,6 +484,6 @@
 }
 
 .badge-tooltip-level-btn:hover {
-  background: rgba(86, 156, 214, 0.3);
+  background: var(--color-btn-blue-bg-active);
   color: var(--text-primary);
 }

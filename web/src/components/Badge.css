@@ -24,8 +24,8 @@
 }
 
 .count-badge-expanded {
-  color: var(--accent-red, #f44747) !important;
-  background: rgba(244, 71, 71, 0.1);
+  color: var(--color-badge-expanded) !important;
+  background: var(--color-badge-expanded-bg);
 }
 
 .count-badge-interactive {

@@ -1,7 +1,9 @@
 /* Design tokens — single source of truth for colors.
-   Imported by App.css; consumed by all component CSS via var(). */
+   Imported by App.css; consumed by all component CSS via var().
+   Theme is set via data-theme="dark|light" on <html>. */
 
-:root {
+/* Dark theme */
+[data-theme="dark"] {
   /* Background layers (dark → light) */
   --bg-primary: #1e1e1e;
   --bg-secondary: #252526;
@@ -17,6 +19,7 @@
   --accent-yellow: #dcdcaa;
   --accent-orange: #ce9178;
   --accent-green: #6a9955;
+  --accent-red: #f44747;
 
   --border-color: #3c3c3c;
 
@@ -35,7 +38,81 @@
   --color-badge-parents: var(--accent-cyan);
   --color-badge-children: var(--accent-green);
   --color-badge-descendants: #5a8a50;
+  --color-badge-expanded: var(--accent-red);
+  --color-badge-expanded-bg: rgba(244, 71, 71, 0.1);
 
   /* Semantic: links */
   --color-link: var(--accent-cyan);
+
+  /* Buttons */
+  --color-btn-blue-bg: rgba(86, 156, 214, 0.2);
+  --color-btn-blue-bg-hover: rgba(86, 156, 214, 0.35);
+  --color-btn-blue-bg-subtle: rgba(86, 156, 214, 0.1);
+  --color-btn-blue-bg-active: rgba(86, 156, 214, 0.3);
+  --color-btn-orange-bg: rgba(206, 145, 120, 0.15);
+  --color-btn-orange-bg-hover: rgba(206, 145, 120, 0.3);
+
+  /* Overlays & shadows */
+  --overlay-backdrop: rgba(30, 30, 30, 0.7);
+  --overlay-progress: rgba(30, 30, 30, 0.6);
+  --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+  /* Row/cell highlights */
+  --color-highlight-row: rgba(86, 156, 214, 0.1);
+
+  color-scheme: dark;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f8fa;
+  --bg-tertiary: #eef0f3;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+
+  --accent-blue: #0056a3;
+  --accent-cyan: #006bb3;
+  --accent-yellow: #6b4f1e;
+  --accent-orange: #b81414;
+  --accent-green: #1a6b00;
+  --accent-red: #c62828;
+
+  --border-color: #c8c8c8;
+
+  --color-selected: var(--accent-yellow);
+  --color-selected-bg: rgba(107, 79, 30, 0.14);
+
+  --color-hover: var(--accent-blue);
+  --color-hover-bg: rgba(0, 86, 163, 0.12);
+
+  --color-search-match: var(--accent-orange);
+
+  --color-badge-parents: var(--accent-cyan);
+  --color-badge-children: var(--accent-green);
+  --color-badge-descendants: #2d6600;
+  --color-badge-expanded: var(--accent-red);
+  --color-badge-expanded-bg: rgba(211, 47, 47, 0.08);
+
+  --color-link: var(--accent-cyan);
+
+  --color-btn-blue-bg: rgba(0, 86, 163, 0.14);
+  --color-btn-blue-bg-hover: rgba(0, 86, 163, 0.24);
+  --color-btn-blue-bg-subtle: rgba(0, 86, 163, 0.08);
+  --color-btn-blue-bg-active: rgba(0, 86, 163, 0.20);
+  --color-btn-orange-bg: rgba(184, 20, 20, 0.10);
+  --color-btn-orange-bg-hover: rgba(184, 20, 20, 0.18);
+
+  --overlay-backdrop: rgba(0, 0, 0, 0.3);
+  --overlay-progress: rgba(255, 255, 255, 0.6);
+  --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.18);
+
+  --color-highlight-row: rgba(0, 86, 163, 0.08);
+
+  color-scheme: light;
 }

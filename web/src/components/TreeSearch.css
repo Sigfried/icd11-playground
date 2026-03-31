@@ -127,7 +127,7 @@
   border: 1px solid var(--border-color);
   border-top: none;
   border-radius: 0 0 4px 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-tooltip);
 }
 
 .tree-search-dropdown-loading,

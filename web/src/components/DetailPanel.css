@@ -151,7 +151,7 @@
 }
 
 .relation-list li.highlighted {
-  background: rgba(86, 156, 214, 0.1);
+  background: var(--color-highlight-row);
   border-radius: 3px;
 }
 

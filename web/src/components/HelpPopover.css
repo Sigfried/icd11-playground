@@ -8,7 +8,7 @@
   border: 1px solid var(--accent-blue);
   border-radius: 6px;
   padding: 12px 14px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-popover);
   color: var(--text-primary);
   font-size: 0.85rem;
   line-height: 1.45;

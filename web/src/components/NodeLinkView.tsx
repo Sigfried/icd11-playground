@@ -997,13 +997,13 @@ export const NodeLinkView = memo(function NodeLinkView() {
 
       const parts: string[] = [];
       if (node.parentCount > 0) {
-        parts.push(`${node.parentCount} parents (${parentsShown} shown)`);
+        parts.push(`${node.parentCount}\u00A0parents\u00A0(${parentsShown}\u00A0shown)`);
       }
       if (node.childCount > 0) {
-        parts.push(`${node.childCount} children (${childrenShown} shown)`);
+        parts.push(`${node.childCount}\u00A0children\u00A0(${childrenShown}\u00A0shown)`);
       }
       if (node.descendantCount > node.childCount) {
-        parts.push(`${node.descendantCount.toLocaleString()} descendants`);
+        parts.push(`${node.descendantCount.toLocaleString()}\u00A0descendants`);
       }
 
       if (parts.length > 0) {
@@ -1362,9 +1362,9 @@ export const NodeLinkView = memo(function NodeLinkView() {
 
       const badgeDiv = fo.append('xhtml:div')
         .style('display', 'flex')
-        .style('gap', '3px')
+        .style('gap', '4px')
         .style('align-items', 'center')
-        .style('font-size', '10px')
+        .style('font-size', '11px')
         .html(badgeParts.join(''));
 
       badgeDiv.selectAll('.count-badge').each(function () {

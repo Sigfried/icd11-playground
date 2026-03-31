@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 30, 30, 0.7);
+  background: var(--overlay-backdrop);
   z-index: 20;
 }
 
@@ -16,7 +16,7 @@
   padding: 20px 24px;
   min-width: 260px;
   max-width: 360px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-popup);
 }
 
 .resume-modal-title {
@@ -60,13 +60,13 @@
 }
 
 .resume-btn {
-  background: rgba(86, 156, 214, 0.2);
+  background: var(--color-btn-blue-bg);
   border: 1px solid var(--accent-blue);
   color: var(--accent-cyan);
 }
 
 .resume-btn:hover {
-  background: rgba(86, 156, 214, 0.35);
+  background: var(--color-btn-blue-bg-hover);
   color: var(--text-primary);
 }
 
